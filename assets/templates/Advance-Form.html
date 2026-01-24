@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>نموذج طلب سلفة</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Cairo', Arial, sans-serif;
+      background: white;
+      padding: 20px;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 15px 20px;
+      border-bottom: 3px solid #0b4fa2;
+      margin-bottom: 30px;
+    }
+    .logo img { height: 60px; }
+    .header-info {
+      text-align: left;
+      font-size: 11px;
+      color: #333;
+    }
+    .header-info p {
+      margin: 3px 0;
+    }
+    .header-info strong {
+      color: #0b4fa2;
+    }
+    .title {
+      text-align: center;
+      margin: 25px 0;
+      font-size: 26px;
+      font-weight: 700;
+      color: #0b4fa2;
+    }
+    .form-section {
+      margin: 25px 0;
+      padding: 20px;
+      border: 2px solid #0b4fa2;
+      border-radius: 8px;
+      background: #f9f9f9;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    .form-field {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .form-field label {
+      font-weight: 600;
+      color: #0b4fa2;
+      min-width: 140px;
+    }
+    .form-field .value {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: white;
+      min-height: 35px;
+    }
+    .full-width {
+      grid-column: 1 / -1;
+    }
+    .amount-box {
+      margin: 20px 0;
+      padding: 20px;
+      background: #e3f2fd;
+      border: 2px solid #0b4fa2;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .amount-box label {
+      display: block;
+      font-weight: 700;
+      color: #0b4fa2;
+      font-size: 18px;
+      margin-bottom: 15px;
+    }
+    .amount-box .value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #0b4fa2;
+      padding: 15px;
+      background: white;
+      border: 2px solid #0b4fa2;
+      border-radius: 4px;
+    }
+    .reason-field {
+      margin-top: 20px;
+    }
+    .reason-field label {
+      display: block;
+      font-weight: 600;
+      color: #0b4fa2;
+      margin-bottom: 10px;
+    }
+    .reason-field .value {
+      width: 100%;
+      min-height: 100px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: white;
+    }
+    .signatures {
+      margin-top: 40px;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 30px;
+    }
+    .signature-box {
+      text-align: center;
+    }
+    .signature-box p {
+      margin-bottom: 60px;
+      font-weight: 600;
+      color: #0b4fa2;
+    }
+    .signature-line {
+      border-top: 2px solid #333;
+      width: 200px;
+      margin: 0 auto;
+    }
+    .footer {
+      margin-top: 50px;
+      text-align: center;
+      font-size: 11px;
+      color: #666;
+      border-top: 1px solid #ddd;
+      padding-top: 15px;
+    }
+    .note-box {
+      margin: 20px 0;
+      padding: 15px;
+      background: #fff3cd;
+      border-right: 4px solid #ffc107;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">
+      {{LOGO}}
+    </div>
+    <div class="header-info">
+      <p><strong>DATE OF ISSUE:</strong> {{DATE}}</p>
+    </div>
+  </div>
+
+  <h1 class="title">نموذج طلب سلفة</h1>
+
+  <div class="note-box">
+    💡 <strong>ملاحظة:</strong> السكرتيرة تختار الموظف والتاريخ فقط، باقي الخانات يملأها الموظف يدوياً
+  </div>
+
+  <div class="form-section">
+    <div class="form-grid">
+      <div class="form-field">
+        <label>اسم الموظف:</label>
+        <div class="value">{{EMPLOYEE_NAME}}</div>
+      </div>
+      <div class="form-field">
+        <label>تاريخ تعبئة النموذج:</label>
+        <div class="value">{{DATE}}</div>
+      </div>
+      <div class="form-field">
+        <label>المنصب:</label>
+        <div class="value">----------------</div>
+      </div>
+      <div class="form-field">
+        <label>القسم:</label>
+        <div class="value">----------------</div>
+      </div>
+    </div>
+
+    <div class="amount-box">
+      <label>مبلغ السلفة: ________________ دينار</label>
+    </div>
+
+    <div class="reason-field">
+      <label>سبب السلفة:</label>
+      <div class="value">
+        ---------------------------------------------------------------<br>
+        ---------------------------------------------------------------<br>
+        ---------------------------------------------------------------
+      </div>
+    </div>
+
+    <div class="reason-field">
+      <label>طريقة السداد:</label>
+      <div class="value">
+        ---------------------------------------------------------------<br>
+        ---------------------------------------------------------------
+      </div>
+    </div>
+  </div>
+
+  <div class="signatures">
+    <div class="signature-box">
+      <p>توقيع الإدارة</p>
+      <div class="signature-line"></div>
+    </div>
+    <div class="signature-box">
+      <p>توقيع الموظف</p>
+      <div class="signature-line"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>{{FORM_CODE}} | Page <span class="pageNumber"></span> of <span class="totalPages"></span></p>
+  </div>
+</body>
+</html>

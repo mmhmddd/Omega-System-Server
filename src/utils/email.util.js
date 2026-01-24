@@ -1,4 +1,4 @@
-// src/utils/email.util.js
+// src/utils/email.util.js (محدث)
 const nodemailer = require('nodemailer');
 const logger = require('./logger.util');
 
@@ -8,9 +8,6 @@ class EmailService {
     this.initializeTransporter();
   }
 
-  /**
-   * Initialize email transporter
-   */
   initializeTransporter() {
     try {
       this.transporter = nodemailer.createTransport({
@@ -21,7 +18,6 @@ class EmailService {
         }
       });
 
-      // Verify connection
       this.transporter.verify((error, success) => {
         if (error) {
           logger.error('Email transporter verification failed', error);
@@ -34,19 +30,12 @@ class EmailService {
     }
   }
 
-  /**
-   * Send password reset email
-   * @param {string} to - Recipient email
-   * @param {string} resetToken - Password reset token
-   * @param {string} userName - User's name
-   */
   async sendPasswordResetEmail(to, resetToken, userName) {
     try {
       if (!this.transporter) {
         throw new Error('Email transporter not initialized');
       }
 
-      // Create reset link (adjust this URL to match your frontend)
       const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
 
       const mailOptions = {
@@ -199,13 +188,6 @@ This is an automated email from Omega System. Please do not reply.
     }
   }
 
-  /**
-   * Send welcome email to new user
-   * @param {string} to - Recipient email
-   * @param {string} userName - User's name
-   * @param {string} username - User's username
-   * @param {string} temporaryPassword - Temporary password
-   */
   async sendWelcomeEmail(to, userName, username, temporaryPassword) {
     try {
       if (!this.transporter) {
@@ -215,7 +197,7 @@ This is an automated email from Omega System. Please do not reply.
       const loginUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/login`;
 
       const mailOptions = {
-        from: `"omega System" <${process.env.EMAIL_USER}>`,
+        from: `"Omega System" <${process.env.EMAIL_USER}>`,
         to: to,
         subject: 'Welcome to Omega System',
         html: `
@@ -352,8 +334,147 @@ If you have any questions, please contact your system administrator.
   }
 
   /**
-   * Send test email to verify configuration
+   * إرسال إشعار بالبريد الإلكتروني للسكرتارية عند إنشاء نموذج جديد
    */
+  async sendFormNotificationEmail(to, secretariatName, employeeName, formType, formNumber, date) {
+    try {
+      if (!this.transporter) {
+        throw new Error('Email transporter not initialized');
+      }
+
+      const mailOptions = {
+        from: `"Omega System" <${process.env.EMAIL_USER}>`,
+        to: to,
+        subject: `نموذج جديد - ${formType}`,
+        html: `
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+          <head>
+            <meta charset="UTF-8">
+            <style>
+              body {
+                font-family: 'Arial', sans-serif;
+                line-height: 1.6;
+                color: #333;
+                max-width: 600px;
+                margin: 0 auto;
+                padding: 20px;
+              }
+              .container {
+                background-color: #f9f9f9;
+                border-radius: 10px;
+                padding: 30px;
+                border: 1px solid #ddd;
+              }
+              .header {
+                text-align: center;
+                color: #0b4fa2;
+                margin-bottom: 30px;
+              }
+              .content {
+                background-color: white;
+                padding: 20px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+              }
+              .info-box {
+                background-color: #e3f2fd;
+                padding: 20px;
+                border-radius: 5px;
+                margin: 20px 0;
+                border-right: 4px solid #0b4fa2;
+              }
+              .info-box p {
+                margin: 10px 0;
+              }
+              .info-box strong {
+                color: #0b4fa2;
+              }
+              .button {
+                display: inline-block;
+                padding: 12px 30px;
+                background-color: #0b4fa2;
+                color: white;
+                text-decoration: none;
+                border-radius: 5px;
+                margin: 20px 0;
+                font-weight: bold;
+              }
+              .footer {
+                text-align: center;
+                color: #6b7280;
+                font-size: 12px;
+                margin-top: 30px;
+                padding-top: 20px;
+                border-top: 1px solid #ddd;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>📋 نموذج جديد يحتاج إلى معالجة</h1>
+              </div>
+              
+              <div class="content">
+                <p>مرحباً <strong>${secretariatName}</strong>،</p>
+                
+                <p>تم إنشاء نموذج جديد من قبل أحد الموظفين ويحتاج إلى مراجعتك:</p>
+                
+                <div class="info-box">
+                  <p><strong>نوع النموذج:</strong> ${formType}</p>
+                  <p><strong>رقم النموذج:</strong> ${formNumber}</p>
+                  <p><strong>اسم الموظف:</strong> ${employeeName}</p>
+                  <p><strong>تاريخ الإنشاء:</strong> ${date}</p>
+                </div>
+                
+                <p>يرجى تسجيل الدخول إلى النظام لمراجعة النموذج.</p>
+                
+                <div style="text-align: center;">
+                  <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">تسجيل الدخول</a>
+                </div>
+              </div>
+              
+              <div class="footer">
+                <p>هذا بريد إلكتروني تلقائي من نظام Omega</p>
+                <p>يرجى عدم الرد على هذا البريد</p>
+                <p>&copy; ${new Date().getFullYear()} Omega System. جميع الحقوق محفوظة.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `
+مرحباً ${secretariatName},
+
+تم إنشاء نموذج جديد من قبل أحد الموظفين ويحتاج إلى مراجعتك:
+
+نوع النموذج: ${formType}
+رقم النموذج: ${formNumber}
+اسم الموظف: ${employeeName}
+تاريخ الإنشاء: ${date}
+
+يرجى تسجيل الدخول إلى النظام لمراجعة النموذج.
+
+هذا بريد إلكتروني تلقائي من نظام Omega. يرجى عدم الرد.
+
+© ${new Date().getFullYear()} Omega System. جميع الحقوق محفوظة.
+        `
+      };
+
+      const info = await this.transporter.sendMail(mailOptions);
+      
+      logger.info(`Form notification email sent to: ${to}`);
+      return {
+        success: true,
+        messageId: info.messageId
+      };
+    } catch (error) {
+      logger.error('Failed to send form notification email', error);
+      throw new Error('Failed to send form notification email');
+    }
+  }
+
   async sendTestEmail(to) {
     try {
       if (!this.transporter) {

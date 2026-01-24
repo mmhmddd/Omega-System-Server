@@ -222,7 +222,7 @@ body {
 }
 
 .detail-row:nth-child(even) {
-  background-color: #fff;
+  background-color: #f9f9f9;
 }
 
 .detail-label {
@@ -230,13 +230,13 @@ body {
   text-align: left;
   font-weight: bold;
   padding: 10px 18px;
-  background-color: #6b8dd6;
+  background-color: #e8f0fa;
   border-${isRTL ? 'left' : 'right'}: 2px solid var(--primary);
   display: flex;
   align-items: center;
   justify-content: flex-start;
   font-size: 13px;
-  color: white;
+  color: var(--primary);
 }
 
 .detail-value {
@@ -248,7 +248,6 @@ body {
   align-items: center;
   font-size: 13px;
   color: #333;
-  font-weight: bold;
 }
 
 .items-table {

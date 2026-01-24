@@ -42,9 +42,9 @@ const validateUser = (req, res, next) => {
 
   // Validate role
   if (role) {
-    const validRoles = ['super_admin', 'admin', 'employee'];
+    const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
     if (!validRoles.includes(role)) {
-      errors.push({ field: 'role', message: 'Role must be one of: super_admin, admin, or employee' });
+      errors.push({ field: 'role', message: 'Role must be one of: super_admin, admin, employee, or secretariat' });
     }
   }
 
@@ -108,9 +108,9 @@ const validateUserUpdate = (req, res, next) => {
 
   // Validate role if provided
   if (role !== undefined) {
-    const validRoles = ['super_admin', 'admin', 'employee'];
+    const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
     if (!validRoles.includes(role)) {
-      errors.push({ field: 'role', message: 'Role must be one of: super_admin, admin, or employee' });
+      errors.push({ field: 'role', message: 'Role must be one of: super_admin, admin, employee, or secretariat' });
     }
   }
 

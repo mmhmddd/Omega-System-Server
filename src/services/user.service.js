@@ -1,17 +1,14 @@
-// src/services/user.service.js
+// src/services/user.service.js (محدث)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
-const atomicWrite = require('../utils/atomic-write.util'); // ✅ Fixed
+const atomicWrite = require('../utils/atomic-write.util');
 const { generateId } = require('../utils/id-generator.util');
 const emailService = require('../utils/email.util');
 
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
 class UserService {
-  /**
-   * Initialize users file if it doesn't exist
-   */
   async initializeUsersFile() {
     try {
       const usersDir = path.dirname(USERS_FILE);
@@ -34,11 +31,13 @@ class UserService {
             password: "admin123",
             role: "super_admin",
             active: true,
+            systemAccess: {
+              laserCuttingManagement: true,
+            },
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           }
         ];
-        // ✅ Fixed: Use as function
         await atomicWrite(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
         console.log('✅ Created users.json with default super admin');
         console.log('📧 Email: admin@laser.com | Password: admin123');
@@ -49,9 +48,6 @@ class UserService {
     }
   }
 
-  /**
-   * Load users from JSON file
-   */
   async loadUsers() {
     try {
       const data = await fs.readFile(USERS_FILE, 'utf8');
@@ -66,17 +62,10 @@ class UserService {
     }
   }
 
-  /**
-   * Save users to JSON file
-   */
   async saveUsers(users) {
-    // ✅ Fixed: Use as function
     await atomicWrite(USERS_FILE, JSON.stringify(users, null, 2));
   }
 
-  /**
-   * Generate unique username from name and email
-   */
   async generateUniqueUsername(name, email, users) {
     const emailPrefix = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
     
@@ -129,25 +118,16 @@ class UserService {
     return username;
   }
 
-  /**
-   * Check if email already exists
-   */
   async emailExists(email, excludeId = null) {
     const users = await this.loadUsers();
     return users.some(u => u.email === email && u.id !== excludeId);
   }
 
-  /**
-   * Check if username already exists
-   */
   async usernameExists(username, excludeId = null) {
     const users = await this.loadUsers();
     return users.some(u => u.username === username && u.id !== excludeId);
   }
 
-  /**
-   * Create a new user
-   */
   async createUser(userData) {
     const users = await this.loadUsers();
 
@@ -155,9 +135,10 @@ class UserService {
       throw new Error('Email already exists');
     }
 
-    const validRoles = ['super_admin', 'admin', 'employee'];
+    // تحديث الأدوار المتاحة لتشمل secretariat
+    const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
     if (!validRoles.includes(userData.role)) {
-      throw new Error('Invalid role specified');
+      throw new Error('Invalid role specified. Valid roles: super_admin, admin, employee, secretariat');
     }
 
     const username = await this.generateUniqueUsername(
@@ -170,6 +151,10 @@ class UserService {
       throw new Error('Username already exists - generation error occurred');
     }
 
+    const systemAccess = userData.systemAccess || {
+      laserCuttingManagement: false,
+    };
+
     const newUser = {
       id: generateId('USER'),
       username,
@@ -178,6 +163,7 @@ class UserService {
       password: userData.password,
       role: userData.role,
       active: true,
+      systemAccess,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -189,9 +175,6 @@ class UserService {
     return userWithoutPassword;
   }
 
-  /**
-   * Get all users with filters and pagination
-   */
   async getAllUsers(filters = {}) {
     let users = await this.loadUsers();
 
@@ -227,9 +210,6 @@ class UserService {
     };
   }
 
-  /**
-   * Get user by ID
-   */
   async getUserById(id) {
     const users = await this.loadUsers();
     const user = users.find(u => u.id === id);
@@ -242,9 +222,6 @@ class UserService {
     return userWithoutPassword;
   }
 
-  /**
-   * Update user
-   */
   async updateUser(id, updateData) {
     const users = await this.loadUsers();
     const userIndex = users.findIndex(u => u.id === id);
@@ -262,9 +239,9 @@ class UserService {
     }
 
     if (updateData.role) {
-      const validRoles = ['super_admin', 'admin', 'employee'];
+      const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
       if (!validRoles.includes(updateData.role)) {
-        throw new Error('Invalid role specified');
+        throw new Error('Invalid role specified. Valid roles: super_admin, admin, employee, secretariat');
       }
     }
 
@@ -273,6 +250,13 @@ class UserService {
     if (updateData.password) user.password = updateData.password;
     if (updateData.role) user.role = updateData.role;
     if (updateData.active !== undefined) user.active = updateData.active;
+    
+    if (updateData.systemAccess !== undefined) {
+      user.systemAccess = {
+        ...user.systemAccess,
+        ...updateData.systemAccess
+      };
+    }
 
     user.updatedAt = new Date().toISOString();
 
@@ -283,9 +267,6 @@ class UserService {
     return userWithoutPassword;
   }
 
-  /**
-   * Delete user
-   */
   async deleteUser(id) {
     const users = await this.loadUsers();
     const userIndex = users.findIndex(u => u.id === id);
@@ -308,9 +289,6 @@ class UserService {
     return { message: 'User deleted successfully' };
   }
 
-  /**
-   * Update user role only
-   */
   async updateUserRole(id, role) {
     const users = await this.loadUsers();
     const userIndex = users.findIndex(u => u.id === id);
@@ -328,6 +306,11 @@ class UserService {
       }
     }
 
+    const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
+    if (!validRoles.includes(role)) {
+      throw new Error('Invalid role specified. Valid roles: super_admin, admin, employee, secretariat');
+    }
+
     user.role = role;
     user.updatedAt = new Date().toISOString();
 
@@ -338,9 +321,6 @@ class UserService {
     return userWithoutPassword;
   }
 
-  /**
-   * Toggle user active status
-   */
   async toggleUserActive(id) {
     const users = await this.loadUsers();
     const userIndex = users.findIndex(u => u.id === id);
@@ -368,17 +348,11 @@ class UserService {
     return userWithoutPassword;
   }
 
-  /**
-   * Check if username is available
-   */
   async checkUsernameAvailability(username) {
     const users = await this.loadUsers();
     return !users.some(u => u.username === username.toLowerCase());
   }
 
-  /**
-   * Update username manually
-   */
   async updateUsername(id, newUsername) {
     const users = await this.loadUsers();
     const userIndex = users.findIndex(u => u.id === id);
@@ -399,6 +373,34 @@ class UserService {
 
     const user = users[userIndex];
     user.username = normalizedUsername;
+    user.updatedAt = new Date().toISOString();
+
+    users[userIndex] = user;
+    await this.saveUsers(users);
+
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  }
+
+  async updateSystemAccess(id, systemAccessUpdates) {
+    const users = await this.loadUsers();
+    const userIndex = users.findIndex(u => u.id === id);
+
+    if (userIndex === -1) {
+      throw new Error('User not found');
+    }
+
+    const user = users[userIndex];
+
+    if (!user.systemAccess) {
+      user.systemAccess = {};
+    }
+
+    user.systemAccess = {
+      ...user.systemAccess,
+      ...systemAccessUpdates
+    };
+
     user.updatedAt = new Date().toISOString();
 
     users[userIndex] = user;

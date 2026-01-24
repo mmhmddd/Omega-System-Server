@@ -1,4 +1,4 @@
-// src/routes/index.js
+// src/routes/index.js (محدث)
 const express = require('express');
 const router = express.Router();
 
@@ -7,9 +7,11 @@ const authRoutes = require('./auth.routes');
 const usersRoutes = require('./users.routes');
 const priceQuoteRoutes = require('./price-quote.routes');
 const receiptsRoutes = require('./receipts.routes');
-const rfqsRoutes = require('./rfqs.routes'); 
-const purchaseRoutes = require('./purchases.routes'); // ADD THIS
-
+const cuttingRoutes = require('./cutting.routes');
+const secretariatRoutes = require('./secretariat.routes');
+const secretariatUserRoutes = require('./secretariat-user.routes');
+const PurchaseOrderRoutes = require('./purchases.routes');
+const rfqRoutes = require('./rfqs.routes');
 
 // Check if system routes exist
 let systemRoutes;
@@ -24,8 +26,17 @@ router.use('/auth', authRoutes);
 router.use('/users', usersRoutes);
 router.use('/price-quotes', priceQuoteRoutes);
 router.use('/receipts', receiptsRoutes);
-router.use('/rfqs', rfqsRoutes);
-router.use('/purchases', purchaseRoutes);
+router.use('/cutting', cuttingRoutes);
+router.use('/secretariat', secretariatRoutes);
+router.use('/user-forms', secretariatUserRoutes);
+router.use('/purchase-orders', PurchaseOrderRoutes);
+router.use('/rfqs', rfqRoutes);
+
+
+
+
+
+
 
 if (systemRoutes) {
   router.use('/system', systemRoutes);

@@ -34,7 +34,8 @@ router.post('/', validateUser, async (req, res, next) => {
       name: req.body.name,
       email: req.body.email,
       password: req.body.password,
-      role: req.body.role || 'employee'
+      role: req.body.role || 'employee',
+      systemAccess: req.body.systemAccess || {}
     };
 
     const user = await userService.createUser(userData);
@@ -105,7 +106,8 @@ router.put('/:id', validateUserUpdate, async (req, res, next) => {
       email: req.body.email,
       password: req.body.password,
       role: req.body.role,
-      active: req.body.active
+      active: req.body.active,
+      systemAccess: req.body.systemAccess
     };
 
     const user = await userService.updateUser(req.params.id, updateData);
@@ -234,6 +236,47 @@ router.patch('/:id/username', async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Username updated successfully',
+      data: user
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   PATCH /api/users/:id/system-access
+ * @desc    Update user system access permissions
+ * @access  Super Admin only
+ */
+router.patch('/:id/system-access', async (req, res, next) => {
+  try {
+    const systemAccessUpdates = req.body;
+
+    // Validate that at least one system access field is provided
+    if (!systemAccessUpdates || Object.keys(systemAccessUpdates).length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide at least one system access permission to update'
+      });
+    }
+
+    // Validate that all values are boolean
+    const invalidFields = Object.entries(systemAccessUpdates).filter(
+      ([key, value]) => typeof value !== 'boolean'
+    );
+
+    if (invalidFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid system access values. All values must be boolean. Invalid fields: ${invalidFields.map(([key]) => key).join(', ')}`
+      });
+    }
+
+    const user = await userService.updateSystemAccess(req.params.id, systemAccessUpdates);
+    
+    res.status(200).json({
+      success: true,
+      message: 'System access updated successfully',
       data: user
     });
   } catch (error) {

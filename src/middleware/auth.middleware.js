@@ -26,10 +26,11 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-this');
 
-      // Attach user info to request
+      // Attach user info to request (including systemAccess)
       req.user = {
         id: decoded.id,
-        role: decoded.role
+        role: decoded.role,
+        systemAccess: decoded.systemAccess || {}
       };
 
       next();
@@ -48,4 +49,27 @@ const protect = async (req, res, next) => {
   }
 };
 
-module.exports = { protect };
+/**
+ * Check if user has access to a specific system
+ * @param {string} systemName - Name of the system (e.g., 'laserCuttingManagement')
+ */
+const checkSystemAccess = (systemName) => {
+  return (req, res, next) => {
+    // Super admins have access to everything
+    if (req.user.role === 'super_admin') {
+      return next();
+    }
+
+    // Check if user has systemAccess and the specific system is enabled
+    if (!req.user.systemAccess || !req.user.systemAccess[systemName]) {
+      return res.status(403).json({
+        success: false,
+        message: `You don't have access to ${systemName}. Please contact your administrator.`
+      });
+    }
+
+    next();
+  };
+};
+
+module.exports = { protect, checkSystemAccess };

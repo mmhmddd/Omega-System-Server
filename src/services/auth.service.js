@@ -70,11 +70,15 @@ class AuthService {
   }
 
   /**
-   * Generate JWT token
+   * Generate JWT token with systemAccess
    */
-  _generateToken(userId, role) {
+  _generateToken(userId, role, systemAccess = {}) {
     return jwt.sign(
-      { id: userId, role: role },
+      { 
+        id: userId, 
+        role: role,
+        systemAccess: systemAccess
+      },
       process.env.JWT_SECRET || 'your-secret-key-change-this',
       { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
@@ -117,8 +121,13 @@ class AuthService {
         throw error;
       }
 
-      // Generate token
-      const token = this._generateToken(user.id, user.role);
+      // Initialize systemAccess if it doesn't exist
+      const systemAccess = user.systemAccess || {
+        laserCuttingManagement: false
+      };
+
+      // Generate token with systemAccess
+      const token = this._generateToken(user.id, user.role, systemAccess);
 
       // Update last login
       user.lastLogin = new Date().toISOString();
