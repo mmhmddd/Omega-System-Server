@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>عرض سعر - OMEGA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+
+<style>
+/* ================= Variables ================= */
+:root {
+  --primary: #0b4fa2;
+  --secondary: #555;
+  --border: #000;
+  --header-height: 90px;
+  --footer-height: 40px;
+}
+
+/* ================= Reset ================= */
+* {
+  box-sizing: border-box;
+  font-family: 'Cairo', Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* ================= Page Setup - Header & Footer ثابتين ================= */
+@page {
+  size: A4;
+  margin: 0;
+}
+
+body {
+  background: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+/* ================= Header - Fixed على كل صفحة ================= */
+.header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 3px solid var(--primary);
+  padding: 10px 20px;
+  z-index: 1000;
+}
+
+.logo img {
+  height: 60px;
+}
+
+.doc-info {
+  font-size: 11px;
+  text-align: left;
+  direction: ltr;
+  font-family: 'Roboto', Arial, sans-serif;
+}
+
+.doc-info p {
+  margin: 3px 0;
+}
+
+.doc-info strong {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ================= Footer - Fixed على كل صفحة ================= */
+footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--footer-height);
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 20px;
+  font-size: 11px;
+  color: var(--secondary);
+  border-top: 1px solid #ddd;
+  z-index: 1000;
+}
+
+footer .page-number {
+  font-family: 'Cairo', Arial, sans-serif;
+  direction: rtl;
+}
+
+/* ================= Content Area - بين الـ Header والـ Footer ================= */
+.content {
+  margin-top: var(--header-height);
+  margin-bottom: var(--footer-height);
+  padding: 20px;
+}
+
+/* ================= Title ================= */
+.title {
+  text-align: center;
+  margin: 20px 0 25px 0;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+/* ================= Company ================= */
+.company {
+  margin-bottom: 25px;
+  background-color: #ecebeb;
+  padding: 15px 20px;
+  border-radius: 7px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.col-left,
+.col-right {
+  width: 48%;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Arabic */
+.col-right {
+  text-align: right;
+  direction: rtl;
+  font-family: 'Cairo', Arial, sans-serif;
+}
+
+.col-right strong {
+  font-weight: 700;
+}
+
+/* English */
+.col-left {
+  text-align: left;
+  direction: ltr;
+  font-family: 'Roboto', Arial, sans-serif;
+}
+
+.col-left strong {
+  font-weight: 600;
+}
+
+/* ================= Table Styles ================= */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 20px 0;
+  font-family: 'Cairo', Arial, sans-serif;
+}
+
+table th {
+  background-color: var(--primary);
+  color: white;
+  padding: 10px 8px;
+  border: 1px solid var(--border);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+table td {
+  padding: 8px 6px;
+  border: 1px solid #ddd;
+  font-size: 12px;
+}
+
+table tbody tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+/* ================= Page Break - للصفحات الجديدة ================= */
+.page-break {
+  page-break-before: always;
+  page-break-after: always;
+}
+
+/* ================= Attachment Pages ================= */
+.attachment-page {
+  min-height: calc(297mm - var(--header-height) - var(--footer-height));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.attachment-page img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+/* ================= Print Support ================= */
+@media print {
+  body {
+    background: none;
+  }
+  
+  .header {
+    position: fixed;
+    top: 0;
+  }
+  
+  footer {
+    position: fixed;
+    bottom: 0;
+  }
+  
+  .content {
+    margin-top: var(--header-height);
+    margin-bottom: var(--footer-height);
+  }
+  
+  .page-break {
+    page-break-before: always;
+    page-break-after: always;
+  }
+}
+</style>
+</head>
+
+<body>
+
+  <!-- ================= Header - ثابت في كل صفحة ================= -->
+  <header class="header">
+    <div class="doc-info">
+      <p><strong>REV. No:</strong> 00</p>
+      <p><strong>DATE OF ISSUE:</strong> 21-01-2026</p>
+    </div>
+    <div class="logo">
+      <img src="assets/images/OmegaLogo.png" alt="Omega Logo">
+    </div>
+  </header>
+
+  <!-- ================= Content Area - المحتوى بين Header و Footer ================= -->
+  <div class="content">
+
+    <!-- Title -->
+    <h1 class="title">عرض سعر</h1>
+
+    <!-- Company Info -->
+    <section class="company">
+      <div class="row">
+        <!-- Arabic (Right) -->
+        <div class="col-right">
+          <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+          <p>تصميم – تصنيع – تركيب</p>
+          <p>المملكة الأردنية الهاشمية</p>
+          <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+        </div>
+        <!-- English (Left) -->
+        <div class="col-left">
+          <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+          <p>Design – Manufacture – Installation</p>
+          <p>Jordan</p>
+          <p>Tel: +96264161060 | Fax: +96264162060</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Client Info Section - سيتم إضافته من الـ Service -->
+
+    <!-- Items Table - سيتم إضافته من الـ Service -->
+
+    <!-- Totals Section - سيتم إضافته من الـ Service -->
+
+    <!-- Notes Section - سيتم إضافته من الـ Service -->
+
+    <!-- Attachment Pages - سيتم إضافته من الـ Service -->
+
+  </div>
+
+  <!-- ================= Footer - ثابت في كل صفحة ================= -->
+  <footer>
+    <div style="font-family: 'Roboto', Arial, sans-serif;">OMEGA-SAL-06</div>
+    <div class="page-number">صفحة 1 من 1</div>
+  </footer>
+
+</body>
+</html>
