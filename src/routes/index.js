@@ -10,9 +10,9 @@ const receiptsRoutes = require('./receipts.routes');
 const cuttingRoutes = require('./cutting.routes');
 const secretariatRoutes = require('./secretariat.routes');
 const secretariatUserRoutes = require('./secretariat-user.routes');
-const PurchaseOrderRoutes = require('./purchases.routes');
 const rfqRoutes = require('./rfqs.routes');
-
+const PurchaseOrderRoutes = require('./purchases.routes');
+const materialsRoutes = require('./materials.routes');
 // Check if system routes exist
 let systemRoutes;
 try {
@@ -29,9 +29,9 @@ router.use('/receipts', receiptsRoutes);
 router.use('/cutting', cuttingRoutes);
 router.use('/secretariat', secretariatRoutes);
 router.use('/user-forms', secretariatUserRoutes);
-router.use('/purchase-orders', PurchaseOrderRoutes);
 router.use('/rfqs', rfqRoutes);
-
+router.use('/purchases', PurchaseOrderRoutes);
+router.use('/materials', materialsRoutes);
 
 
 

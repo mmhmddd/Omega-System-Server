@@ -131,6 +131,7 @@ class PurchaseService {
   detectPOLanguage(poData) {
     const fieldsToCheck = [
       poData.supplier,
+      poData.supplierAddress,
       poData.receiver,
       poData.receiverCity,
       poData.receiverAddress,
@@ -184,11 +185,14 @@ class PurchaseService {
       poNumber,
       date: poData.date || today,
       supplier: poData.supplier || '',
+      supplierAddress: poData.supplierAddress || '',
+      supplierPhone: poData.supplierPhone || '',
       receiver: poData.receiver || '',
       receiverCity: poData.receiverCity || '',
       receiverAddress: poData.receiverAddress || '',
       receiverPhone: poData.receiverPhone || '',
       tableHeaderText: poData.tableHeaderText || '',
+      taxRate: poData.taxRate || 0,
       items: poData.items || [],
       notes: poData.notes || '',
       language: detectedLanguage,
@@ -309,11 +313,14 @@ class PurchaseService {
 
     if (updateData.date) po.date = updateData.date;
     if (updateData.supplier !== undefined) po.supplier = updateData.supplier;
+    if (updateData.supplierAddress !== undefined) po.supplierAddress = updateData.supplierAddress;
+    if (updateData.supplierPhone !== undefined) po.supplierPhone = updateData.supplierPhone;
     if (updateData.receiver !== undefined) po.receiver = updateData.receiver;
     if (updateData.receiverCity !== undefined) po.receiverCity = updateData.receiverCity;
     if (updateData.receiverAddress !== undefined) po.receiverAddress = updateData.receiverAddress;
     if (updateData.receiverPhone !== undefined) po.receiverPhone = updateData.receiverPhone;
     if (updateData.tableHeaderText !== undefined) po.tableHeaderText = updateData.tableHeaderText;
+    if (updateData.taxRate !== undefined) po.taxRate = updateData.taxRate;
     if (updateData.items) po.items = updateData.items;
     if (updateData.notes !== undefined) po.notes = updateData.notes;
     if (updateData.status) po.status = updateData.status;

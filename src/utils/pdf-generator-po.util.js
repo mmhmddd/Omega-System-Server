@@ -14,6 +14,7 @@ class POPDFGenerator {
   detectLanguage(poData) {
     const fieldsToCheck = [
       poData.supplier,
+      poData.supplierAddress,
       poData.receiver,
       poData.receiverCity,
       poData.receiverAddress,
@@ -59,6 +60,8 @@ class POPDFGenerator {
         revNo: 'REV. No',
         supplierInfo: 'معلومات المورد',
         supplierName: 'اسم المورد',
+        supplierAddress: 'عنوان المورد',
+        supplierPhone: 'هاتف المورد',
         receiverInfo: 'معلومات المستلم',
         receiverName: 'اسم المستلم',
         receiverCity: 'مدينة المستلم',
@@ -99,6 +102,8 @@ class POPDFGenerator {
         revNo: 'REV. No',
         supplierInfo: 'Supplier Information',
         supplierName: 'Supplier Name',
+        supplierAddress: 'Supplier Address',
+        supplierPhone: 'Supplier Phone',
         receiverInfo: 'Receiver Information',
         receiverName: 'Receiver Name',
         receiverCity: 'Receiver City',
@@ -129,9 +134,9 @@ class POPDFGenerator {
     return labels[lang] || labels.ar;
   }
 
-  calculateTotals(items) {
+  calculateTotals(items, taxRate = 0) {
     if (!items || items.length === 0) {
-      return { subtotal: 0, grandTotal: 0 };
+      return { subtotal: 0, tax: 0, grandTotal: 0 };
     }
     
     let subtotal = 0;
@@ -142,10 +147,12 @@ class POPDFGenerator {
       subtotal += qty * price;
     });
 
-    const grandTotal = subtotal;
+    const tax = (subtotal * taxRate) / 100;
+    const grandTotal = subtotal + tax;
 
     return {
       subtotal: subtotal.toFixed(2),
+      tax: tax.toFixed(2),
       grandTotal: grandTotal.toFixed(2)
     };
   }
@@ -155,7 +162,7 @@ class POPDFGenerator {
     const labels = this.getLabels(language);
     const isRTL = language === 'ar';
     const formattedDate = po.date || new Date().toISOString().split('T')[0];
-    const totals = this.calculateTotals(po.items);
+    const totals = this.calculateTotals(po.items, po.taxRate || 0);
 
     let itemsHTML = '';
     if (po.items && po.items.length > 0) {
@@ -483,6 +490,18 @@ body {
       <span class="info-label">${labels.supplierName}:</span>
       <span class="info-value">${po.supplier || ''}</span>
     </div>
+    ${po.supplierAddress ? `
+    <div class="info-field">
+      <span class="info-label">${labels.supplierAddress}:</span>
+      <span class="info-value">${po.supplierAddress}</span>
+    </div>
+    ` : ''}
+    ${po.supplierPhone ? `
+    <div class="info-field">
+      <span class="info-label">${labels.supplierPhone}:</span>
+      <span class="info-value">${po.supplierPhone}</span>
+    </div>
+    ` : ''}
   </div>
 
   <!-- Receiver Information -->
@@ -545,6 +564,14 @@ body {
   <!-- Totals Section -->
   <div class="totals-section">
     <div class="totals-box">
+      <div class="total-row">
+        <span class="total-label">${labels.subtotal}:</span>
+        <span class="total-value">${totals.subtotal}</span>
+      </div>
+      <div class="total-row">
+        <span class="total-label">${labels.tax} (${po.taxRate || 0}%):</span>
+        <span class="total-value">${totals.tax}</span>
+      </div>
       <div class="total-row">
         <span class="total-label">${labels.grandTotal}:</span>
         <span class="total-value">${totals.grandTotal}</span>

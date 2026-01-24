@@ -63,8 +63,9 @@ router.get('/stats', async (req, res, next) => {
  * 3. CREATE PURCHASE ORDER (Auto-detect language from data)
  * POST /api/purchases
  * Body: {
- *   date, supplier, receiver, receiverCity, receiverAddress, receiverPhone,
- *   tableHeaderText, items: [{ description, unit, quantity, unitPrice }],
+ *   date, supplier, supplierAddress, supplierPhone,
+ *   receiver, receiverCity, receiverAddress, receiverPhone,
+ *   tableHeaderText, taxRate, items: [{ description, unit, quantity, unitPrice }],
  *   notes
  * }
  */
@@ -73,11 +74,14 @@ router.post('/', async (req, res, next) => {
     const poData = {
       date: req.body.date,
       supplier: req.body.supplier,
+      supplierAddress: req.body.supplierAddress,
+      supplierPhone: req.body.supplierPhone,
       receiver: req.body.receiver,
       receiverCity: req.body.receiverCity,
       receiverAddress: req.body.receiverAddress,
       receiverPhone: req.body.receiverPhone,
       tableHeaderText: req.body.tableHeaderText,
+      taxRate: req.body.taxRate,
       items: req.body.items || [],
       notes: req.body.notes
     };
@@ -172,11 +176,14 @@ router.put('/:id', async (req, res, next) => {
     const updateData = {
       date: req.body.date,
       supplier: req.body.supplier,
+      supplierAddress: req.body.supplierAddress,
+      supplierPhone: req.body.supplierPhone,
       receiver: req.body.receiver,
       receiverCity: req.body.receiverCity,
       receiverAddress: req.body.receiverAddress,
       receiverPhone: req.body.receiverPhone,
       tableHeaderText: req.body.tableHeaderText,
+      taxRate: req.body.taxRate,
       items: req.body.items,
       notes: req.body.notes,
       status: req.body.status
