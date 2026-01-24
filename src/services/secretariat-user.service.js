@@ -156,9 +156,10 @@ class SecretariatUserService {
       let htmlTemplate = await fs.readFile(templatePath, 'utf8');
 
       htmlTemplate = htmlTemplate
-        .replace(/{{LOGO}}/g, logoBase64 ? `<img src="data:image/png;base64,${logoBase64}" alt="Logo" style="height: 60px;" />` : '')
+        .replace(/{{LOGO}}/g, logoBase64 ? `<img src="data:image/png;base64,${logoBase64}" alt="Logo" style="height: 50px;" />` : '')
         .replace(/{{EMPLOYEE_NAME}}/g, formData.employeeName)
         .replace(/{{DATE}}/g, formData.date)
+        .replace(/{{PROJECT_NAME}}/g, formData.projectName || '----------------')
         .replace(/{{FORM_CODE}}/g, FORM_CODES[formType]);
 
       browser = await puppeteer.launch({
@@ -173,24 +174,36 @@ class SecretariatUserService {
       });
 
       const page = await browser.newPage();
+      
+      // Set viewport to ensure proper rendering
+      await page.setViewport({
+        width: 794,  // A4 width in pixels at 96 DPI
+        height: 1123, // A4 height in pixels at 96 DPI
+        deviceScaleFactor: 1
+      });
+
       await page.setContent(htmlTemplate, { waitUntil: 'networkidle0', timeout: 60000 });
       await page.evaluate(() => document.fonts.ready);
 
       const filename = `USER_${formData.formNumber}_${formData.employeeName.replace(/\s+/g, '_')}_${formData.date}.pdf`;
       const pdfPath = path.join(PDF_DIR, filename);
 
-      await page.pdf({
+      // PDF options with proper margins
+      const pdfOptions = {
         path: pdfPath,
         format: 'A4',
         printBackground: true,
         displayHeaderFooter: false,
+        preferCSSPageSize: false,
         margin: {
-          top: '20px',
-          bottom: '20px',
-          left: '20px',
-          right: '20px'
+          top: '10mm',
+          bottom: '10mm',
+          left: '10mm',
+          right: '10mm'
         }
-      });
+      };
+
+      await page.pdf(pdfOptions);
 
       await browser.close();
       console.log('User PDF generated successfully:', pdfPath);
@@ -257,6 +270,7 @@ class SecretariatUserService {
       formType: formData.formType,
       employeeId: createdBy,
       employeeName: user.name,
+      projectName: formData.projectName || null,
       date: formData.date || new Date().toISOString().split('T')[0],
       createdBy,
       createdByRole: user.role,
@@ -271,10 +285,7 @@ class SecretariatUserService {
     forms.push(newForm);
     await this.saveForms(forms);
 
-    // إنشاء إشعار للسكرتارية
     await this.createNotification(newForm, formData.formType, createdBy);
-
-    // إرسال بريد إلكتروني للسكرتارية
     await this.sendEmailToSecretariat(newForm, formData.formType);
 
     return newForm;

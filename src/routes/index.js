@@ -14,6 +14,7 @@ const rfqRoutes = require('./rfqs.routes');
 const PurchaseOrderRoutes = require('./purchases.routes');
 const materialsRoutes = require('./materials.routes');
 const supplierRoutes = require('./suppliers.routes');
+const itemsRoutes = require('./Items.routes');
 
 
 
@@ -39,7 +40,7 @@ router.use('/rfqs', rfqRoutes);
 router.use('/purchases', PurchaseOrderRoutes);
 router.use('/materials', materialsRoutes);
 router.use('/suppliers', supplierRoutes);
-
+router.use('/items', itemsRoutes);
 
 
 

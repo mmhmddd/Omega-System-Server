@@ -2,7 +2,6 @@
 
 /**
  * Simple validation middleware without external dependencies
- * You can install Joi later with: npm install joi
  */
 
 /**
@@ -165,8 +164,86 @@ const validateLogin = (req, res, next) => {
   next();
 };
 
+/**
+ * Validate item creation data
+ */
+const validateItem = (req, res, next) => {
+  const { name, description } = req.body;
+  const errors = [];
+
+  // Validate name (required)
+  if (!name || name.trim().length === 0) {
+    errors.push({ field: 'name', message: 'اسم الصنف مطلوب' });
+  } else if (name.length < 2) {
+    errors.push({ field: 'name', message: 'اسم الصنف يجب أن يكون على الأقل حرفين' });
+  } else if (name.length > 200) {
+    errors.push({ field: 'name', message: 'اسم الصنف يجب ألا يتجاوز 200 حرف' });
+  }
+
+  // Validate description (optional)
+  if (description !== undefined && description !== null && description.length > 500) {
+    errors.push({ field: 'description', message: 'الوصف يجب ألا يتجاوز 500 حرف' });
+  }
+
+  // If there are errors, return 400
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'خطأ في التحقق من البيانات',
+      errors
+    });
+  }
+
+  next();
+};
+
+/**
+ * Validate item update data
+ */
+const validateItemUpdate = (req, res, next) => {
+  const { name, description } = req.body;
+  const errors = [];
+
+  // Check if at least one field is provided
+  if (name === undefined && description === undefined) {
+    return res.status(400).json({
+      success: false,
+      message: 'يجب توفير حقل واحد على الأقل للتحديث'
+    });
+  }
+
+  // Validate name if provided
+  if (name !== undefined) {
+    if (!name || name.trim().length === 0) {
+      errors.push({ field: 'name', message: 'اسم الصنف مطلوب' });
+    } else if (name.length < 2) {
+      errors.push({ field: 'name', message: 'اسم الصنف يجب أن يكون على الأقل حرفين' });
+    } else if (name.length > 200) {
+      errors.push({ field: 'name', message: 'اسم الصنف يجب ألا يتجاوز 200 حرف' });
+    }
+  }
+
+  // Validate description if provided
+  if (description !== undefined && description !== null && description.length > 500) {
+    errors.push({ field: 'description', message: 'الوصف يجب ألا يتجاوز 500 حرف' });
+  }
+
+  // If there are errors, return 400
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'خطأ في التحقق من البيانات',
+      errors
+    });
+  }
+
+  next();
+};
+
 module.exports = {
   validateUser,
   validateUserUpdate,
-  validateLogin
+  validateLogin,
+  validateItem,
+  validateItemUpdate
 };

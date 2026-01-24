@@ -25,6 +25,7 @@ const directories = [
   'data/secretariat-forms',
   'data/cutting-jobs',
   'data/settings',
+  'data/items',
   'logs',
   'data/quotations',
   'data/quotations/pdfs',
@@ -72,6 +73,7 @@ const dataFiles = [
   { path: 'data/purchases/index.json', content: [] },
   { path: 'data/secretariat-forms/index.json', content: [] },
   { path: 'data/cutting-jobs/index.json', content: [] },
+  { path: 'data/items/index.json', content: [] },
   {
     path: 'data/settings/config.json',
     content: {

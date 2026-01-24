@@ -218,6 +218,7 @@ body {
   width: 210mm;
   min-height: 297mm;
   background: #fff;
+  margin: 0 auto;
   padding: 35mm 20mm 25mm 20mm;
 }
 
