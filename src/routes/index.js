@@ -13,6 +13,12 @@ const secretariatUserRoutes = require('./secretariat-user.routes');
 const rfqRoutes = require('./rfqs.routes');
 const PurchaseOrderRoutes = require('./purchases.routes');
 const materialsRoutes = require('./materials.routes');
+const supplierRoutes = require('./suppliers.routes');
+
+
+
+
+
 // Check if system routes exist
 let systemRoutes;
 try {
@@ -32,8 +38,7 @@ router.use('/user-forms', secretariatUserRoutes);
 router.use('/rfqs', rfqRoutes);
 router.use('/purchases', PurchaseOrderRoutes);
 router.use('/materials', materialsRoutes);
-
-
+router.use('/suppliers', supplierRoutes);
 
 
 
