@@ -1,4 +1,3 @@
-// src/routes/index.js (محدث)
 const express = require('express');
 const router = express.Router();
 
@@ -15,11 +14,7 @@ const PurchaseOrderRoutes = require('./purchases.routes');
 const materialsRoutes = require('./materials.routes');
 const supplierRoutes = require('./suppliers.routes');
 const itemsRoutes = require('./Items.routes');
-
-
-
-
-
+const filesroutes = require('./files.routes');
 // Check if system routes exist
 let systemRoutes;
 try {
@@ -41,8 +36,7 @@ router.use('/purchases', PurchaseOrderRoutes);
 router.use('/materials', materialsRoutes);
 router.use('/suppliers', supplierRoutes);
 router.use('/items', itemsRoutes);
-
-
+router.use('/file-management', filesroutes); // NEW
 
 if (systemRoutes) {
   router.use('/system', systemRoutes);
