@@ -12,6 +12,7 @@ const PORT = process.env.PORT || 4000;
 const routes = require('./src/routes');
 const errorMiddleware = require('./src/middleware/error.middleware');
 
+
 // Create required directories
 const directories = [
   'data',
