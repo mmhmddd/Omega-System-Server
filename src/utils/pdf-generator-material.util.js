@@ -1,7 +1,11 @@
-// src/utils/pdf-generator-material.util.js - MATERIAL REQUEST PDF GENERATOR
-const fs = require('fs');
+// ============================================================
+// 2. PDF GENERATOR MATERIAL - UPDATED WITH MERGE & HEADERS
+// src/utils/pdf-generator-material.util.js
+// ============================================================
+const fsSync = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
 class MaterialPDFGenerator {
   isArabic(text) {
@@ -30,9 +34,7 @@ class MaterialPDFGenerator {
     fieldsToCheck.forEach(field => {
       if (field) {
         totalFields++;
-        if (this.isArabic(field)) {
-          arabicCount++;
-        }
+        if (this.isArabic(field)) arabicCount++;
       }
     });
 
@@ -44,13 +46,12 @@ class MaterialPDFGenerator {
       ar: {
         title: 'طلب مواد داخلي',
         companyNameAr: 'شركة أوميغا للصناعات الهندسية',
-        companyNameEn: 'OMEGA ENGINEERING INDUSTRIES CO.',
+        companyNameEn: 'OMEGA ENGINEERING INDUSTRIES',
         tagline: 'تصميم – تصنيع – تركيب',
         taglineEn: 'DESIGN - FABRICATION - INSTALLATION',
         country: 'JORDAN',
         tel: 'Tel: +96264161060 Fax: +96264162060',
         website: 'https://www.omega-jordan.com',
-        email: 'info@omega-jordan.com / omega.jo@gmail.com',
         requestInfo: 'معلومات الطلب',
         mrNumber: 'رقم الطلب',
         date: 'التاريخ',
@@ -66,26 +67,23 @@ class MaterialPDFGenerator {
         requiredDate: 'مطلوب بتاريخ',
         priority: 'أولوية المادة',
         additionalNotes: 'ملاحظات',
-        additionalNotesPlaceholder: 'أدخل أي ملاحظات إضافية هنا...',
-        approvals: 'التوقيعات',
-        requester: 'أمين المستلم',
+        approvals: 'التواقيعات',
+        requester: 'أمين المستودع',
         sectionManager: 'مدير القسم',
         purchaseManager: 'أمين المشتريات',
         docCode: 'OMEGA-MAT-01',
         revision: 'REV. No: 01',
-        page: 'صفحة',
-        of: 'من'
+        issueDate: 'DATE OF ISSUE'
       },
       en: {
         title: 'Internal Material Request',
         companyNameAr: 'شركة أوميغا للصناعات الهندسية',
-        companyNameEn: 'OMEGA ENGINEERING INDUSTRIES CO.',
+        companyNameEn: 'OMEGA ENGINEERING INDUSTRIES',
         tagline: 'تصميم – تصنيع – تركيب',
         taglineEn: 'DESIGN - FABRICATION - INSTALLATION',
         country: 'JORDAN',
         tel: 'Tel: +96264161060 Fax: +96264162060',
         website: 'https://www.omega-jordan.com',
-        email: 'info@omega-jordan.com / omega.jo@gmail.com',
         requestInfo: 'Request Information',
         mrNumber: 'Request Number',
         date: 'Date',
@@ -101,55 +99,53 @@ class MaterialPDFGenerator {
         requiredDate: 'Required Date',
         priority: 'Priority',
         additionalNotes: 'Additional Notes',
-        additionalNotesPlaceholder: 'Enter any additional notes here...',
         approvals: 'Approvals',
         requester: 'Warehouse Keeper',
         sectionManager: 'Section Manager',
         purchaseManager: 'Purchase Manager',
         docCode: 'OMEGA-MAT-01',
         revision: 'REV. No: 01',
-        page: 'Page',
-        of: 'of'
+        issueDate: 'DATE OF ISSUE'
       }
     };
 
     return labels[lang] || labels.ar;
   }
 
-  generateHTML(material) {
-    const language = this.detectLanguage(material);
-    const labels = this.getLabels(language);
-    const isRTL = language === 'ar';
-    const formattedDate = material.date || new Date().toISOString().split('T')[0];
+generateHTML(material) {
+  const language = this.detectLanguage(material);
+  const labels = this.getLabels(language);
+  const isRTL = language === 'ar';
+  const formattedDate = material.date || new Date().toISOString().split('T')[0];
 
-    let itemsHTML = '';
-    if (material.items && material.items.length > 0) {
-      itemsHTML = material.items.map((item, index) => `
-        <tr>
-          <td style="text-align: center; padding: 10px 8px; background-color: #FFFBEA;">${index + 1}</td>
-          <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 10px;">${item.description || ''}</td>
-          <td style="text-align: center; padding: 10px;">${item.unit || ''}</td>
-          <td style="text-align: center; padding: 10px;">${item.quantity || ''}</td>
-          <td style="text-align: center; padding: 10px;">${item.requiredDate || ''}</td>
-          <td style="text-align: center; padding: 10px;">${item.priority || ''}</td>
-        </tr>
-      `).join('');
-    } else {
-      for (let i = 0; i < 5; i++) {
-        itemsHTML += `
-        <tr>
-          <td style="padding: 10px 8px; height: 40px; background-color: #FFFBEA;">&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-        </tr>
-        `;
-      }
+  let itemsHTML = '';
+  if (material.items && material.items.length > 0) {
+    itemsHTML = material.items.map((item, index) => `
+      <tr>
+        <td style="text-align: center; padding: 10px 8px;">${index + 1}</td>
+        <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 10px;">${item.description || ''}</td>
+        <td style="text-align: center; padding: 10px;">${item.unit || ''}</td>
+        <td style="text-align: center; padding: 10px;">${item.quantity || ''}</td>
+        <td style="text-align: center; padding: 10px;">${item.requiredDate || ''}</td>
+        <td style="text-align: center; padding: 10px;">${item.priority || ''}</td>
+      </tr>
+    `).join('');
+  } else {
+    for (let i = 0; i < 5; i++) {
+      itemsHTML += `
+      <tr>
+        <td style="padding: 10px 8px; height: 40px;">&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+      </tr>
+      `;
     }
+  }
 
-    return `
+  return `
 <!DOCTYPE html>
 <html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
 <head>
@@ -165,108 +161,152 @@ class MaterialPDFGenerator {
 
 body {
   background: #fff;
-  padding: 10mm;
+  margin: 0;
+  padding: 0;
 }
 
-.container {
+@page {
+  size: A4;
+  margin: 35mm 20mm 25mm 20mm;
+}
+
+.page-content {
   width: 100%;
-  max-width: 210mm;
-  margin: 0 auto;
+  background: #fff;
 }
 
 .header-box {
-  border: 2px solid #2B4C8C;
+  background-color: #f0f0f0;
   padding: 15px;
   margin-bottom: 15px;
-  text-align: center;
+  border: 1px solid #ddd;
+  direction: ltr;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
-.header-title {
-  color: #2B4C8C;
-  font-size: 20px;
-  font-weight: bold;
-  margin-bottom: 10px;
-}
-
-.company-info {
+.header-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #ddd;
+  direction: ltr;
 }
 
-.company-left, .company-right {
+.header-left, .header-right {
   width: 48%;
-  font-size: 10px;
-  line-height: 1.6;
 }
 
-.company-left {
+.header-left {
   text-align: left;
+  direction: ltr;
 }
 
-.company-right {
+.header-right {
   text-align: right;
+  direction: rtl;
 }
 
-.request-info {
+.header-left p, .header-right p {
+  margin: 4px 0;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.title {
+  text-align: center;
+  margin: 20px 0 15px 0;
+  font-size: 22px;
+  color: #1F6B3D;
+  font-weight: bold;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.doc-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  font-size: 12px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.doc-info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.doc-info-label {
+  font-weight: bold;
+  color: #1F6B3D;
+}
+
+.info-section {
+  background-color: #E8F0FE;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 4px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.info-title {
+  font-weight: bold;
+  color: #1F6B3D;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.info-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 2px;
-  margin-bottom: 15px;
-  border: 1px solid #2B4C8C;
+  gap: 10px;
 }
 
-.info-row {
-  display: contents;
+.info-field {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
 }
 
 .info-label {
-  background-color: #E8F0FE;
-  padding: 8px 12px;
   font-weight: bold;
-  font-size: 11px;
-  border: 1px solid #2B4C8C;
-  text-align: ${isRTL ? 'right' : 'left'};
+  min-width: 100px;
+  color: #333;
 }
 
 .info-value {
-  padding: 8px 12px;
-  font-size: 11px;
-  border: 1px solid #2B4C8C;
-  background-color: #fff;
-  text-align: ${isRTL ? 'right' : 'left'};
-}
-
-.section-title {
-  background-color: #2B4C8C;
-  color: white;
-  padding: 8px 12px;
-  font-weight: bold;
-  font-size: 13px;
-  margin: 15px 0 10px 0;
-  text-align: center;
+  color: #555;
 }
 
 .items-table {
   width: 100%;
   border-collapse: collapse;
-  margin: 10px 0;
+  margin: 15px 0;
   font-size: 11px;
 }
 
 .items-table thead {
-  background-color: #2B4C8C;
+  background-color: #1F6B3D;
   color: white;
+  display: table-header-group;
 }
 
 .items-table th {
   padding: 10px 8px;
   text-align: center;
   font-weight: bold;
-  border: 1px solid #2B4C8C;
+  border: 1px solid #1F6B3D;
+}
+
+.items-table tbody {
+  display: table-row-group;
+}
+
+.items-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .items-table td {
@@ -275,68 +315,89 @@ body {
   text-align: center;
 }
 
+.items-table tbody tr {
+  background-color: #fff;
+}
+
 .items-table tbody tr:nth-child(even) {
   background-color: #f9f9f9;
 }
 
 .notes-section {
-  border: 1px solid #ddd;
+  background-color: #FFFBEA;
   padding: 15px;
   margin: 15px 0;
-  min-height: 100px;
-  background-color: #FFFBEA;
+  border-radius: 4px;
+  min-height: 80px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .notes-title {
   font-weight: bold;
-  color: #2B4C8C;
+  color: #1F6B3D;
   margin-bottom: 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .notes-content {
-  font-size: 11px;
+  font-size: 12px;
   color: #555;
   line-height: 1.6;
 }
 
-.approvals-section {
+.signature-section {
   display: flex;
   justify-content: space-between;
-  margin-top: 30px;
-  gap: 15px;
+  margin-top: 40px;
+  gap: 20px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
-.approval-box {
+.signature-box {
   text-align: center;
   width: 32%;
   font-size: 11px;
 }
 
-.approval-label {
-  margin-bottom: 40px;
+.signature-label {
+  margin-bottom: 30px;
   font-weight: normal;
   color: #333;
 }
 
-.approval-line {
+.signature-line {
   border-bottom: 1.5px solid #333;
   width: 100%;
 }
 
-.footer {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 20px;
-  font-size: 10px;
-  color: #666;
-  border-top: 1px solid #ddd;
-  padding-top: 10px;
-}
-
 @media print {
   body {
+    background: none;
     padding: 0;
+    margin: 0;
+  }
+  
+  .page-content {
+    margin: 0;
+  }
+  
+  .items-table {
+    page-break-inside: auto;
+  }
+  
+  .items-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  .items-table thead {
+    display: table-header-group;
+  }
+  
+  .items-table tfoot {
+    display: table-footer-group;
   }
 }
 </style>
@@ -344,68 +405,69 @@ body {
 
 <body>
 
-<div class="container">
+<div class="page-content">
 
-  <!-- Header Box -->
   <div class="header-box">
-    <div class="header-title">${labels.title}</div>
-    <div class="company-info">
-      <div class="company-left">
-        <strong>${labels.companyNameEn}</strong><br>
-        ${labels.taglineEn}<br>
-        ${labels.country}<br>
-        ${labels.tel}<br>
-        ${labels.website} / ${labels.email}
+    <div class="header-row">
+      <div class="header-left">
+        <p><strong>${labels.companyNameEn}</strong></p>
+        <p>${labels.taglineEn}</p>
+        <p>${labels.country}</p>
+        <p>${labels.tel}</p>
+        <p>${labels.website}</p>
       </div>
-      <div class="company-right">
-        <strong>${labels.companyNameAr}</strong><br>
-        ${labels.tagline}<br>
-        ${labels.country}<br>
-        ${labels.tel}<br>
-        ${labels.website} / ${labels.email}
+      <div class="header-right">
+        <p><strong>${labels.companyNameAr}</strong></p>
+        <p>${labels.tagline}</p>
+        <p>${labels.country}</p>
+        <p>${labels.tel}</p>
+        <p>${labels.website}</p>
       </div>
     </div>
   </div>
 
-  <!-- Request Information -->
-  <div class="request-info">
-    <div class="info-row">
-      <div class="info-label">${labels.mrNumber}</div>
-      <div class="info-value">${material.mrNumber || ''}</div>
+  <h1 class="title">${labels.title}</h1>
+
+  <div class="doc-info">
+    <div class="doc-info-item">
+      <span class="doc-info-label">${labels.mrNumber}:</span>
+      <span>${material.mrNumber || ''}</span>
     </div>
-    <div class="info-row">
-      <div class="info-label">${labels.date}</div>
-      <div class="info-value">${formattedDate}</div>
-    </div>
-    <div class="info-row">
-      <div class="info-label">${labels.section}</div>
-      <div class="info-value">${material.section || ''}</div>
-    </div>
-    <div class="info-row">
-      <div class="info-label">${labels.project}</div>
-      <div class="info-value">${material.project || ''}</div>
-    </div>
-    <div class="info-row">
-      <div class="info-label">${labels.requestPriority}</div>
-      <div class="info-value">${material.requestPriority || ''}</div>
-    </div>
-    <div class="info-row">
-      <div class="info-label">${labels.requestReason}</div>
-      <div class="info-value">${material.requestReason || ''}</div>
+    <div class="doc-info-item">
+      <span class="doc-info-label">${labels.date}:</span>
+      <span>${formattedDate}</span>
     </div>
   </div>
 
-  <!-- Required Materials Section Title -->
-  <div class="section-title">${labels.requiredMaterials}</div>
+  <div class="info-section">
+    <div class="info-title">${labels.requestInfo}</div>
+    <div class="info-grid">
+      <div class="info-field">
+        <span class="info-label">${labels.section}:</span>
+        <span class="info-value">${material.section || ''}</span>
+      </div>
+      <div class="info-field">
+        <span class="info-label">${labels.project}:</span>
+        <span class="info-value">${material.project || ''}</span>
+      </div>
+      <div class="info-field">
+        <span class="info-label">${labels.requestPriority}:</span>
+        <span class="info-value">${material.requestPriority || ''}</span>
+      </div>
+      <div class="info-field">
+        <span class="info-label">${labels.requestReason}:</span>
+        <span class="info-value">${material.requestReason || ''}</span>
+      </div>
+    </div>
+  </div>
 
-  <!-- Items Table -->
   <table class="items-table">
     <thead>
       <tr>
-        <th style="width: 6%;">${labels.itemNo}</th>
+        <th style="width: 8%;">${labels.itemNo}</th>
         <th style="width: 30%;">${labels.description}</th>
         <th style="width: 12%;">${labels.unit}</th>
-        <th style="width: 12%;">${labels.quantity}</th>
+        <th style="width: 10%;">${labels.quantity}</th>
         <th style="width: 20%;">${labels.requiredDate}</th>
         <th style="width: 20%;">${labels.priority}</th>
       </tr>
@@ -415,41 +477,32 @@ body {
     </tbody>
   </table>
 
-  <!-- Additional Notes -->
   <div class="notes-section">
     <div class="notes-title">${labels.additionalNotes}</div>
-    <div class="notes-content">${material.additionalNotes || labels.additionalNotesPlaceholder}</div>
+    <div class="notes-content">${material.additionalNotes || ''}</div>
   </div>
 
-  <!-- Approvals Section -->
-  <div class="approvals-section">
-    <div class="approval-box">
-      <div class="approval-label">${labels.requester}</div>
-      <div class="approval-line"></div>
+  <div class="signature-section">
+    <div class="signature-box">
+      <div class="signature-label">${labels.requester}</div>
+      <div class="signature-line"></div>
     </div>
-    <div class="approval-box">
-      <div class="approval-label">${labels.sectionManager}</div>
-      <div class="approval-line"></div>
+    <div class="signature-box">
+      <div class="signature-label">${labels.sectionManager}</div>
+      <div class="signature-line"></div>
     </div>
-    <div class="approval-box">
-      <div class="approval-label">${labels.purchaseManager}</div>
-      <div class="approval-line"></div>
+    <div class="signature-box">
+      <div class="signature-label">${labels.purchaseManager}</div>
+      <div class="signature-line"></div>
     </div>
-  </div>
-
-  <!-- Footer -->
-  <div class="footer">
-    <span>${labels.docCode}</span>
-    <span>${labels.revision}</span>
-    <span>${labels.page} 1 ${labels.of} 1</span>
   </div>
 
 </div>
 
 </body>
 </html>
-    `;
-  }
+  `;
+}
 
   async generateMaterialPDF(material) {
     const language = this.detectLanguage(material);
@@ -459,11 +512,11 @@ body {
       
       try {
         const pdfDir = path.join(__dirname, '../../data/materials-requests/pdfs');
-        if (!fs.existsSync(pdfDir)) {
-          fs.mkdirSync(pdfDir, { recursive: true });
+        if (!fsSync.existsSync(pdfDir)) {
+          fsSync.mkdirSync(pdfDir, { recursive: true });
         }
 
-        const filename = `${material.mrNumber || 'IMR'}_${Date.now()}.pdf`;
+        const filename = `${material.mrNumber || 'material'}_${Date.now()}.pdf`;
         const filepath = path.join(pdfDir, filename);
         const html = this.generateHTML(material);
 
@@ -488,11 +541,12 @@ body {
           format: 'A4',
           printBackground: true,
           margin: {
-            top: '10mm',
-            right: '10mm',
-            bottom: '10mm',
-            left: '10mm'
-          }
+            top: '0mm',
+            right: '0mm',
+            bottom: '0mm',
+            left: '0mm'
+          },
+          preferCSSPageSize: true
         });
 
         await browser.close();
@@ -514,6 +568,316 @@ body {
         });
       }
     });
+  }
+
+  getA4Dimensions() {
+    return {
+      width: 595.28,
+      height: 841.89
+    };
+  }
+
+  async resizePageToA4(page) {
+    const a4 = this.getA4Dimensions();
+    const { width, height } = page.getSize();
+
+    const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
+    if (isA4) return page;
+
+    const scaleX = a4.width / width;
+    const scaleY = a4.height / height;
+    const scale = Math.min(scaleX, scaleY, 1);
+
+    page.setSize(a4.width, a4.height);
+    
+    if (scale < 1) {
+      page.scaleContent(scale, scale);
+      
+      const scaledWidth = width * scale;
+      const scaledHeight = height * scale;
+      const translateX = (a4.width - scaledWidth) / 2;
+      const translateY = (a4.height - scaledHeight) / 2;
+      page.translateContent(translateX, translateY);
+    }
+
+    return page;
+  }
+
+  async addHeadersFootersToAllPages(pdfDoc, language = 'ar') {
+    const pages = pdfDoc.getPages();
+    const totalPages = pages.length;
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const isRTL = language === 'ar';
+    const a4 = this.getA4Dimensions();
+    
+    const primaryGreen = rgb(0.122, 0.420, 0.239);
+    const textGray = rgb(0.333, 0.333, 0.333);
+    const lightGray = rgb(0.8, 0.8, 0.8);
+    const white = rgb(1, 1, 1);
+
+    let logoImage = null;
+    try {
+      const logoPath = path.join(__dirname, '../../assets/images/OmegaLogo.png');
+      if (fsSync.existsSync(logoPath)) {
+        const logoBytes = fsSync.readFileSync(logoPath);
+        logoImage = await pdfDoc.embedPng(logoBytes);
+      }
+    } catch (error) {
+      console.log('Logo not found');
+    }
+
+    for (let i = 0; i < totalPages; i++) {
+      const page = pages[i];
+      const { width, height } = page.getSize();
+      
+      const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
+      if (!isA4) {
+        console.log(`Page ${i + 1} is not A4, skipping header/footer`);
+        continue;
+      }
+      
+      const revNo = 'REV. No: 01';
+      const dateOfIssue = `DATE OF ISSUE: ${new Date().toISOString().split('T')[0]}`;
+      const docCode = 'OMEGA-MAT-01';
+      const pageNumber = `Page ${i + 1} of ${totalPages}`;
+
+      if (i > 0) {
+        page.drawRectangle({
+          x: 0,
+          y: height - 100,
+          width: width,
+          height: 100,
+          color: white
+        });
+      }
+
+      if (logoImage) {
+        const logoWidth = 80;
+        const logoHeight = 50;
+        
+        if (isRTL) {
+          page.drawImage(logoImage, {
+            x: 60,
+            y: height - 70,
+            width: logoWidth,
+            height: logoHeight
+          });
+        } else {
+          page.drawImage(logoImage, {
+            x: width - 140,
+            y: height - 70,
+            width: logoWidth,
+            height: logoHeight
+          });
+        }
+      }
+
+      page.drawLine({
+        start: { x: 50, y: height - 90 },
+        end: { x: width - 50, y: height - 90 },
+        thickness: 2,
+        color: primaryGreen
+      });
+
+      if (isRTL) {
+        page.drawText(revNo, {
+          x: width - 200,
+          y: height - 50,
+          size: 9,
+          font: font,
+          color: textGray
+        });
+        page.drawText(dateOfIssue, {
+          x: width - 200,
+          y: height - 63,
+          size: 9,
+          font: font,
+          color: textGray
+        });
+      } else {
+        page.drawText(revNo, {
+          x: 60,
+          y: height - 50,
+          size: 9,
+          font: font,
+          color: textGray
+        });
+        page.drawText(dateOfIssue, {
+          x: 60,
+          y: height - 63,
+          size: 9,
+          font: font,
+          color: textGray
+        });
+      }
+
+      page.drawLine({
+        start: { x: 50, y: 50 },
+        end: { x: width - 50, y: 50 },
+        thickness: 1,
+        color: lightGray
+      });
+
+      if (isRTL) {
+        page.drawText(docCode, {
+          x: width - 150,
+          y: 35,
+          size: 9,
+          font: font,
+          color: textGray
+        });
+        page.drawText(pageNumber, {
+          x: 60,
+          y: 35,
+          size: 9,
+          font: font,
+          color: textGray
+        });
+      } else {
+        page.drawText(pageNumber, {
+          x: 60,
+          y: 35,
+          size: 9,
+          font: font,
+          color: textGray
+        });
+        page.drawText(docCode, {
+          x: width - 150,
+          y: 35,
+          size: 9,
+          font: font,
+          color: textGray
+        });
+      }
+    }
+
+    return pdfDoc;
+  }
+
+  async mergePDFs(generatedPdfPath, attachmentPdf = null, outputFilename = null, language = 'ar') {
+    try {
+      if (!attachmentPdf) {
+        const pdfBytes = fsSync.readFileSync(generatedPdfPath);
+        const pdfDoc = await PDFDocument.load(pdfBytes);
+        
+        await this.addHeadersFootersToAllPages(pdfDoc, language);
+        
+        const updatedBytes = await pdfDoc.save();
+        fsSync.writeFileSync(generatedPdfPath, updatedBytes);
+        
+        return {
+          filepath: generatedPdfPath,
+          filename: path.basename(generatedPdfPath),
+          merged: false,
+          pageCount: {
+            total: pdfDoc.getPageCount()
+          }
+        };
+      }
+
+      const generatedPdfBytes = fsSync.readFileSync(generatedPdfPath);
+      const generatedPdf = await PDFDocument.load(generatedPdfBytes);
+
+      let attachmentPdfBytes;
+      if (Buffer.isBuffer(attachmentPdf)) {
+        attachmentPdfBytes = attachmentPdf;
+      } else if (typeof attachmentPdf === 'string') {
+        attachmentPdfBytes = fsSync.readFileSync(attachmentPdf);
+      } else {
+        throw new Error('Invalid attachment format');
+      }
+
+      const attachmentPdfDoc = await PDFDocument.load(attachmentPdfBytes);
+      const mergedPdf = await PDFDocument.create();
+      const a4 = this.getA4Dimensions();
+
+      const generatedPages = await mergedPdf.copyPages(
+        generatedPdf,
+        generatedPdf.getPageIndices()
+      );
+      generatedPages.forEach(page => mergedPdf.addPage(page));
+
+      const attachmentIndices = attachmentPdfDoc.getPageIndices();
+      for (const index of attachmentIndices) {
+        const [copiedPage] = await mergedPdf.copyPages(attachmentPdfDoc, [index]);
+        const { width, height } = copiedPage.getSize();
+        
+        const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
+        
+        if (!isA4) {
+          console.log(`Normalizing attachment page ${index + 1} from ${width.toFixed(2)}x${height.toFixed(2)} to A4`);
+          await this.resizePageToA4(copiedPage);
+        }
+        
+        mergedPdf.addPage(copiedPage);
+      }
+
+      await this.addHeadersFootersToAllPages(mergedPdf, language);
+
+      const timestamp = Date.now();
+      const finalFilename = outputFilename || 
+        path.basename(generatedPdfPath).replace('.pdf', `_merged_${timestamp}.pdf`);
+      
+      const outputDir = path.dirname(generatedPdfPath);
+      const outputPath = path.join(outputDir, finalFilename);
+
+      const mergedPdfBytes = await mergedPdf.save();
+      fsSync.writeFileSync(outputPath, mergedPdfBytes);
+
+      try {
+        fsSync.unlinkSync(generatedPdfPath);
+        console.log('✓ Original PDF deleted');
+      } catch (err) {
+        console.log('Could not delete original:', err.message);
+      }
+
+      return {
+        filepath: outputPath,
+        filename: finalFilename,
+        merged: true,
+        pageCount: {
+          generated: generatedPdf.getPageCount(),
+          attachment: attachmentPdfDoc.getPageCount(),
+          total: mergedPdf.getPageCount()
+        }
+      };
+    } catch (error) {
+      throw new Error(`PDF merge failed: ${error.message}`);
+    }
+  }
+
+  async isValidPDF(pdfData) {
+    try {
+      let pdfBytes;
+      if (Buffer.isBuffer(pdfData)) {
+        pdfBytes = pdfData;
+      } else if (typeof pdfData === 'string') {
+        pdfBytes = fsSync.readFileSync(pdfData);
+      } else {
+        return false;
+      }
+      await PDFDocument.load(pdfBytes);
+      return true;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async getPageCount(pdfData) {
+    try {
+      let pdfBytes;
+      if (Buffer.isBuffer(pdfData)) {
+        pdfBytes = pdfData;
+      } else if (typeof pdfData === 'string') {
+        pdfBytes = fsSync.readFileSync(pdfData);
+      } else {
+        throw new Error('Invalid PDF data');
+      }
+      const pdf = await PDFDocument.load(pdfBytes);
+      return pdf.getPageCount();
+    } catch (error) {
+      throw new Error(`Failed to get page count: ${error.message}`);
+    }
   }
 }
 

@@ -1,72 +1,70 @@
-// src/routes/materials.routes.js - MATERIAL REQUEST ROUTES
+// ============================================================
+// MATERIAL ROUTES - UPDATED TO MATCH RECEIPT SYSTEM
+// src/routes/materials.routes.js
+// ============================================================
 const express = require('express');
 const router = express.Router();
 const path = require('path');
 const materialService = require('../services/material.service');
-const { protect ,checkRouteAccess } = require('../middleware/auth.middleware');
+const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
+const multer = require('multer');
+
+// Configure multer for file uploads (in memory)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed'), false);
+    }
+  }
+});
 
 router.use(protect);
 router.use(checkRouteAccess('materialManagement'));
 
 /**
- * 1. RESET COUNTER - Super admin only
- * POST /api/materials/reset-counter
- */
-router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) => {
-  try {
-    const result = await materialService.resetMaterialCounter();
-
-    res.status(200).json({
-      success: true,
-      message: 'Material Request counter reset successfully',
-      data: result
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * 2. GET MATERIAL REQUEST STATISTICS
- * GET /api/materials/stats
- */
-router.get('/stats', async (req, res, next) => {
-  try {
-    const stats = await materialService.getMaterialStats(req.user.id, req.user.role);
-
-    res.status(200).json({
-      success: true,
-      data: stats
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * 3. CREATE MATERIAL REQUEST (Auto-detect language from data)
+ * CREATE MATERIAL REQUEST (NO AUTO PDF GENERATION)
  * POST /api/materials
- * Body: {
- *   date, section, project, requestPriority, requestReason,
- *   items: [{ description, unit, quantity, requiredDate, priority }],
- *   additionalNotes
- * }
  */
 router.post('/', async (req, res, next) => {
   try {
+    // Parse items - handle both JSON string and object
+    let items = [];
+    if (req.body.items) {
+      if (typeof req.body.items === 'string') {
+        try {
+          items = JSON.parse(req.body.items);
+        } catch (e) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid items format. Must be valid JSON array.'
+          });
+        }
+      } else if (Array.isArray(req.body.items)) {
+        items = req.body.items;
+      } else {
+        items = [req.body.items];
+      }
+    }
+
     const materialData = {
       date: req.body.date,
       section: req.body.section,
       project: req.body.project,
       requestPriority: req.body.requestPriority,
       requestReason: req.body.requestReason,
-      items: req.body.items || [],
+      items: items,
       additionalNotes: req.body.additionalNotes
     };
 
     const material = await materialService.createMaterialRequest(
-      materialData, 
+      materialData,
       req.user.id,
       req.user.role
     );
@@ -82,9 +80,7 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * 4. GET ALL MATERIAL REQUESTS
- * GET /api/materials
- * Query params: mrNumber, startDate, endDate, section, project, priority, status, search, page, limit
+ * GET ALL MATERIAL REQUESTS
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -130,8 +126,38 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
- * 5. GET SPECIFIC MATERIAL REQUEST (By ID)
- * GET /api/materials/:id
+ * GET MATERIAL REQUEST STATISTICS
+ */
+router.get('/stats', async (req, res, next) => {
+  try {
+    const stats = await materialService.getMaterialStats(req.user.id, req.user.role);
+    res.status(200).json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * RESET COUNTER - Super admin only
+ */
+router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) => {
+  try {
+    const result = await materialService.resetMaterialCounter();
+    res.status(200).json({
+      success: true,
+      message: 'Material Request counter reset successfully',
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET SPECIFIC MATERIAL REQUEST (By ID)
  */
 router.get('/:id', async (req, res, next) => {
   try {
@@ -151,8 +177,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * 6. UPDATE MATERIAL REQUEST (Auto-detect language from data)
- * PUT /api/materials/:id
+ * UPDATE MATERIAL REQUEST (NO AUTO PDF GENERATION)
  */
 router.put('/:id', async (req, res, next) => {
   try {
@@ -162,15 +187,15 @@ router.put('/:id', async (req, res, next) => {
       project: req.body.project,
       requestPriority: req.body.requestPriority,
       requestReason: req.body.requestReason,
-      items: req.body.items,
+      items: req.body.items ? JSON.parse(req.body.items) : undefined,
       additionalNotes: req.body.additionalNotes,
       status: req.body.status
     };
 
     const material = await materialService.updateMaterialRequest(
-      req.params.id, 
-      updateData, 
-      req.user.id, 
+      req.params.id,
+      updateData,
+      req.user.id,
       req.user.role
     );
 
@@ -185,13 +210,11 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * 7. DELETE MATERIAL REQUEST (Super Admin Only)
- * DELETE /api/materials/:id
+ * DELETE MATERIAL REQUEST (Super Admin Only)
  */
 router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
   try {
     await materialService.deleteMaterialRequest(req.params.id);
-
     res.status(200).json({
       success: true,
       message: 'Material Request deleted successfully'
@@ -202,15 +225,18 @@ router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
 });
 
 /**
- * 8. GENERATE MATERIAL REQUEST PDF
+ * GENERATE MATERIAL REQUEST PDF (WITH OPTIONAL ATTACHMENT)
  * POST /api/materials/:id/generate-pdf
  */
-router.post('/:id/generate-pdf', async (req, res, next) => {
+router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {
+    const attachmentPdf = req.file ? req.file.buffer : null;
+
     const result = await materialService.generateMaterialPDF(
-      req.params.id, 
-      req.user.id, 
-      req.user.role
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      attachmentPdf
     );
 
     const responseData = {
@@ -218,12 +244,26 @@ router.post('/:id/generate-pdf', async (req, res, next) => {
       mrNumber: result.material.mrNumber,
       pdfFilename: result.pdf.filename,
       language: result.pdf.language,
-      downloadUrl: `/api/materials/${req.params.id}/download-pdf`
+      downloadUrl: `/api/materials/${req.params.id}/download-pdf`,
+      merged: result.pdf.merged || false
     };
+
+    if (result.pdf.pageCount) {
+      responseData.pageCount = result.pdf.pageCount;
+    }
+
+    if (result.pdf.mergeError) {
+      responseData.mergeError = result.pdf.mergeError;
+      responseData.warning = 'PDF generated but attachment merge failed. Using original PDF.';
+    }
+
+    const message = result.pdf.merged
+      ? `PDF generated and merged successfully in ${result.pdf.language === 'ar' ? 'Arabic' : 'English'}`
+      : `PDF generated successfully in ${result.pdf.language === 'ar' ? 'Arabic' : 'English'}`;
 
     res.status(200).json({
       success: true,
-      message: `PDF generated successfully in ${result.pdf.language === 'ar' ? 'Arabic' : 'English'}`,
+      message,
       data: responseData
     });
   } catch (error) {
@@ -232,7 +272,7 @@ router.post('/:id/generate-pdf', async (req, res, next) => {
 });
 
 /**
- * 9. DOWNLOAD MATERIAL REQUEST PDF
+ * DOWNLOAD MATERIAL REQUEST PDF
  * GET /api/materials/:id/download-pdf
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
@@ -261,9 +301,7 @@ router.get('/:id/download-pdf', async (req, res, next) => {
     }
 
     res.download(pdfPath, `MR_${material.mrNumber}.pdf`, (err) => {
-      if (err) {
-        next(err);
-      }
+      if (err) next(err);
     });
   } catch (error) {
     next(error);

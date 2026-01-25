@@ -93,38 +93,38 @@ class PDFGenerator {
     return labels[lang] || labels.ar;
   }
 
-  generateHTML(receipt) {
-    const language = this.detectLanguage(receipt);
-    const labels = this.getLabels(language);
-    const isRTL = language === 'ar';
-    const formattedDate = receipt.date || new Date().toISOString().split('T')[0];
+generateHTML(receipt) {
+  const language = this.detectLanguage(receipt);
+  const labels = this.getLabels(language);
+  const isRTL = language === 'ar';
+  const formattedDate = receipt.date || new Date().toISOString().split('T')[0];
 
-    let itemsHTML = '';
-    if (receipt.items && receipt.items.length > 0) {
-      itemsHTML = receipt.items.map(item => `
-        <tr>
-          <td style="text-align: center; padding: 12px 8px;">${item.quantity || ''}</td>
-          <td style="text-align: left; padding: 12px 10px;">${item.description || ''}</td>
-          <td style="text-align: left; padding: 12px 10px;">${item.element || ''}</td>
-        </tr>
-      `).join('');
-    } else {
-      for (let i = 0; i < 3; i++) {
-        itemsHTML += `
-        <tr>
-          <td style="text-align: center; padding: 12px 8px; height: 45px;">&nbsp;</td>
-          <td style="text-align: left; padding: 12px 10px;">&nbsp;</td>
-          <td style="text-align: left; padding: 12px 10px;">&nbsp;</td>
-        </tr>
-        `;
-      }
+  let itemsHTML = '';
+  if (receipt.items && receipt.items.length > 0) {
+    itemsHTML = receipt.items.map(item => `
+      <tr>
+        <td style="text-align: center; padding: 12px 8px;">${item.quantity || ''}</td>
+        <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 12px 10px;">${item.description || ''}</td>
+        <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 12px 10px;">${item.element || ''}</td>
+      </tr>
+    `).join('');
+  } else {
+    for (let i = 0; i < 3; i++) {
+      itemsHTML += `
+      <tr>
+        <td style="text-align: center; padding: 12px 8px; height: 45px;">&nbsp;</td>
+        <td style="text-align: left; padding: 12px 10px;">&nbsp;</td>
+        <td style="text-align: left; padding: 12px 10px;">&nbsp;</td>
+      </tr>
+      `;
     }
+  }
 
-    const additionalTextHTML = receipt.additionalText 
-      ? `<div style="text-align: ${isRTL ? 'right' : 'left'}; margin: 15px 0; font-size: 13px;">${receipt.additionalText}</div>`
-      : `<div style="text-align: ${isRTL ? 'right' : 'left'}; margin: 15px 0; font-size: 13px;">${labels.additionalInfo}</div>`;
+  const additionalTextHTML = receipt.additionalText 
+    ? `<div style="text-align: ${isRTL ? 'right' : 'left'}; margin: 15px 0; font-size: 13px;">${receipt.additionalText}</div>`
+    : `<div style="text-align: ${isRTL ? 'right' : 'left'}; margin: 15px 0; font-size: 13px;">${labels.additionalInfo}</div>`;
 
-    return `
+  return `
 <!DOCTYPE html>
 <html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
 <head>
@@ -152,13 +152,14 @@ body {
   margin: 0;
 }
 
-.a4 {
-  width: 210mm;
-  min-height: 297mm;
+@page {
+  size: A4;
+  margin: 35mm 20mm 25mm 20mm;
+}
+
+.page-content {
+  width: 100%;
   background: #fff;
-  margin: 0 auto;
-  padding: 35mm 20mm 25mm 20mm;
-  position: relative;
 }
 
 .title {
@@ -167,6 +168,8 @@ body {
   font-size: 24px;
   color: var(--primary);
   font-weight: bold;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .company-box {
@@ -174,6 +177,8 @@ body {
   padding: 12px 18px;
   margin-bottom: 20px;
   border: none;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .company-row {
@@ -209,6 +214,8 @@ body {
   margin: 20px 0;
   border-radius: 4px;
   overflow: hidden;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .detail-row {
@@ -260,6 +267,7 @@ body {
 .items-table thead {
   background-color: #6b8dd6;
   color: white;
+  display: table-header-group;
 }
 
 .items-table thead th {
@@ -268,6 +276,15 @@ body {
   font-size: 13px;
   font-weight: bold;
   border: 1px solid #6b8dd6;
+}
+
+.items-table tbody {
+  display: table-row-group;
+}
+
+.items-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .items-table tbody td {
@@ -284,8 +301,9 @@ body {
   display: flex;
   justify-content: space-between;
   margin-top: 40px;
-  margin-bottom: 20mm;
   gap: 25px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .signature-box {
@@ -309,9 +327,28 @@ body {
   body {
     background: none;
     padding: 0;
-  }
-  .a4 {
     margin: 0;
+  }
+  
+  .page-content {
+    margin: 0;
+  }
+  
+  .items-table {
+    page-break-inside: auto;
+  }
+  
+  .items-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  .items-table thead {
+    display: table-header-group;
+  }
+  
+  .items-table tfoot {
+    display: table-footer-group;
   }
 }
 </style>
@@ -319,12 +356,10 @@ body {
 
 <body>
 
-<div class="a4">
+<div class="page-content">
 
-  <!-- Title -->
   <h1 class="title">${labels.title}</h1>
 
-  <!-- Company Info Box -->
   <div class="company-box">
     <div class="company-row">
       ${isRTL ? `
@@ -357,7 +392,6 @@ body {
     </div>
   </div>
 
-  <!-- Receipt Details Box -->
   <div class="details-box">
     ${receipt.to ? `
     <div class="detail-row">
@@ -407,16 +441,14 @@ body {
     ` : ''}
   </div>
 
-  <!-- Additional Text -->
   ${additionalTextHTML}
 
-  <!-- Items Table -->
   <table class="items-table">
     <thead>
       <tr>
         <th style="width: 15%;">${labels.quantity}</th>
-        <th style="width: 40%;">${labels.description}</th>
-        <th style="width: 45%;">${labels.element}</th>
+        <th style="width: 40%; text-align: ${isRTL ? 'right' : 'center'};">${labels.description}</th>
+        <th style="width: 45%; text-align: ${isRTL ? 'right' : 'center'};">${labels.element}</th>
       </tr>
     </thead>
     <tbody>
@@ -424,7 +456,6 @@ body {
     </tbody>
   </table>
 
-  <!-- Signature Section -->
   <div class="signature-section">
     <div class="signature-box">
       <div class="signature-label">${labels.receiverSignature}</div>
@@ -444,8 +475,8 @@ body {
 
 </body>
 </html>
-    `;
-  }
+  `;
+}
 
   async generateReceiptPDF(receipt) {
     const language = this.detectLanguage(receipt);

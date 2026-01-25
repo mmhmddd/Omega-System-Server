@@ -143,41 +143,41 @@ class RFQPDFGenerator {
     };
   }
 
-  generateHTML(rfq) {
-    const language = this.detectLanguage(rfq);
-    const labels = this.getLabels(language);
-    const isRTL = language === 'ar';
-    const formattedDate = rfq.date || new Date().toISOString().split('T')[0];
-    const totals = this.calculateTotal(rfq.items);
+generateHTML(rfq) {
+  const language = this.detectLanguage(rfq);
+  const labels = this.getLabels(language);
+  const isRTL = language === 'ar';
+  const formattedDate = rfq.date || new Date().toISOString().split('T')[0];
+  const totals = this.calculateTotal(rfq.items);
 
-    let itemsHTML = '';
-    if (rfq.items && rfq.items.length > 0) {
-      itemsHTML = rfq.items.map((item, index) => `
-        <tr>
-          <td style="text-align: center; padding: 10px 8px;">${index + 1}</td>
-          <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 10px;">${item.description || ''}</td>
-          <td style="text-align: center; padding: 10px;">${item.unit || ''}</td>
-          <td style="text-align: center; padding: 10px;">${item.quantity || ''}</td>
-          <td style="text-align: center; padding: 10px;">${item.unitPriceExternal || ''}</td>
-          <td style="text-align: center; padding: 10px;">${item.unitPriceInternal || ''}</td>
-        </tr>
-      `).join('');
-    } else {
-      for (let i = 0; i < 5; i++) {
-        itemsHTML += `
-        <tr>
-          <td style="padding: 10px 8px; height: 40px;">&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-        </tr>
-        `;
-      }
+  let itemsHTML = '';
+  if (rfq.items && rfq.items.length > 0) {
+    itemsHTML = rfq.items.map((item, index) => `
+      <tr>
+        <td style="text-align: center; padding: 10px 8px;">${index + 1}</td>
+        <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 10px;">${item.description || ''}</td>
+        <td style="text-align: center; padding: 10px;">${item.unit || ''}</td>
+        <td style="text-align: center; padding: 10px;">${item.quantity || ''}</td>
+        <td style="text-align: center; padding: 10px;">${item.unitPriceExternal || ''}</td>
+        <td style="text-align: center; padding: 10px;">${item.unitPriceInternal || ''}</td>
+      </tr>
+    `).join('');
+  } else {
+    for (let i = 0; i < 5; i++) {
+      itemsHTML += `
+      <tr>
+        <td style="padding: 10px 8px; height: 40px;">&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
+      </tr>
+      `;
     }
+  }
 
-    return `
+  return `
 <!DOCTYPE html>
 <html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
 <head>
@@ -193,14 +193,18 @@ class RFQPDFGenerator {
 
 body {
   background: #fff;
+  margin: 0;
+  padding: 0;
 }
 
-.a4 {
-  width: 210mm;
-  min-height: 297mm;
+@page {
+  size: A4;
+  margin: 35mm 20mm 25mm 20mm;
+}
+
+.page-content {
+  width: 100%;
   background: #fff;
-  margin: 0 auto;
-  padding: 35mm 20mm 25mm 20mm;
 }
 
 .header-box {
@@ -209,6 +213,8 @@ body {
   margin-bottom: 15px;
   border: 1px solid #ddd;
   direction: ltr;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .header-row {
@@ -244,6 +250,8 @@ body {
   font-size: 22px;
   color: #2B4C8C;
   font-weight: bold;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .doc-info {
@@ -251,6 +259,8 @@ body {
   justify-content: space-between;
   margin-bottom: 15px;
   font-size: 12px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .doc-info-item {
@@ -269,6 +279,8 @@ body {
   padding: 15px;
   margin-bottom: 15px;
   border-radius: 4px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .info-title {
@@ -310,6 +322,7 @@ body {
 .items-table thead {
   background-color: #2B4C8C;
   color: white;
+  display: table-header-group;
 }
 
 .items-table th {
@@ -317,6 +330,15 @@ body {
   text-align: center;
   font-weight: bold;
   border: 1px solid #2B4C8C;
+}
+
+.items-table tbody {
+  display: table-row-group;
+}
+
+.items-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .items-table td {
@@ -336,6 +358,8 @@ body {
 .total-row {
   background-color: #E8F0FE !important;
   font-weight: bold;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .notes-section {
@@ -344,6 +368,8 @@ body {
   margin: 15px 0;
   border-radius: 4px;
   min-height: 80px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .notes-title {
@@ -364,6 +390,8 @@ body {
   justify-content: space-between;
   margin-top: 40px;
   gap: 20px;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .signature-box {
@@ -387,9 +415,28 @@ body {
   body {
     background: none;
     padding: 0;
-  }
-  .a4 {
     margin: 0;
+  }
+  
+  .page-content {
+    margin: 0;
+  }
+  
+  .items-table {
+    page-break-inside: auto;
+  }
+  
+  .items-table tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+  
+  .items-table thead {
+    display: table-header-group;
+  }
+  
+  .items-table tfoot {
+    display: table-footer-group;
   }
 }
 </style>
@@ -397,9 +444,8 @@ body {
 
 <body>
 
-<div class="a4">
+<div class="page-content">
 
-  <!-- Header Box - ALWAYS: English left, Arabic right -->
   <div class="header-box">
     <div class="header-row">
       <div class="header-left">
@@ -419,10 +465,8 @@ body {
     </div>
   </div>
 
-  <!-- Title -->
   <h1 class="title">${labels.title}</h1>
 
-  <!-- Document Info -->
   <div class="doc-info">
     <div class="doc-info-item">
       <span class="doc-info-label">${labels.rfqNo}:</span>
@@ -434,7 +478,6 @@ body {
     </div>
   </div>
 
-  <!-- Request Information -->
   <div class="info-section">
     <div class="info-title">${labels.requestInfo}</div>
     <div class="info-grid">
@@ -457,7 +500,6 @@ body {
     </div>
   </div>
 
-  <!-- Items Table -->
   <table class="items-table">
     <thead>
       <tr>
@@ -481,13 +523,11 @@ body {
     </tbody>
   </table>
 
-  <!-- Notes Section -->
   <div class="notes-section">
     <div class="notes-title">${labels.notes}</div>
     <div class="notes-content">${rfq.notes || ''}</div>
   </div>
 
-  <!-- Signature Section -->
   <div class="signature-section">
     <div class="signature-box">
       <div class="signature-label">${labels.requesterSig}</div>
@@ -507,8 +547,8 @@ body {
 
 </body>
 </html>
-    `;
-  }
+  `;
+}
 
   async generateRFQPDF(rfq) {
     const language = this.detectLanguage(rfq);
