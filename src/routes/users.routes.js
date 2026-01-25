@@ -1,4 +1,4 @@
-// src/routes/users.routes.js
+// src/routes/users.routes.js (UPDATED with route access management)
 const express = require('express');
 const router = express.Router();
 const userService = require('../services/user.service');
@@ -24,6 +24,20 @@ router.use(protect);
 router.use(restrictTo('super_admin'));
 
 /**
+ * @route   GET /api/users/available-routes
+ * @desc    Get available routes for assignment
+ * @access  Super Admin only
+ */
+router.get('/available-routes', (req, res) => {
+  const availableRoutes = userService.getAvailableRoutes();
+  
+  res.status(200).json({
+    success: true,
+    data: availableRoutes
+  });
+});
+
+/**
  * @route   POST /api/users
  * @desc    Create a new user
  * @access  Super Admin only
@@ -35,7 +49,8 @@ router.post('/', validateUser, async (req, res, next) => {
       email: req.body.email,
       password: req.body.password,
       role: req.body.role || 'employee',
-      systemAccess: req.body.systemAccess || {}
+      systemAccess: req.body.systemAccess || {},
+      routeAccess: req.body.routeAccess || [] // NEW
     };
 
     const user = await userService.createUser(userData);
@@ -107,7 +122,8 @@ router.put('/:id', validateUserUpdate, async (req, res, next) => {
       password: req.body.password,
       role: req.body.role,
       active: req.body.active,
-      systemAccess: req.body.systemAccess
+      systemAccess: req.body.systemAccess,
+      routeAccess: req.body.routeAccess // NEW
     };
 
     const user = await userService.updateUser(req.params.id, updateData);
@@ -149,7 +165,7 @@ router.patch('/:id/role', async (req, res, next) => {
   try {
     const { role } = req.body;
     
-    if (!role || !['super_admin', 'admin', 'employee'].includes(role)) {
+    if (!role || !['super_admin', 'admin', 'employee', 'secretariat'].includes(role)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid role specified'
@@ -277,6 +293,36 @@ router.patch('/:id/system-access', async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'System access updated successfully',
+      data: user
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   PATCH /api/users/:id/route-access
+ * @desc    Update employee route access permissions
+ * @access  Super Admin only
+ * @body    { routeAccess: ['priceQuotes', 'purchases', 'rfqs'] }
+ */
+router.patch('/:id/route-access', async (req, res, next) => {
+  try {
+    const { routeAccess } = req.body;
+
+    // Validate that routeAccess is provided and is an array
+    if (!routeAccess || !Array.isArray(routeAccess)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Route access must be an array of route keys'
+      });
+    }
+
+    const user = await userService.updateRouteAccess(req.params.id, routeAccess);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Route access updated successfully',
       data: user
     });
   } catch (error) {

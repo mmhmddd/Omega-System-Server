@@ -1,4 +1,4 @@
-// src/services/auth.service.js
+// src/services/auth.service.js (UPDATED)
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
@@ -70,14 +70,15 @@ class AuthService {
   }
 
   /**
-   * Generate JWT token with systemAccess
+   * Generate JWT token with systemAccess and routeAccess
    */
-  _generateToken(userId, role, systemAccess = {}) {
+  _generateToken(userId, role, systemAccess = {}, routeAccess = []) {
     return jwt.sign(
       { 
         id: userId, 
         role: role,
-        systemAccess: systemAccess
+        systemAccess: systemAccess,
+        routeAccess: routeAccess // NEW
       },
       process.env.JWT_SECRET || 'your-secret-key-change-this',
       { expiresIn: process.env.JWT_EXPIRE || '7d' }
@@ -126,8 +127,11 @@ class AuthService {
         laserCuttingManagement: false
       };
 
-      // Generate token with systemAccess
-      const token = this._generateToken(user.id, user.role, systemAccess);
+      // Initialize routeAccess if it doesn't exist (NEW)
+      const routeAccess = user.routeAccess || [];
+
+      // Generate token with systemAccess and routeAccess
+      const token = this._generateToken(user.id, user.role, systemAccess, routeAccess);
 
       // Update last login
       user.lastLogin = new Date().toISOString();

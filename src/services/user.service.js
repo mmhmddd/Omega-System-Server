@@ -1,4 +1,4 @@
-// src/services/user.service.js (محدث)
+// src/services/user.service.js (UPDATED with routeAccess)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -7,6 +7,19 @@ const { generateId } = require('../utils/id-generator.util');
 const emailService = require('../utils/email.util');
 
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
+
+// Available routes that can be assigned to employees
+const AVAILABLE_ROUTES = [
+  { key: 'priceQuotes', label: 'Price Quotes', path: '/api/price-quotes' },
+  { key: 'receipts', label: 'Receipts', path: '/api/receipts' },
+  { key: 'cutting', label: 'Laser Cutting', path: '/api/cutting' },
+  { key: 'rfqs', label: 'RFQs', path: '/api/rfqs' },
+  { key: 'purchases', label: 'Purchase Orders', path: '/api/purchases' },
+  { key: 'materials', label: 'Material Requests', path: '/api/materials' },
+  { key: 'suppliers', label: 'Suppliers', path: '/api/suppliers' },
+  { key: 'items', label: 'Items', path: '/api/items' },
+  { key: 'userForms', label: 'User Forms', path: '/api/user-forms' }
+];
 
 class UserService {
   async initializeUsersFile() {
@@ -34,6 +47,7 @@ class UserService {
             systemAccess: {
               laserCuttingManagement: true,
             },
+            routeAccess: [], // Super admins don't need routeAccess
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           }
@@ -135,7 +149,6 @@ class UserService {
       throw new Error('Email already exists');
     }
 
-    // تحديث الأدوار المتاحة لتشمل secretariat
     const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
     if (!validRoles.includes(userData.role)) {
       throw new Error('Invalid role specified. Valid roles: super_admin, admin, employee, secretariat');
@@ -155,6 +168,19 @@ class UserService {
       laserCuttingManagement: false,
     };
 
+    // Initialize routeAccess for employees
+    let routeAccess = [];
+    if (userData.role === 'employee') {
+      routeAccess = userData.routeAccess || [];
+      
+      // Validate routeAccess
+      const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
+      const invalidRoutes = routeAccess.filter(r => !validRouteKeys.includes(r));
+      if (invalidRoutes.length > 0) {
+        throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
+      }
+    }
+
     const newUser = {
       id: generateId('USER'),
       username,
@@ -164,6 +190,7 @@ class UserService {
       role: userData.role,
       active: true,
       systemAccess,
+      routeAccess, // NEW FIELD
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -258,6 +285,22 @@ class UserService {
       };
     }
 
+    // Handle routeAccess updates for employees
+    if (updateData.routeAccess !== undefined) {
+      if (user.role === 'employee') {
+        // Validate routeAccess
+        const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
+        const invalidRoutes = updateData.routeAccess.filter(r => !validRouteKeys.includes(r));
+        if (invalidRoutes.length > 0) {
+          throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
+        }
+        user.routeAccess = updateData.routeAccess;
+      } else {
+        // Non-employees don't use routeAccess
+        user.routeAccess = [];
+      }
+    }
+
     user.updatedAt = new Date().toISOString();
 
     users[userIndex] = user;
@@ -312,6 +355,14 @@ class UserService {
     }
 
     user.role = role;
+    
+    // Reset routeAccess when changing role
+    if (role !== 'employee') {
+      user.routeAccess = [];
+    } else if (!user.routeAccess) {
+      user.routeAccess = [];
+    }
+    
     user.updatedAt = new Date().toISOString();
 
     users[userIndex] = user;
@@ -408,6 +459,47 @@ class UserService {
 
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
+  }
+
+  /**
+   * NEW: Update route access for employee users
+   */
+  async updateRouteAccess(id, routeAccessArray) {
+    const users = await this.loadUsers();
+    const userIndex = users.findIndex(u => u.id === id);
+
+    if (userIndex === -1) {
+      throw new Error('User not found');
+    }
+
+    const user = users[userIndex];
+
+    if (user.role !== 'employee') {
+      throw new Error('Route access can only be assigned to employees');
+    }
+
+    // Validate routeAccess
+    const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
+    const invalidRoutes = routeAccessArray.filter(r => !validRouteKeys.includes(r));
+    if (invalidRoutes.length > 0) {
+      throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
+    }
+
+    user.routeAccess = routeAccessArray;
+    user.updatedAt = new Date().toISOString();
+
+    users[userIndex] = user;
+    await this.saveUsers(users);
+
+    const { password, ...userWithoutPassword } = user;
+    return userWithoutPassword;
+  }
+
+  /**
+   * NEW: Get available routes
+   */
+  getAvailableRoutes() {
+    return AVAILABLE_ROUTES;
   }
 }
 

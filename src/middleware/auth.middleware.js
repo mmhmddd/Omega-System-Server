@@ -72,4 +72,53 @@ const checkSystemAccess = (systemName) => {
   };
 };
 
-module.exports = { protect, checkSystemAccess };
+const checkRouteAccess = (routeKey) => {
+  return (req, res, next) => {
+    const user = req.user;
+    
+    // Super admins and admins have access to all routes
+    if (user.role === 'super_admin' || user.role === 'admin') {
+      return next();
+    }
+
+    // Secretariat has access to their specific routes
+    if (user.role === 'secretariat') {
+      // Secretariat can access user-forms and secretariat routes
+      const secretariatRoutes = ['userForms'];
+      if (secretariatRoutes.includes(routeKey)) {
+        return next();
+      }
+    }
+
+    // For employees, check routeAccess array
+    if (user.role === 'employee') {
+      if (!user.routeAccess || !Array.isArray(user.routeAccess)) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to this route. Please contact your administrator.'
+        });
+      }
+
+      if (!user.routeAccess.includes(routeKey)) {
+        return res.status(403).json({
+          success: false,
+          message: `You do not have access to ${routeKey}. Please contact your administrator.`
+        });
+      }
+
+      return next();
+    }
+
+    // Default deny
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to access this resource.'
+    });
+  };
+};
+
+module.exports = {
+  protect,
+  checkSystemAccess,
+  checkRouteAccess
+};

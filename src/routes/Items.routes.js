@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const itemsService = require('../services/Items.service');
-const { protect } = require('../middleware/auth.middleware');
+const { protect ,checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 /**
@@ -11,6 +11,7 @@ const { restrictTo } = require('../middleware/role.middleware');
  * @access  Private (Admin & Super Admin only)
  */
 router.post('/', protect, restrictTo('admin', 'super_admin'), async (req, res) => {
+router.use(checkRouteAccess('items'));
   try {
     const { name, description } = req.body;
 

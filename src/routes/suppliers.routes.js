@@ -5,7 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const supplierService = require('../services/supplier.service');
-const { protect } = require('../middleware/auth.middleware');
+const { protect ,checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 // ============================================
@@ -18,6 +18,8 @@ const { restrictTo } = require('../middleware/role.middleware');
  * @access  Authenticated
  * @query   status, materialType, country, city, minRating
  */
+router.use(checkRouteAccess('supplierManagement'));
+
 router.get('/', protect, async (req, res, next) => {
   try {
     const filters = {

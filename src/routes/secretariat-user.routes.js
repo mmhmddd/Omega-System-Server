@@ -2,12 +2,12 @@
 const express = require('express');
 const router = express.Router();
 const secretariatUserService = require('../services/secretariat-user.service');
-const { protect } = require('../middleware/auth.middleware');
+const { protect , checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 // جميع المسارات تتطلب المصادقة
 router.use(protect);
-
+router.use(checkRouteAccess('secretariatUserManagement'));
 /**
  * @route   POST /api/user-forms
  * @desc    إنشاء نموذج جديد من قبل الموظف

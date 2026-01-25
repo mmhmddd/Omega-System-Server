@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const priceQuoteService = require('../services/price-quote.service');
-const { protect } = require('../middleware/auth.middleware');
+const { protect, checkRouteAccess } = require('../middleware/auth.middleware'); // ✏️ UPDATED
 const { restrictTo } = require('../middleware/role.middleware');
 
 // Configure multer for file uploads
@@ -24,6 +24,7 @@ const upload = multer({
 
 // All routes require authentication
 router.use(protect);
+router.use(checkRouteAccess('priceQuotes')); // ➕ ADDED
 
 /**
  * @route   POST /api/price-quotes

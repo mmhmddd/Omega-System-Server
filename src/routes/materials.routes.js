@@ -3,10 +3,11 @@ const express = require('express');
 const router = express.Router();
 const path = require('path');
 const materialService = require('../services/material.service');
-const { protect } = require('../middleware/auth.middleware');
+const { protect ,checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 router.use(protect);
+router.use(checkRouteAccess('materialManagement'));
 
 /**
  * 1. RESET COUNTER - Super admin only

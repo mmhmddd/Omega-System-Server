@@ -4,11 +4,11 @@ const router = express.Router();
 const path = require('path');
 const multer = require('multer');
 const purchaseService = require('../services/purchase.service');
-const { protect } = require('../middleware/auth.middleware');
+const { protect  ,checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 router.use(protect);
-
+router.use(checkRouteAccess('purchaseManagement'));
 // Configure multer for PDF uploads (memory storage)
 const upload = multer({
   storage: multer.memoryStorage(),

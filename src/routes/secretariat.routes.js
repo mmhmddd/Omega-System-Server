@@ -2,13 +2,13 @@
 const express = require('express');
 const router = express.Router();
 const secretariatService = require('../services/secretariat.service');
-const { protect } = require('../middleware/auth.middleware');
+const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 // جميع المسارات تتطلب المصادقة والدور: secretariat أو super_admin
 router.use(protect);
 router.use(restrictTo('secretariat', 'super_admin'));
-
+router.use(checkRouteAccess('secretariatManagement'));
 /**
  * @route   POST /api/secretariat/forms
  * @desc    إنشاء نموذج جديد من قبل السكرتارية

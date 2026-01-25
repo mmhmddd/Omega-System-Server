@@ -2,11 +2,12 @@
 const express = require('express');
 const router = express.Router();
 const fileManagementService = require('../services/file.service');
-const { protect } = require('../middleware/auth.middleware');
+const { protect ,checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 // All routes require authentication and admin/super_admin role
 router.use(protect);
+router.use(checkRouteAccess('fileManagement'));
 router.use(restrictTo('admin', 'super_admin'));
 
 /**

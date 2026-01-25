@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const cuttingService = require('../services/cutting.service');
-const { protect, checkSystemAccess } = require('../middleware/auth.middleware');
+const { protect, checkRouteAccess ,checkSystemAccess  } = require('../middleware/auth.middleware'); // ✏️ UPDATED
 
 // Configure multer for file upload (memory storage)
 const storage = multer.memoryStorage();
@@ -30,11 +30,14 @@ router.use(protect);
 // Check system access for laser cutting management
 // Super admins automatically have access, others need laserCuttingManagement permission
 router.use(checkSystemAccess('laserCuttingManagement'));
+router.use(checkRouteAccess('cutting'));
+
+
 
 /**
  * @route   POST /api/cutting
  * @desc    Create new cutting job
- * @access  Private (Super Admin or users with laserCuttingManagement access)
+ * @access  Private (Super Admin or users with cutting access)
  */
 router.post('/', upload.single('file'), async (req, res, next) => {
   try {
@@ -79,7 +82,7 @@ router.post('/', upload.single('file'), async (req, res, next) => {
       notes
     };
 
-    const uploadedBy = req.user.id; // Get user ID from JWT token
+    const uploadedBy = req.user.id;
     const job = await cuttingService.createCuttingJob(jobData, req.file, uploadedBy);
 
     res.status(201).json({
@@ -95,7 +98,7 @@ router.post('/', upload.single('file'), async (req, res, next) => {
 /**
  * @route   GET /api/cutting
  * @desc    Get all cutting jobs with filters and pagination
- * @access  Private (Super Admin or users with laserCuttingManagement access)
+ * @access  Private
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -134,7 +137,7 @@ router.get('/', async (req, res, next) => {
 /**
  * @route   GET /api/cutting/statistics
  * @desc    Get cutting jobs statistics
- * @access  Private (Super Admin or users with laserCuttingManagement access)
+ * @access  Private
  */
 router.get('/statistics', async (req, res, next) => {
   try {
@@ -152,7 +155,7 @@ router.get('/statistics', async (req, res, next) => {
 /**
  * @route   GET /api/cutting/:id
  * @desc    Get specific cutting job by ID
- * @access  Private (Super Admin or users with laserCuttingManagement access)
+ * @access  Private
  */
 router.get('/:id', async (req, res, next) => {
   try {
@@ -170,7 +173,7 @@ router.get('/:id', async (req, res, next) => {
 /**
  * @route   PUT /api/cutting/:id
  * @desc    Update cutting job
- * @access  Private (Super Admin or users with laserCuttingManagement access)
+ * @access  Private
  */
 router.put('/:id', upload.single('file'), async (req, res, next) => {
   try {
@@ -223,7 +226,7 @@ router.put('/:id', upload.single('file'), async (req, res, next) => {
       dateFrom
     };
 
-    const updatedBy = req.user.id; // Get user ID from JWT token
+    const updatedBy = req.user.id;
     const job = await cuttingService.updateCuttingJob(
       req.params.id,
       updateData,
@@ -244,7 +247,7 @@ router.put('/:id', upload.single('file'), async (req, res, next) => {
 /**
  * @route   DELETE /api/cutting/:id
  * @desc    Delete cutting job
- * @access  Private (Super Admin or users with laserCuttingManagement access)
+ * @access  Private
  */
 router.delete('/:id', async (req, res, next) => {
   try {
@@ -262,7 +265,7 @@ router.delete('/:id', async (req, res, next) => {
 /**
  * @route   PATCH /api/cutting/:id/status
  * @desc    Update only the file status of a cutting job
- * @access  Private (Super Admin or users with laserCuttingManagement access)
+ * @access  Private
  */
 router.patch('/:id/status', async (req, res, next) => {
   try {

@@ -1,15 +1,16 @@
-// src/routes/receipts.routes.js (UPDATED with PDF attachment support)
+// src/routes/receipts.routes.js
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const multer = require('multer'); // NEW: For file uploads
+const multer = require('multer');
 const receiptService = require('../services/receipt.service');
-const { protect } = require('../middleware/auth.middleware');
+const { protect, checkRouteAccess } = require('../middleware/auth.middleware'); 
 const { restrictTo } = require('../middleware/role.middleware');
 
 router.use(protect);
+router.use(checkRouteAccess('receipts')); 
 
-// NEW: Configure multer for PDF uploads (memory storage)
+// Configure multer for PDF uploads (memory storage)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -221,19 +222,17 @@ router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
 });
 
 /**
- * GENERATE PDF (UPDATED with optional attachment support)
- * Supports multipart/form-data with optional 'attachment' field
+ * GENERATE PDF (with optional attachment support)
  */
 router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {
-    // Extract attachment buffer if provided
     const attachmentPdf = req.file ? req.file.buffer : null;
 
     const result = await receiptService.generateReceiptPDF(
       req.params.id, 
       req.user.id, 
       req.user.role,
-      attachmentPdf // NEW: Pass attachment to service
+      attachmentPdf
     );
 
     const responseData = {
@@ -245,12 +244,10 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
       merged: result.pdf.merged || false
     };
 
-    // Include page count if merge was successful
     if (result.pdf.pageCount) {
       responseData.pageCount = result.pdf.pageCount;
     }
 
-    // Include merge error if it occurred
     if (result.pdf.mergeError) {
       responseData.mergeError = result.pdf.mergeError;
       responseData.warning = 'PDF generated but attachment merge failed. Using original PDF.';
