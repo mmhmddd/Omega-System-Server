@@ -7,8 +7,75 @@ const pdfGenerator = require('../utils/pdf-generatorRecipts.util');
 
 const RECEIPTS_FILE = path.join(__dirname, '../../data/receipts/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
+const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
 class ReceiptService {
+  /**
+   * Load users from JSON file
+   */
+  async loadUsers() {
+    try {
+      console.log('Loading users from:', USERS_FILE);
+      const data = await fs.readFile(USERS_FILE, 'utf8');
+      const users = JSON.parse(data);
+      console.log('Loaded users count:', users.length);
+      return users;
+    } catch (error) {
+      console.error('Error loading users file:', error);
+      if (error.code === 'ENOENT') {
+        console.error('Users file does not exist at:', USERS_FILE);
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get user name by ID
+   */
+  async getUserNameById(userId) {
+    try {
+      const users = await this.loadUsers();
+      console.log('=== USER LOOKUP DEBUG ===');
+      console.log('Looking for userId:', userId);
+      console.log('Type of userId:', typeof userId);
+      console.log('All user IDs in database:');
+      users.forEach(u => {
+        console.log(`  - ID: "${u.id}" (type: ${typeof u.id}) | Name: "${u.name}"`);
+      });
+      
+      // Try exact match first
+      let user = users.find(u => u.id === userId);
+      
+      // If not found, try string comparison
+      if (!user && typeof userId !== 'string') {
+        const userIdStr = String(userId);
+        console.log('Trying string conversion:', userIdStr);
+        user = users.find(u => u.id === userIdStr);
+      }
+      
+      // If still not found, try trimming whitespace
+      if (!user && typeof userId === 'string') {
+        const userIdTrimmed = userId.trim();
+        console.log('Trying trimmed version:', userIdTrimmed);
+        user = users.find(u => u.id.trim() === userIdTrimmed);
+      }
+      
+      if (user) {
+        console.log('✓ Found user:', user.name);
+        console.log('========================');
+        return user.name;
+      } else {
+        console.log('✗ User not found for ID:', userId);
+        console.log('========================');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error getting user name:', error);
+      return null;
+    }
+  }
+
   /**
    * Load receipts from JSON file
    */
@@ -78,7 +145,7 @@ class ReceiptService {
   }
 
   /**
-   * Reset receipt counter to 0 AND delete all receipts (super admin only)
+   * Reset receipt counter to 0 AND delete all receipts
    */
   async resetReceiptCounter(newCounter = 0) {
     if (typeof newCounter !== 'number' || newCounter < 0) {
@@ -105,6 +172,11 @@ class ReceiptService {
    * Create a new receipt
    */
   async createReceipt(receiptData, userId, userRole) {
+    console.log('\n=== CREATE RECEIPT DEBUG ===');
+    console.log('userId:', userId);
+    console.log('userId type:', typeof userId);
+    console.log('userRole:', userRole);
+    
     const receipts = await this.loadReceipts();
     
     const counter = await this.loadCounter();
@@ -117,6 +189,14 @@ class ReceiptService {
     await this.saveCounter(newCounter);
 
     const today = new Date().toISOString().split('T')[0];
+
+    // Get creator name with detailed logging
+    console.log('Calling getUserNameById with:', userId);
+    const createdByName = await this.getUserNameById(userId);
+    console.log('getUserNameById returned:', createdByName);
+    console.log('createdByName is null?', createdByName === null);
+    console.log('createdByName is undefined?', createdByName === undefined);
+    console.log('============================\n');
 
     const newReceipt = {
       id,
@@ -133,6 +213,7 @@ class ReceiptService {
       items: receiptData.items || [],
       notes: receiptData.notes || '',
       createdBy: userId,
+      createdByName: createdByName || 'Unknown User',
       createdByRole: userRole,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -141,7 +222,34 @@ class ReceiptService {
     receipts.push(newReceipt);
     await this.saveReceipts(receipts);
 
+    console.log('Receipt created with name:', newReceipt.createdByName);
     return newReceipt;
+  }
+
+  /**
+   * Add creator names to receipts
+   */
+  async enrichReceiptsWithCreatorNames(receipts) {
+    const users = await this.loadUsers();
+    
+    return Promise.all(receipts.map(async receipt => {
+      // Always look up the current user name from users database
+      const user = users.find(u => u.id === receipt.createdBy);
+      
+      if (user && user.name) {
+        // User found - use their current name
+        return {
+          ...receipt,
+          createdByName: user.name
+        };
+      } else {
+        // User not found - use Unknown User
+        return {
+          ...receipt,
+          createdByName: 'Unknown User'
+        };
+      }
+    }));
   }
 
   /**
@@ -149,6 +257,9 @@ class ReceiptService {
    */
   async getAllReceipts(filters = {}, userId, userRole) {
     let receipts = await this.loadReceipts();
+
+    // Add creator names to all receipts
+    receipts = await this.enrichReceiptsWithCreatorNames(receipts);
 
     if (userRole === 'employee' || userRole === 'admin') {
       receipts = receipts.filter(r => r.createdBy === userId);
@@ -179,7 +290,8 @@ class ReceiptService {
         r.receiptNumber.toLowerCase().includes(searchLower) ||
         r.to.toLowerCase().includes(searchLower) ||
         r.projectCode.toLowerCase().includes(searchLower) ||
-        r.workLocation.toLowerCase().includes(searchLower)
+        r.workLocation.toLowerCase().includes(searchLower) ||
+        (r.createdByName && r.createdByName.toLowerCase().includes(searchLower))
       );
     }
 
@@ -220,7 +332,13 @@ class ReceiptService {
       }
     }
 
-    return receipt;
+    // Add creator name
+    const createdByName = await this.getUserNameById(receipt.createdBy);
+
+    return {
+      ...receipt,
+      createdByName: createdByName || receipt.createdByName || 'Unknown User'
+    };
   }
 
   /**
@@ -240,7 +358,13 @@ class ReceiptService {
       }
     }
 
-    return receipt;
+    // Add creator name
+    const createdByName = await this.getUserNameById(receipt.createdBy);
+
+    return {
+      ...receipt,
+      createdByName: createdByName || receipt.createdByName || 'Unknown User'
+    };
   }
 
   /**
@@ -279,7 +403,13 @@ class ReceiptService {
     receipts[receiptIndex] = receipt;
     await this.saveReceipts(receipts);
 
-    return receipt;
+    // Add creator name
+    const createdByName = await this.getUserNameById(receipt.createdBy);
+
+    return {
+      ...receipt,
+      createdByName: createdByName || receipt.createdByName || 'Unknown User'
+    };
   }
 
   /**
@@ -334,7 +464,6 @@ class ReceiptService {
 
   /**
    * Generate receipt PDF with optional attachment merge
-   * NOW with dynamic page numbers on all pages
    */
   async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
     // Get receipt data
@@ -343,7 +472,7 @@ class ReceiptService {
     // Generate the receipt PDF
     const pdfResult = await pdfGenerator.generateReceiptPDF(receipt);
     
-    // Merge with attachment (or add headers/footers to single PDF)
+    // Merge with attachment
     let finalPdfResult = pdfResult;
     try {
       if (attachmentPdf) {
@@ -354,12 +483,12 @@ class ReceiptService {
         }
       }
 
-      // Merge PDFs (pass language from pdfResult)
+      // Merge PDFs
       const mergeResult = await pdfGenerator.mergePDFs(
         pdfResult.filepath,
         attachmentPdf,
         null,
-        pdfResult.language // Pass detected language
+        pdfResult.language
       );
 
       finalPdfResult = {
