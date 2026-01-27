@@ -1,4 +1,4 @@
-// src/utils/pdf-generator.util.js - COMPLETE FIXED VERSION WITH A4 ENFORCEMENT
+// src/utils/pdf-generator.util.js - COMPLETE FIXED VERSION
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -51,6 +51,7 @@ class PDFGenerator {
         workLocation: 'موقع العمل',
         date: 'التاريخ',
         receiptNumber: 'رقم الإشعار',
+        vehicleNumber: 'رقم المركبة',
         quantity: 'العدد',
         description: 'وصف',
         element: 'العناصر',
@@ -60,7 +61,8 @@ class PDFGenerator {
         docCode: 'OMEGA-RIC-01',
         revNo: 'REV. No',
         dateOfIssue: 'DATE OF ISSUE',
-        additionalInfo: 'يرجى الاستلام ما لم ترد إشارة dvf/dh/dofba'
+        additionalInfo: 'يرجى استلام ما تم إدراجه أدناه',
+        additionalNotes: 'ملاحظات إضافية'
       },
       en: {
         title: 'Delivery Notice',
@@ -77,6 +79,7 @@ class PDFGenerator {
         workLocation: 'Work Location',
         date: 'Date',
         receiptNumber: 'Receipt Number',
+        vehicleNumber: 'Vehicle Number',
         quantity: 'Quantity',
         description: 'Description',
         element: 'Elements',
@@ -86,7 +89,8 @@ class PDFGenerator {
         docCode: 'OMEGA-RIC-01',
         revNo: 'REV. No',
         dateOfIssue: 'DATE OF ISSUE',
-        additionalInfo: 'Please receive the items listed below:'
+        additionalInfo: 'Please receive the items listed below:',
+        additionalNotes: 'Additional Notes'
       }
     };
 
@@ -98,6 +102,15 @@ generateHTML(receipt) {
   const labels = this.getLabels(language);
   const isRTL = language === 'ar';
   const formattedDate = receipt.date || new Date().toISOString().split('T')[0];
+
+  console.log('╔════════════════════════════════════════════════════════════╗');
+  console.log('║           PDF GENERATOR: PROCESSING RECEIPT                ║');
+  console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log('📄 Receipt data:');
+  console.log('   - companyNumber:', receipt.companyNumber);
+  console.log('   - additionalText:', receipt.additionalText);
+  console.log('   - notes:', receipt.notes);
+  console.log('════════════════════════════════════════════════════════════');
 
   let itemsHTML = '';
   if (receipt.items && receipt.items.length > 0) {
@@ -120,9 +133,43 @@ generateHTML(receipt) {
     }
   }
 
-  const additionalTextHTML = receipt.additionalText 
-    ? `<div style="text-align: ${isRTL ? 'right' : 'left'}; margin: 15px 0; font-size: 13px;">${receipt.additionalText}</div>`
-    : `<div style="text-align: ${isRTL ? 'right' : 'left'}; margin: 15px 0; font-size: 13px;">${labels.additionalInfo}</div>`;
+  // 🔥 FIXED: الجملة الثابتة + النص الإضافي من الفورم
+  const fixedSentence = isRTL 
+    ? 'يرجى استلام ما تجد إدراجه أدناه:' 
+    : 'Please receive what is listed below:';
+
+  const additionalTextHTML = `
+    <div style="
+      text-align: ${isRTL ? 'right' : 'left'}; 
+      margin: 20px 0; 
+      padding: 15px 20px; 
+      border: 2px solid #1565C0; 
+      border-radius: 8px; 
+      background-color: #f0f7ff; 
+      line-height: 1.8;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    ">
+      <div style="
+        margin-bottom: ${receipt.additionalText ? '10px' : '0'}; 
+        font-weight: bold; 
+        color: #0D47A1; 
+        font-size: 14px;
+      ">
+        ${fixedSentence}
+      </div>
+      ${receipt.additionalText ? `
+        <div style="
+          color: #1565C0; 
+          font-size: 13px; 
+          line-height: 1.6;
+          font-weight: 500;
+        ">
+          ${receipt.additionalText}
+        </div>
+      ` : ''}
+    </div>
+  `;
 
   return `
 <!DOCTYPE html>
@@ -297,6 +344,33 @@ body {
   background-color: #fff;
 }
 
+.additional-notes-box {
+  margin: 25px 0;
+  padding: 15px 20px;
+  border: 2px solid #FDD835;
+  border-radius: 8px;
+  background-color: #FFFDE7;
+  min-height: 80px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.additional-notes-title {
+  font-weight: bold;
+  font-size: 14px;
+  color: #333;
+  margin-bottom: 8px;
+  text-align: ${isRTL ? 'right' : 'left'};
+}
+
+.additional-notes-content {
+  font-size: 13px;
+  color: #555;
+  line-height: 1.6;
+  text-align: ${isRTL ? 'right' : 'left'};
+  white-space: pre-wrap;
+}
+
 .signature-section {
   display: flex;
   justify-content: space-between;
@@ -428,6 +502,13 @@ body {
     </div>
     ` : ''}
     
+    ${receipt.companyNumber ? `
+    <div class="detail-row">
+      <div class="detail-label">${labels.vehicleNumber}:</div>
+      <div class="detail-value">${receipt.companyNumber}</div>
+    </div>
+    ` : ''}
+    
     <div class="detail-row">
       <div class="detail-label">${labels.date}:</div>
       <div class="detail-value">${formattedDate}</div>
@@ -455,6 +536,13 @@ body {
       ${itemsHTML}
     </tbody>
   </table>
+
+  ${receipt.notes ? `
+  <div class="additional-notes-box">
+    <div class="additional-notes-title">${labels.additionalNotes}:</div>
+    <div class="additional-notes-content">${receipt.notes}</div>
+  </div>
+  ` : ''}
 
   <div class="signature-section">
     <div class="signature-box">
@@ -544,8 +632,6 @@ body {
     });
   }
 
-  // A4 dimensions in points (72 points per inch)
-  // A4 = 210mm x 297mm = 595.28 x 841.89 points
   getA4Dimensions() {
     return {
       width: 595.28,
@@ -557,25 +643,20 @@ body {
     const a4 = this.getA4Dimensions();
     const { width, height } = page.getSize();
 
-    // If already A4, return as is
     const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
     if (isA4) {
       return page;
     }
 
-    // Calculate scaling to fit content within A4 while maintaining aspect ratio
     const scaleX = a4.width / width;
     const scaleY = a4.height / height;
-    const scale = Math.min(scaleX, scaleY, 1); // Don't upscale, only downscale if needed
+    const scale = Math.min(scaleX, scaleY, 1);
 
-    // Simply resize the page to A4
     page.setSize(a4.width, a4.height);
     
-    // Scale the content if needed
     if (scale < 1) {
       page.scaleContent(scale, scale);
       
-      // Center the scaled content
       const scaledWidth = width * scale;
       const scaledHeight = height * scale;
       const translateX = (a4.width - scaledWidth) / 2;
@@ -613,10 +694,9 @@ body {
       const page = pages[i];
       const { width, height } = page.getSize();
       
-      // If page is not A4, skip header/footer (will be handled in normalization)
       const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
       if (!isA4) {
-        console.log(`Page ${i + 1} is not A4 (${width.toFixed(2)} x ${height.toFixed(2)}), skipping header/footer`);
+        console.log(`Page ${i + 1} is not A4, skipping header/footer`);
         continue;
       }
       
@@ -775,24 +855,20 @@ body {
       const mergedPdf = await PDFDocument.create();
       const a4 = this.getA4Dimensions();
 
-      // Copy generated pages (already A4)
       const generatedPages = await mergedPdf.copyPages(
         generatedPdf,
         generatedPdf.getPageIndices()
       );
       generatedPages.forEach(page => mergedPdf.addPage(page));
 
-      // Copy and normalize attachment pages to A4
       const attachmentIndices = attachmentPdfDoc.getPageIndices();
       for (const index of attachmentIndices) {
         const [copiedPage] = await mergedPdf.copyPages(attachmentPdfDoc, [index]);
-        const { width, height } = copiedPage.getSize();
+        const { width, height} = copiedPage.getSize();
         
-        // Check if page is already A4
         const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
         
         if (!isA4) {
-          console.log(`Normalizing attachment page ${index + 1} from ${width.toFixed(2)}x${height.toFixed(2)} to A4`);
           await this.resizePageToA4(copiedPage);
         }
         
@@ -813,9 +889,8 @@ body {
 
       try {
         fs.unlinkSync(generatedPdfPath);
-        console.log('✓ Original PDF deleted');
       } catch (err) {
-        console.log('Could not delete original:', err.message);
+        console.log('Could not delete original');
       }
 
       return {

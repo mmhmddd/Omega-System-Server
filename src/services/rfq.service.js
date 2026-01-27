@@ -1,4 +1,5 @@
-// src/services/rfq.service.js - COMPLETE RFQ SERVICE WITH PDF
+// src/services/rfq.service.js - UPDATED WITH SUPPLIER ADDRESS AND USER NAME
+
 const fs = require('fs').promises;
 const path = require('path');
 const atomicWrite = require('../utils/atomic-write.util');
@@ -9,9 +10,6 @@ const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
 class RFQService {
-  /**
-   * Load RFQs from JSON file
-   */
   async loadRFQs() {
     try {
       const data = await fs.readFile(RFQS_FILE, 'utf8');
@@ -24,16 +22,10 @@ class RFQService {
     }
   }
 
-  /**
-   * Save RFQs to JSON file
-   */
   async saveRFQs(rfqs) {
     await atomicWrite(RFQS_FILE, JSON.stringify(rfqs, null, 2));
   }
 
-  /**
-   * Load counter from counters.json file
-   */
   async loadCounter() {
     try {
       const data = await fs.readFile(COUNTER_FILE, 'utf8');
@@ -47,9 +39,6 @@ class RFQService {
     }
   }
 
-  /**
-   * Save counter to counters.json file
-   */
   async saveCounter(counter) {
     try {
       let counters = {};
@@ -69,26 +58,17 @@ class RFQService {
     }
   }
 
-  /**
-   * Get user name by user ID
-   */
   async getUserName(userId) {
     try {
-      console.log('getUserName called with userId:', userId);
       const data = await fs.readFile(USERS_FILE, 'utf8');
       const users = JSON.parse(data);
-      console.log('Total users found:', users.length);
       
       const user = users.find(u => u.id === userId);
-      console.log('User found:', user);
       
       if (user) {
-        const returnName = user.name || user.username || userId;
-        console.log('Returning name:', returnName);
-        return returnName;
+        return user.name || user.username || userId;
       }
       
-      console.log('User not found, returning userId:', userId);
       return userId;
     } catch (error) {
       console.log('Could not fetch user name:', error.message);
@@ -96,17 +76,11 @@ class RFQService {
     }
   }
 
-  /**
-   * Generate RFQ number from counter
-   */
   generateRFQNumber(counter) {
     const paddedNumber = String(counter).padStart(4, '0');
     return `RFQ${paddedNumber}`;
   }
 
-  /**
-   * Reset RFQ counter to 0 AND delete all RFQs (super admin only)
-   */
   async resetRFQCounter() {
     const oldCounter = await this.loadCounter();
     const rfqs = await this.loadRFQs();
@@ -124,22 +98,17 @@ class RFQService {
     };
   }
 
-  /**
-   * Detect language from text (Arabic or English)
-   */
   detectLanguage(text) {
     if (!text) return 'en';
     const arabicPattern = /[\u0600-\u06FF]/;
     return arabicPattern.test(text) ? 'ar' : 'en';
   }
 
-  /**
-   * Detect primary language from RFQ data
-   */
   detectRFQLanguage(rfqData) {
     const fieldsToCheck = [
       rfqData.production,
       rfqData.supplier,
+      rfqData.supplierAddress,
       rfqData.notes
     ];
 
@@ -167,7 +136,7 @@ class RFQService {
   }
 
   /**
-   * Create a new RFQ
+   * Create a new RFQ - UPDATED WITH SUPPLIER ADDRESS AND USER NAME
    */
   async createRFQ(rfqData, userId, userRole) {
     const rfqs = await this.loadRFQs();
@@ -186,10 +155,13 @@ class RFQService {
 
     const detectedLanguage = rfqData.forceLanguage || this.detectRFQLanguage(rfqData);
 
+    // Get user name for createdByName field
+    const userName = await this.getUserName(userId);
+
     // Auto-populate requester with user's name if not provided
     let requesterName = rfqData.requester;
     if (!requesterName || requesterName.trim() === '') {
-      requesterName = await this.getUserName(userId);
+      requesterName = userName;
     }
 
     const newRFQ = {
@@ -200,12 +172,14 @@ class RFQService {
       requester: requesterName,
       production: rfqData.production || '',
       supplier: rfqData.supplier || '',
+      supplierAddress: rfqData.supplierAddress || '', // ✅ NEW FIELD
       urgent: rfqData.urgent || false,
       items: rfqData.items || [],
       notes: rfqData.notes || '',
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
+      createdByName: userName, // ✅ NEW FIELD - user's actual name
       createdByRole: userRole,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -218,7 +192,7 @@ class RFQService {
   }
 
   /**
-   * Get all RFQs with filtering and pagination
+   * Get all RFQs - ENSURES createdByName IS POPULATED
    */
   async getAllRFQs(filters = {}, userId, userRole) {
     let rfqs = await this.loadRFQs();
@@ -267,6 +241,7 @@ class RFQService {
         r.rfqNumber.toLowerCase().includes(searchLower) ||
         r.supplier.toLowerCase().includes(searchLower) ||
         r.production.toLowerCase().includes(searchLower) ||
+        (r.supplierAddress && r.supplierAddress.toLowerCase().includes(searchLower)) ||
         r.notes.toLowerCase().includes(searchLower)
       );
     }
@@ -280,6 +255,13 @@ class RFQService {
 
     const paginatedRFQs = rfqs.slice(startIndex, endIndex);
 
+    // ✅ Ensure createdByName is populated for each RFQ
+    for (let rfq of paginatedRFQs) {
+      if (!rfq.createdByName) {
+        rfq.createdByName = await this.getUserName(rfq.createdBy);
+      }
+    }
+
     return {
       rfqs: paginatedRFQs,
       pagination: {
@@ -292,7 +274,7 @@ class RFQService {
   }
 
   /**
-   * Get RFQ by ID
+   * Get RFQ by ID - ENSURES createdByName IS POPULATED
    */
   async getRFQById(id, userId, userRole) {
     const rfqs = await this.loadRFQs();
@@ -308,11 +290,16 @@ class RFQService {
       }
     }
 
+    // ✅ Ensure createdByName is populated
+    if (!rfq.createdByName) {
+      rfq.createdByName = await this.getUserName(rfq.createdBy);
+    }
+
     return rfq;
   }
 
   /**
-   * Update RFQ
+   * Update RFQ - UPDATED WITH SUPPLIER ADDRESS
    */
   async updateRFQ(id, updateData, userId, userRole) {
     const rfqs = await this.loadRFQs();
@@ -335,6 +322,7 @@ class RFQService {
     if (updateData.requester !== undefined) rfq.requester = updateData.requester;
     if (updateData.production !== undefined) rfq.production = updateData.production;
     if (updateData.supplier !== undefined) rfq.supplier = updateData.supplier;
+    if (updateData.supplierAddress !== undefined) rfq.supplierAddress = updateData.supplierAddress; // ✅ NEW FIELD
     if (updateData.urgent !== undefined) rfq.urgent = updateData.urgent;
     if (updateData.items) rfq.items = updateData.items;
     if (updateData.notes !== undefined) rfq.notes = updateData.notes;
@@ -345,15 +333,17 @@ class RFQService {
 
     rfq.updatedAt = new Date().toISOString();
 
+    // ✅ Ensure createdByName is populated
+    if (!rfq.createdByName) {
+      rfq.createdByName = await this.getUserName(rfq.createdBy);
+    }
+
     rfqs[rfqIndex] = rfq;
     await this.saveRFQs(rfqs);
 
     return rfq;
   }
 
-  /**
-   * Delete RFQ (super admin only)
-   */
   async deleteRFQ(id) {
     const rfqs = await this.loadRFQs();
     const rfqIndex = rfqs.findIndex(r => r.id === id);
@@ -368,9 +358,6 @@ class RFQService {
     return { message: 'RFQ deleted successfully' };
   }
 
-  /**
-   * Get RFQ statistics
-   */
   async getRFQStats(userId, userRole) {
     let rfqs = await this.loadRFQs();
 
@@ -405,33 +392,24 @@ class RFQService {
     return stats;
   }
 
-  /**
-   * Generate RFQ PDF with optional attachment merge
-   */
   async generateRFQPDF(id, userId, userRole, attachmentPdf = null) {
-    // Get RFQ data
     const rfq = await this.getRFQById(id, userId, userRole);
     
-    // Auto-fill requester name if empty
     if (!rfq.requester || rfq.requester.trim() === '') {
       rfq.requester = await this.getUserName(userId);
     }
     
-    // Generate the RFQ PDF
     const pdfResult = await rfqPdfGenerator.generateRFQPDF(rfq);
     
-    // Merge with attachment (or add headers/footers to single PDF)
     let finalPdfResult = pdfResult;
     try {
       if (attachmentPdf) {
-        // Validate attachment
         const isValid = await rfqPdfGenerator.isValidPDF(attachmentPdf);
         if (!isValid) {
           throw new Error('Invalid PDF attachment');
         }
       }
 
-      // Merge PDFs (pass language from pdfResult)
       const mergeResult = await rfqPdfGenerator.mergePDFs(
         pdfResult.filepath,
         attachmentPdf,
@@ -451,7 +429,6 @@ class RFQService {
       finalPdfResult.mergeError = mergeError.message;
     }
     
-    // Update RFQ record with PDF info
     const rfqs = await this.loadRFQs();
     const rfqIndex = rfqs.findIndex(r => r.id === id);
     

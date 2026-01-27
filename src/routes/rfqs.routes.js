@@ -76,6 +76,7 @@ router.post('/', async (req, res, next) => {
       requester: req.body.requester,
       production: req.body.production,
       supplier: req.body.supplier,
+      supplierAddress: req.body.supplierAddress,
       urgent: req.body.urgent,
       items: req.body.items || [],
       notes: req.body.notes
