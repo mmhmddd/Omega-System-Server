@@ -1,4 +1,5 @@
-// src/utils/pdf-generator-rfq.util.js - RFQ PDF GENERATOR WITH ALIGNED HEADERS
+// src/utils/pdf-generator-rfq.util.js - UPDATED WITH NEW TABLE STRUCTURE
+
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -15,6 +16,7 @@ class RFQPDFGenerator {
     const fieldsToCheck = [
       rfqData.production,
       rfqData.supplier,
+      rfqData.supplierAddress,
       rfqData.notes
     ];
 
@@ -58,18 +60,18 @@ class RFQPDFGenerator {
         requester: 'مقدم الطلب',
         department: 'القسم',
         supplier: 'المورد',
-        location: 'عنوان المورد',
+        supplierAddress: 'عنوان المورد',
         urgent: 'عاجل',
         yes: 'نعم',
         no: 'لا',
-        itemNo: '#',
-        item: 'الصنف',
+        itemNo: 'م',
+        description: 'الوصف',
         unit: 'الوحدة',
         quantity: 'الكمية',
-        unitPrice: 'سعر الوحدة',
-        unitPriceExternal: 'السعر الخارجي الوحدة',
-        unitPriceInternal: 'السعر الداخلي الوحدة',
-        totalPrice: 'السعر الإجمالي',
+        jobNo: 'رقم العمل',
+        taskNo: 'رقم المهمة',
+        estimatedUnitPrice: 'السعر التقديري',
+        totalPrice: 'الإجمالي',
         notes: 'ملاحظات',
         signatures: 'التواقيع',
         requesterSig: 'مقدم الطلب',
@@ -96,18 +98,18 @@ class RFQPDFGenerator {
         requester: 'Requester',
         department: 'Department',
         supplier: 'Supplier',
-        location: 'Supplier Address',
+        supplierAddress: 'Supplier Address',
         urgent: 'Urgent',
         yes: 'Yes',
         no: 'No',
         itemNo: '#',
-        item: 'Item',
+        description: 'Description',
         unit: 'Unit',
-        quantity: 'Qty',
-        unitPrice: 'Unit Price',
-        unitPriceExternal: 'External Unit Price',
-        unitPriceInternal: 'Internal Unit Price',
-        totalPrice: 'Total Price',
+        quantity: 'Quantity',
+        jobNo: 'Job No.',
+        taskNo: 'Task No.',
+        estimatedUnitPrice: 'Est. Unit Price',
+        totalPrice: 'Total',
         notes: 'Notes',
         signatures: 'Signatures',
         requesterSig: 'Requester',
@@ -122,25 +124,24 @@ class RFQPDFGenerator {
     return labels[lang] || labels.ar;
   }
 
-  calculateTotal(items) {
-    if (!items || items.length === 0) return { external: 0, internal: 0 };
-    
-    let externalTotal = 0;
-    let internalTotal = 0;
+  // حساب السعر الإجمالي (الكمية × السعر التقديري للوحدة)
+  calculateItemTotal(quantity, unitPrice) {
+    const qty = parseFloat(quantity) || 0;
+    const price = parseFloat(unitPrice) || 0;
+    return (qty * price).toFixed(2);
+  }
 
+  calculateGrandTotal(items) {
+    if (!items || items.length === 0) return '0.00';
+    
+    let total = 0;
     items.forEach(item => {
       const qty = parseFloat(item.quantity) || 0;
-      const extPrice = parseFloat(item.unitPriceExternal) || 0;
-      const intPrice = parseFloat(item.unitPriceInternal) || 0;
-      
-      externalTotal += qty * extPrice;
-      internalTotal += qty * intPrice;
+      const price = parseFloat(item.estimatedUnitPrice) || 0;
+      total += qty * price;
     });
 
-    return {
-      external: externalTotal.toFixed(2),
-      internal: internalTotal.toFixed(2)
-    };
+    return total.toFixed(2);
   }
 
 generateHTML(rfq) {
@@ -148,25 +149,33 @@ generateHTML(rfq) {
   const labels = this.getLabels(language);
   const isRTL = language === 'ar';
   const formattedDate = rfq.date || new Date().toISOString().split('T')[0];
-  const totals = this.calculateTotal(rfq.items);
+  const grandTotal = this.calculateGrandTotal(rfq.items);
 
   let itemsHTML = '';
   if (rfq.items && rfq.items.length > 0) {
-    itemsHTML = rfq.items.map((item, index) => `
+    itemsHTML = rfq.items.map((item, index) => {
+      const totalPrice = this.calculateItemTotal(item.quantity, item.estimatedUnitPrice);
+      
+      return `
       <tr>
-        <td style="text-align: center; padding: 10px 8px;">${index + 1}</td>
-        <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 10px;">${item.description || ''}</td>
-        <td style="text-align: center; padding: 10px;">${item.unit || ''}</td>
-        <td style="text-align: center; padding: 10px;">${item.quantity || ''}</td>
-        <td style="text-align: center; padding: 10px;">${item.unitPriceExternal || ''}</td>
-        <td style="text-align: center; padding: 10px;">${item.unitPriceInternal || ''}</td>
+        <td style="text-align: center; padding: 8px 6px;">${index + 1}</td>
+        <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 8px;">${item.description || ''}</td>
+        <td style="text-align: center; padding: 8px;">${item.unit || ''}</td>
+        <td style="text-align: center; padding: 8px;">${item.quantity || ''}</td>
+        <td style="text-align: center; padding: 8px;">${item.jobNo || ''}</td>
+        <td style="text-align: center; padding: 8px;">${item.taskNo || ''}</td>
+        <td style="text-align: center; padding: 8px;">${item.estimatedUnitPrice || ''}</td>
+        <td style="text-align: center; padding: 8px; font-weight: 600;">${totalPrice}</td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   } else {
     for (let i = 0; i < 5; i++) {
       itemsHTML += `
       <tr>
-        <td style="padding: 10px 8px; height: 40px;">&nbsp;</td>
+        <td style="padding: 8px 6px; height: 35px;">&nbsp;</td>
+        <td>&nbsp;</td>
+        <td>&nbsp;</td>
         <td>&nbsp;</td>
         <td>&nbsp;</td>
         <td>&nbsp;</td>
@@ -304,7 +313,7 @@ body {
 
 .info-label {
   font-weight: bold;
-  min-width: 100px;
+  min-width: 120px;
   color: #333;
 }
 
@@ -316,7 +325,7 @@ body {
   width: 100%;
   border-collapse: collapse;
   margin: 15px 0;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .items-table thead {
@@ -326,10 +335,11 @@ body {
 }
 
 .items-table th {
-  padding: 10px 8px;
+  padding: 8px 6px;
   text-align: center;
   font-weight: bold;
   border: 1px solid #2B4C8C;
+  font-size: 10px;
 }
 
 .items-table tbody {
@@ -342,9 +352,10 @@ body {
 }
 
 .items-table td {
-  padding: 10px 8px;
+  padding: 8px 6px;
   border: 1px solid #ddd;
   text-align: center;
+  font-size: 10px;
 }
 
 .items-table tbody tr {
@@ -494,6 +505,10 @@ body {
         <span class="info-value">${rfq.supplier || ''}</span>
       </div>
       <div class="info-field">
+        <span class="info-label">${labels.supplierAddress}:</span>
+        <span class="info-value">${rfq.supplierAddress || ''}</span>
+      </div>
+      <div class="info-field">
         <span class="info-label">${labels.urgent}:</span>
         <span class="info-value">${rfq.urgent ? labels.yes : labels.no}</span>
       </div>
@@ -503,22 +518,23 @@ body {
   <table class="items-table">
     <thead>
       <tr>
-        <th style="width: 8%;">${labels.itemNo}</th>
-        <th style="width: 30%;">${labels.item}</th>
-        <th style="width: 12%;">${labels.unit}</th>
-        <th style="width: 10%;">${labels.quantity}</th>
-        <th style="width: 20%;">${labels.unitPriceExternal}</th>
-        <th style="width: 20%;">${labels.unitPriceInternal}</th>
+        <th style="width: 5%;">${labels.itemNo}</th>
+        <th style="width: 25%;">${labels.description}</th>
+        <th style="width: 8%;">${labels.unit}</th>
+        <th style="width: 8%;">${labels.quantity}</th>
+        <th style="width: 10%;">${labels.jobNo}</th>
+        <th style="width: 10%;">${labels.taskNo}</th>
+        <th style="width: 12%;">${labels.estimatedUnitPrice}</th>
+        <th style="width: 12%;">${labels.totalPrice}</th>
       </tr>
     </thead>
     <tbody>
       ${itemsHTML}
       <tr class="total-row">
-        <td colspan="4" style="text-align: ${isRTL ? 'right' : 'left'}; padding: 10px;">
+        <td colspan="7" style="text-align: ${isRTL ? 'right' : 'left'}; padding: 8px;">
           <strong>${labels.totalPrice}:</strong>
         </td>
-        <td style="text-align: center;"><strong>${totals.external}</strong></td>
-        <td style="text-align: center;"><strong>${totals.internal}</strong></td>
+        <td style="text-align: center;"><strong>${grandTotal}</strong></td>
       </tr>
     </tbody>
   </table>
