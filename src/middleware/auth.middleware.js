@@ -94,7 +94,7 @@ const checkRouteAccess = (routeKey) => {
 
     // Secretariat has access to their specific routes
     if (user.role === 'secretariat') {
-      const secretariatRoutes = ['secretariat', 'secretariat-user'];
+      const secretariatRoutes = ['userForms', 'secretariatManagement', 'secretariat-user'];
       if (secretariatRoutes.includes(routeKey)) {
         console.log('✅ Access granted: Secretariat has access to', routeKey);
         return next();
