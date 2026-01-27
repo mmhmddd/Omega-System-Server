@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const priceQuoteService = require('../services/price-quote.service');
-const { protect, checkRouteAccess } = require('../middleware/auth.middleware'); // ✏️ UPDATED
+const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 // Configure multer for file uploads
@@ -24,12 +24,12 @@ const upload = multer({
 
 // All routes require authentication
 router.use(protect);
-router.use(checkRouteAccess('priceQuotes')); // ➕ ADDED
+router.use(checkRouteAccess('priceQuotes'));
 
 /**
  * @route   POST /api/price-quotes
  * @desc    Create a new price quote
- * @access  Private (Admin, Employee, Super Admin)
+ * @access  Private (Admin, Employee with permission, Super Admin)
  */
 router.post('/', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -87,12 +87,18 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       }
     }
 
-    // Validate tax
-    if (includeTax && (!taxRate || taxRate <= 0)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Tax rate is required when tax is included'
-      });
+    // FIXED: Parse includeTax as boolean properly
+    const includeTaxBool = includeTax === 'true' || includeTax === true;
+    
+    // FIXED: Only validate tax rate if includeTax is actually true
+    if (includeTaxBool === true) {
+      const parsedTaxRate = parseFloat(taxRate);
+      if (!parsedTaxRate || parsedTaxRate <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tax rate is required when tax is included'
+        });
+      }
     }
 
     // Validate language
@@ -112,13 +118,18 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       revNumber,
       validForDays,
       language: language || 'arabic',
-      includeTax: includeTax === 'true' || includeTax === true,
-      taxRate: includeTax ? parseFloat(taxRate) : 0,
+      includeTax: includeTaxBool,
+      taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes
     };
 
-    const quote = await priceQuoteService.createQuote(quoteData, req.user.id, req.file);
+    // Pass the full user object from req.user
+    const quote = await priceQuoteService.createQuote(
+      quoteData,
+      req.user,      // Pass full user object (contains id, name, email, etc.)
+      req.file       // PDF attachment file
+    );
 
     res.status(201).json({
       success: true,
@@ -132,18 +143,61 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
 
 /**
  * @route   GET /api/price-quotes
- * @desc    Get all price quotes (Super Admin only)
- * @access  Super Admin
+ * @desc    Get all price quotes
+ * @access  Private (Super Admin sees all, Admin/Employee see only their own)
  */
-router.get('/', restrictTo('super_admin'), async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { search, page, limit, createdBy } = req.query;
+
+    // Determine filtering based on role
+    let filterCreatedBy = createdBy;
+
+    if (req.user.role === 'super_admin') {
+      // Super admin can see all quotes or filter by specific user
+      filterCreatedBy = createdBy;
+    } else if (req.user.role === 'admin' || req.user.role === 'employee') {
+      // Admin and employee can only see their own quotes
+      filterCreatedBy = req.user.id;
+    } else {
+      // Other roles (if any) cannot access
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to access price quotes'
+      });
+    }
 
     const result = await priceQuoteService.getAllQuotes({
       search,
       page: page ? parseInt(page) : 1,
       limit: limit ? parseInt(limit) : 10,
-      createdBy
+      createdBy: filterCreatedBy
+    });
+
+    res.status(200).json({
+      success: true,
+      data: result.quotes,
+      pagination: result.pagination
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   GET /api/price-quotes/my-quotes
+ * @desc    Get all quotes by current user with pagination
+ * @access  Private (Admin/Employee)
+ */
+router.get('/my-quotes', async (req, res, next) => {
+  try {
+    const { search, page, limit } = req.query;
+
+    const result = await priceQuoteService.getAllQuotes({
+      search,
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 10,
+      createdBy: req.user.id
     });
 
     res.status(200).json({
@@ -216,7 +270,7 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
   try {
     const quote = await priceQuoteService.getQuoteById(req.params.id);
 
-    // Check permissions
+    // Check permissions: super_admin can edit all, others only their own
     if (req.user.role !== 'super_admin' && quote.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -271,6 +325,9 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       }
     }
 
+    // FIXED: Parse includeTax as boolean properly
+    const includeTaxBool = includeTax === 'true' || includeTax === true;
+
     const updateData = {
       clientName,
       clientPhone,
@@ -280,8 +337,8 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       revNumber,
       validForDays,
       language,
-      includeTax: includeTax === 'true' || includeTax === true,
-      taxRate: parseFloat(taxRate),
+      includeTax: includeTaxBool,
+      taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes
     };
@@ -301,11 +358,31 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
 /**
  * @route   DELETE /api/price-quotes/:id
  * @desc    Delete price quote
- * @access  Super Admin only
+ * @access  Private (Super Admin can delete all, Admin/Employee can delete their own)
  */
-router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
-    await priceQuoteService.deleteQuote(req.params.id);
+    const quote = await priceQuoteService.getQuoteById(req.params.id);
+
+    // Check permissions
+    if (req.user.role === 'super_admin') {
+      // Super admin can delete any quote
+      await priceQuoteService.deleteQuote(req.params.id);
+    } else if (req.user.role === 'admin' || req.user.role === 'employee') {
+      // Admin/Employee can only delete their own quotes
+      if (quote.createdBy !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to delete this quote'
+        });
+      }
+      await priceQuoteService.deleteQuote(req.params.id);
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to delete quotes'
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -325,7 +402,7 @@ router.get('/:id/pdf', async (req, res, next) => {
   try {
     const quote = await priceQuoteService.getQuoteById(req.params.id);
 
-    // Check permissions
+    // Check permissions: super_admin can download all, others only their own
     if (req.user.role !== 'super_admin' && quote.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,

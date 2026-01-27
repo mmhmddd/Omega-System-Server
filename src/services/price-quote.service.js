@@ -49,7 +49,6 @@ class PriceQuoteService {
   }
 
   async saveQuotes(quotes) {
-    // Use the async writeFile method
     await atomicWrite.writeFile(QUOTES_FILE, JSON.stringify(quotes, null, 2));
   }
 
@@ -92,11 +91,6 @@ class PriceQuoteService {
     return filepath;
   }
 
-  /**
-   * Convert PDF pages to PNG base64 images
-   * @param {string} pdfPath
-   * @returns {Promise<string[]>}
-   */
   async convertPdfPagesToImages(pdfPath) {
     try {
       console.log('Converting attachment PDF to images...');
@@ -108,7 +102,7 @@ class PriceQuoteService {
         format: 'png',
         out_dir: outputDir,
         out_prefix: `page-${Date.now()}`,
-        page: null // all pages
+        page: null
       };
 
       await pdfPoppler.convert(pdfPath, opts);
@@ -252,7 +246,6 @@ class PriceQuoteService {
       const page = await browser.newPage();
       await page.setContent(fullHTML, { waitUntil: 'networkidle0', timeout: 60000 });
 
-      // Wait for fonts & images to load
       await page.evaluate(() => document.fonts.ready);
       await page.waitForNetworkIdle({ timeout: 15000 }).catch(() => {});
 
@@ -411,7 +404,8 @@ class PriceQuoteService {
   // CRUD Operations
   // ──────────────────────────────────────────────
 
-  async createQuote(quoteData, createdBy, attachmentFile = null) {
+  // ✅ FIXED: Now accepts currentUser object instead of just userId
+  async createQuote(quoteData, currentUser, attachmentFile = null) {
     const quotes = await this.loadQuotes();
     const quoteNumber = await this.generateQuoteNumber();
 
@@ -430,7 +424,8 @@ class PriceQuoteService {
       taxRate: quoteData.includeTax ? (quoteData.taxRate || 0) : 0,
       items: quoteData.items || [],
       customNotes: quoteData.customNotes || null,
-      createdBy,
+      createdBy: currentUser.id,           // ✅ Store user ID
+      createdByName: currentUser.name,     // ✅ Store user name
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -536,6 +531,8 @@ class PriceQuoteService {
     if (updateData.items) quote.items = updateData.items;
     if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
 
+    // ✅ DO NOT update createdBy and createdByName - they should remain unchanged
+
     const totals = this.calculateTotals(quote.items, quote.includeTax, quote.taxRate);
     quote.subtotal = totals.subtotal;
     quote.taxAmount = totals.taxAmount;
@@ -545,7 +542,6 @@ class PriceQuoteService {
 
     let attachmentPath = quote.attachmentPath;
     if (attachmentFile) {
-      // Delete old attachment if exists
       if (attachmentPath && fsSync.existsSync(attachmentPath)) {
         await fs.unlink(attachmentPath).catch(() => {});
       }
@@ -572,7 +568,6 @@ class PriceQuoteService {
 
     const quote = quotes[quoteIndex];
 
-    // Delete PDF and attachment files if they exist
     if (quote.pdfPath && fsSync.existsSync(quote.pdfPath)) {
       await fs.unlink(quote.pdfPath).catch(() => {});
     }
