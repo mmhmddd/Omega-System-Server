@@ -8,10 +8,15 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Import routes
 const routes = require('./src/routes');
 const errorMiddleware = require('./src/middleware/error.middleware');
 
+
+const allowedOrigins = [
+  'https://omega-system.vercel.app',
+  'http://localhost:4200',
+  'http://127.0.0.1:4200',         
+];
 
 // Create required directories
 const directories = [
@@ -106,20 +111,37 @@ logFiles.forEach(logFile => {
 
 console.log('\n✨ System initialization completed!\n');
 
-// Middleware
+// ────────────────────────────────────────────────
+//                   MIDDLEWARE
+// ────────────────────────────────────────────────
+// ────────────────────────────────────────────────
+//                   MIDDLEWARE
+// ────────────────────────────────────────────────
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || '*',
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, Postman, etc.)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+// Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve static files (uploaded files)
+// Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'data/files/physical')));
 
-// Logging middleware (only in development)
-if (process.env.NODE_ENV === 'development') {
+// Simple request logger in development only
+if (process.env.NODE_ENV !== 'production') {
   app.use((req, res, next) => {
     console.log(`${req.method} ${req.path}`);
     next();
@@ -168,16 +190,14 @@ app.listen(PORT, () => {
   console.log('\n✅ Server is ready to accept requests\n');
 });
 
-// Graceful shutdown handlers
+// Graceful shutdown
 process.on('unhandledRejection', (err) => {
   console.error('\n❌ Unhandled Promise Rejection:', err);
-  console.log('⚠️  Server shutting down...\n');
   process.exit(1);
 });
 
 process.on('uncaughtException', (err) => {
   console.error('\n❌ Uncaught Exception:', err);
-  console.log('⚠️  Server shutting down...\n');
   process.exit(1);
 });
 
