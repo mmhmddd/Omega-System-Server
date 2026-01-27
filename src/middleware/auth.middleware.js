@@ -26,11 +26,12 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-this');
 
-      // Attach user info to request (including systemAccess)
+      // Attach user info to request (including systemAccess and routeAccess)
       req.user = {
         id: decoded.id,
         role: decoded.role,
-        systemAccess: decoded.systemAccess || {}
+        systemAccess: decoded.systemAccess || {},
+        routeAccess: decoded.routeAccess || []
       };
 
       next();
@@ -72,27 +73,44 @@ const checkSystemAccess = (systemName) => {
   };
 };
 
+/**
+ * Check if user has access to a specific route
+ * @param {string} routeKey - Route key to check access for
+ */
 const checkRouteAccess = (routeKey) => {
   return (req, res, next) => {
     const user = req.user;
     
+    console.log('=== Route Access Check ===');
+    console.log('Route Key:', routeKey);
+    console.log('User Role:', user.role);
+    console.log('User Route Access:', user.routeAccess);
+    
     // Super admins and admins have access to all routes
     if (user.role === 'super_admin' || user.role === 'admin') {
+      console.log('✅ Access granted: Super Admin or Admin');
       return next();
     }
 
     // Secretariat has access to their specific routes
     if (user.role === 'secretariat') {
-      // Secretariat can access user-forms and secretariat routes
-      const secretariatRoutes = ['userForms'];
+      const secretariatRoutes = ['secretariat', 'secretariat-user'];
       if (secretariatRoutes.includes(routeKey)) {
+        console.log('✅ Access granted: Secretariat has access to', routeKey);
         return next();
       }
+      
+      console.log('❌ Access denied: Route not in secretariat allowed routes');
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have access to this route. Please contact your administrator.'
+      });
     }
 
     // For employees, check routeAccess array
     if (user.role === 'employee') {
       if (!user.routeAccess || !Array.isArray(user.routeAccess)) {
+        console.log('❌ Access denied: No routeAccess array found for employee');
         return res.status(403).json({
           success: false,
           message: 'You do not have access to this route. Please contact your administrator.'
@@ -100,16 +118,20 @@ const checkRouteAccess = (routeKey) => {
       }
 
       if (!user.routeAccess.includes(routeKey)) {
+        console.log('❌ Access denied: Route key not in employee routeAccess array');
+        console.log('Available routes:', user.routeAccess);
         return res.status(403).json({
           success: false,
           message: `You do not have access to ${routeKey}. Please contact your administrator.`
         });
       }
 
+      console.log('✅ Access granted: Employee has routeAccess to', routeKey);
       return next();
     }
 
     // Default deny
+    console.log('❌ Access denied: Default deny');
     return res.status(403).json({
       success: false,
       message: 'You do not have permission to access this resource.'

@@ -18,7 +18,9 @@ const AVAILABLE_ROUTES = [
   { key: 'materials', label: 'Material Requests', path: '/api/materials' },
   { key: 'suppliers', label: 'Suppliers', path: '/api/suppliers' },
   { key: 'items', label: 'Items', path: '/api/items' },
-  { key: 'userForms', label: 'User Forms', path: '/api/user-forms' }
+  { key: 'userForms', label: 'User Forms', path: '/api/user-forms' },
+  { key: 'secretariatUserManagement', label: 'Secretariat User Management', path: '/api/secretariat-user' }
+  
 ];
 
 class UserService {

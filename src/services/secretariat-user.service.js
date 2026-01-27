@@ -79,6 +79,9 @@ class SecretariatUserService {
     await atomicWrite.writeFile(NOTIFICATIONS_FILE, JSON.stringify(notifications, null, 2));
   }
 
+  /**
+   * UPDATED: Create notification for BOTH super_admin and secretariat users
+   */
   async createNotification(formData, formType, createdBy) {
     const notifications = await this.loadNotifications();
     
@@ -116,32 +119,60 @@ class SecretariatUserService {
     return users.find(u => u.id === userId);
   }
 
+  /**
+   * UPDATED: Get users with secretariat OR super_admin role
+   */
   async getSecretariatUsers() {
     const usersFile = path.join(__dirname, '../../data/users/users.json');
     const data = await fs.readFile(usersFile, 'utf8');
     const users = JSON.parse(data);
-    return users.filter(u => u.role === 'secretariat' || u.role === 'super_admin');
+    
+    // Get both secretariat and super_admin users
+    return users.filter(u => 
+      u.role === 'secretariat' || u.role === 'super_admin'
+    );
   }
 
+  /**
+   * UPDATED: Send email to all secretariat, super_admin, and always to mohamed.m.mahmoud29@gmail.com
+   */
   async sendEmailToSecretariat(formData, formType) {
     try {
       const secretariatUsers = await this.getSecretariatUsers();
       const formTypeArabic = this.getFormTypeArabic(formType);
 
+      // Collect all email addresses
+      const emailAddresses = [];
+      
       for (const user of secretariatUsers) {
-        if (user.email) {
-          await emailService.sendFormNotificationEmail(
-            user.email,
-            user.name,
-            formData.employeeName,
-            formTypeArabic,
-            formData.formNumber,
-            formData.date
-          );
+        if (user.email && user.email.trim() !== '') {
+          emailAddresses.push(user.email);
         }
+      }
+
+      // The email service will automatically add mohamed.m.mahmoud29@gmail.com
+      // But we can explicitly add it here too for clarity
+      const mandatoryEmail = 'mohamed.m.mahmoud29@gmail.com';
+      if (!emailAddresses.includes(mandatoryEmail)) {
+        emailAddresses.push(mandatoryEmail);
+      }
+
+      if (emailAddresses.length > 0) {
+        // Send one email to all recipients
+        await emailService.sendFormNotificationEmail(
+          emailAddresses,
+          'السكرتارية', // Generic name since we're sending to multiple recipients
+          formData.employeeName,
+          formTypeArabic,
+          formData.formNumber,
+          formData.date
+        );
+
+        console.log(`Form notification emails sent to: ${emailAddresses.join(', ')}`);
       }
     } catch (error) {
       console.error('Error sending email to secretariat:', error);
+      // Don't throw - we don't want email failures to stop form creation
     }
   }
 
@@ -285,7 +316,10 @@ class SecretariatUserService {
     forms.push(newForm);
     await this.saveForms(forms);
 
+    // Create notification (will be visible to both super_admin and secretariat)
     await this.createNotification(newForm, formData.formType, createdBy);
+    
+    // Send emails (includes all secretariat, super_admin, and mandatory email)
     await this.sendEmailToSecretariat(newForm, formData.formType);
 
     return newForm;
@@ -374,15 +408,15 @@ class SecretariatUserService {
     return form;
   }
 
+  /**
+   * Get notifications - accessible by super_admin and secretariat
+   */
   async getNotifications(userId = null) {
     const notifications = await this.loadNotifications();
     
-    let filtered = notifications;
-    if (userId) {
-      filtered = notifications.filter(n => n.createdBy === userId);
-    }
-
-    return filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Return all notifications sorted by creation date
+    // The frontend will handle role-based filtering
+    return notifications.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   async markNotificationAsRead(notificationId) {

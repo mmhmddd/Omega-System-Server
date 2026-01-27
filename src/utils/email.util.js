@@ -335,16 +335,29 @@ If you have any questions, please contact your system administrator.
 
   /**
    * إرسال إشعار بالبريد الإلكتروني للسكرتارية عند إنشاء نموذج جديد
+   * UPDATED: Now always includes mohamed.m.mahmoud29@gmail.com
    */
-  async sendFormNotificationEmail(to, secretariatName, employeeName, formType, formNumber, date) {
+  async sendFormNotificationEmail(recipients, secretariatName, employeeName, formType, formNumber, date) {
     try {
       if (!this.transporter) {
         throw new Error('Email transporter not initialized');
       }
 
+      // Ensure recipients is an array
+      let emailList = Array.isArray(recipients) ? recipients : [recipients];
+      
+      // Always include mohamed.m.mahmoud29@gmail.com
+      const mandatoryEmail = 'mohamed.m.mahmoud29@gmail.com';
+      if (!emailList.includes(mandatoryEmail)) {
+        emailList.push(mandatoryEmail);
+      }
+
+      // Remove duplicates and filter out empty emails
+      emailList = [...new Set(emailList)].filter(email => email && email.trim() !== '');
+
       const mailOptions = {
         from: `"Omega System" <${process.env.EMAIL_USER}>`,
-        to: to,
+        to: emailList.join(', '),
         subject: `نموذج جديد - ${formType}`,
         html: `
           <!DOCTYPE html>
@@ -464,10 +477,11 @@ If you have any questions, please contact your system administrator.
 
       const info = await this.transporter.sendMail(mailOptions);
       
-      logger.info(`Form notification email sent to: ${to}`);
+      logger.info(`Form notification email sent to: ${emailList.join(', ')}`);
       return {
         success: true,
-        messageId: info.messageId
+        messageId: info.messageId,
+        recipients: emailList
       };
     } catch (error) {
       logger.error('Failed to send form notification email', error);
