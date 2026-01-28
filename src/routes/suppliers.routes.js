@@ -5,22 +5,30 @@
 const express = require('express');
 const router = express.Router();
 const supplierService = require('../services/supplier.service');
-const { protect ,checkRouteAccess } = require('../middleware/auth.middleware');
+const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 // ============================================
-// PUBLIC ROUTES (Authenticated users)
+// ✅ الترتيب الصحيح: protect أولاً، ثم checkRouteAccess
+// ============================================
+
+// Apply protect middleware first to all routes
+router.use(protect);
+
+// Then apply route access check
+router.use(checkRouteAccess('supplierManagement'));
+
+// ============================================
+// PUBLIC ROUTES (Authenticated users with supplierManagement access)
 // ============================================
 
 /**
  * @route   GET /api/suppliers
  * @desc    Get all suppliers with optional filters
- * @access  Authenticated
+ * @access  Authenticated + supplierManagement access
  * @query   status, materialType, country, city, minRating
  */
-router.use(checkRouteAccess('supplierManagement'));
-
-router.get('/', protect, async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const filters = {
       status: req.query.status,
@@ -45,10 +53,10 @@ router.get('/', protect, async (req, res, next) => {
 /**
  * @route   GET /api/suppliers/search
  * @desc    Search suppliers by query
- * @access  Authenticated
+ * @access  Authenticated + supplierManagement access
  * @query   q (search query)
  */
-router.get('/search', protect, async (req, res, next) => {
+router.get('/search', async (req, res, next) => {
   try {
     const query = req.query.q || '';
     
@@ -67,9 +75,9 @@ router.get('/search', protect, async (req, res, next) => {
 /**
  * @route   GET /api/suppliers/statistics
  * @desc    Get supplier statistics
- * @access  Authenticated
+ * @access  Authenticated + supplierManagement access
  */
-router.get('/statistics', protect, async (req, res, next) => {
+router.get('/statistics', async (req, res, next) => {
   try {
     const stats = await supplierService.getStatistics();
     
@@ -85,9 +93,9 @@ router.get('/statistics', protect, async (req, res, next) => {
 /**
  * @route   GET /api/suppliers/material/:materialType
  * @desc    Get suppliers by material type
- * @access  Authenticated
+ * @access  Authenticated + supplierManagement access
  */
-router.get('/material/:materialType', protect, async (req, res, next) => {
+router.get('/material/:materialType', async (req, res, next) => {
   try {
     const suppliers = await supplierService.getSuppliersByMaterial(req.params.materialType);
     
@@ -104,9 +112,9 @@ router.get('/material/:materialType', protect, async (req, res, next) => {
 /**
  * @route   GET /api/suppliers/:id
  * @desc    Get single supplier by ID
- * @access  Authenticated
+ * @access  Authenticated + supplierManagement access
  */
-router.get('/:id', protect, async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const supplier = await supplierService.getSupplierById(req.params.id);
     
@@ -134,7 +142,7 @@ router.get('/:id', protect, async (req, res, next) => {
  * @desc    Add new supplier
  * @access  Super Admin only
  */
-router.post('/', protect, restrictTo('super_admin'), async (req, res, next) => {
+router.post('/', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { name, email, phone } = req.body;
     
@@ -184,7 +192,7 @@ router.post('/', protect, restrictTo('super_admin'), async (req, res, next) => {
  * @desc    Update supplier
  * @access  Super Admin only
  */
-router.put('/:id', protect, restrictTo('super_admin'), async (req, res, next) => {
+router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
   try {
     // Email validation if email is being updated
     if (req.body.email) {
@@ -232,7 +240,7 @@ router.put('/:id', protect, restrictTo('super_admin'), async (req, res, next) =>
  * @desc    Update supplier status
  * @access  Super Admin only
  */
-router.patch('/:id/status', protect, restrictTo('super_admin'), async (req, res, next) => {
+router.patch('/:id/status', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { status } = req.body;
     
@@ -272,7 +280,7 @@ router.patch('/:id/status', protect, restrictTo('super_admin'), async (req, res,
  * @desc    Delete supplier
  * @access  Super Admin only
  */
-router.delete('/:id', protect, restrictTo('super_admin'), async (req, res, next) => {
+router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const supplier = await supplierService.deleteSupplier(req.params.id);
     
@@ -297,7 +305,7 @@ router.delete('/:id', protect, restrictTo('super_admin'), async (req, res, next)
  * @desc    Bulk import suppliers
  * @access  Super Admin only
  */
-router.post('/bulk-import', protect, restrictTo('super_admin'), async (req, res, next) => {
+router.post('/bulk-import', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { suppliers } = req.body;
     
