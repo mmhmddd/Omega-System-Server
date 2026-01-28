@@ -1,9 +1,5 @@
 // server.js
-// Load .env فقط في الـ development (محليًا على جهازك)
-if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config();
-}
-
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -12,14 +8,10 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
+// Import routes
 const routes = require('./src/routes');
 const errorMiddleware = require('./src/middleware/error.middleware');
 
-const allowedOrigins = [
-  'https://omega-system.vercel.app',
-  'http://localhost:4200',
-  'http://127.0.0.1:4200',         
-];
 
 // Create required directories
 const directories = [
@@ -114,33 +106,20 @@ logFiles.forEach(logFile => {
 
 console.log('\n✨ System initialization completed!\n');
 
-// ────────────────────────────────────────────────
-//                   MIDDLEWARE
-// ────────────────────────────────────────────────
+// Middleware
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
-
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error(`Origin ${origin} not allowed by CORS`));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  origin: process.env.CORS_ORIGIN || '*',
+  credentials: true
 }));
 
-// Body parsers
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Serve uploaded files
+// Serve static files (uploaded files)
 app.use('/uploads', express.static(path.join(__dirname, 'data/files/physical')));
 
-// Simple request logger in development only
-if (process.env.NODE_ENV !== 'production') {
+// Logging middleware (only in development)
+if (process.env.NODE_ENV === 'development') {
   app.use((req, res, next) => {
     console.log(`${req.method} ${req.path}`);
     next();
@@ -189,14 +168,16 @@ app.listen(PORT, () => {
   console.log('\n✅ Server is ready to accept requests\n');
 });
 
-// Graceful shutdown
+// Graceful shutdown handlers
 process.on('unhandledRejection', (err) => {
   console.error('\n❌ Unhandled Promise Rejection:', err);
+  console.log('⚠️  Server shutting down...\n');
   process.exit(1);
 });
 
 process.on('uncaughtException', (err) => {
   console.error('\n❌ Uncaught Exception:', err);
+  console.log('⚠️  Server shutting down...\n');
   process.exit(1);
 });
 
