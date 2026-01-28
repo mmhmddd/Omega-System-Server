@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const cuttingService = require('../services/cutting.service');
-const { protect, checkRouteAccess ,checkSystemAccess  } = require('../middleware/auth.middleware'); // ✏️ UPDATED
+const { protect, checkRouteAccess ,checkSystemAccess  } = require('../middleware/auth.middleware');
 
 // Configure multer for file upload (memory storage)
 const storage = multer.memoryStorage();
@@ -31,8 +31,6 @@ router.use(protect);
 // Super admins automatically have access, others need laserCuttingManagement permission
 router.use(checkSystemAccess('laserCuttingManagement'));
 router.use(checkRouteAccess('cutting'));
-
-
 
 /**
  * @route   POST /api/cutting
@@ -153,6 +151,35 @@ router.get('/statistics', async (req, res, next) => {
 });
 
 /**
+ * @route   GET /api/cutting/download/:id
+ * @desc    Download cutting job file
+ * @access  Private
+ */
+router.get('/download/:id', async (req, res, next) => {
+  try {
+    const job = await cuttingService.getCuttingJobById(req.params.id);
+
+    if (!job.fileName || !job.filePath) {
+      return res.status(404).json({
+        success: false,
+        message: 'No file associated with this cutting job'
+      });
+    }
+
+    const fileResult = await cuttingService.downloadFile(job.filePath);
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${job.fileName}"`);
+    res.setHeader('Content-Length', fileResult.size);
+
+    res.send(fileResult.buffer);
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * @route   GET /api/cutting/:id
  * @desc    Get specific cutting job by ID
  * @access  Private
@@ -185,7 +212,8 @@ router.put('/:id', upload.single('file'), async (req, res, next) => {
       thickness,
       notes,
       fileStatus,
-      dateFrom
+      dateFrom,
+      currentlyCut  // ✅ NEW: Accept currentlyCut from request
     } = req.body;
 
     // Validate fileStatus if provided
@@ -215,6 +243,17 @@ router.put('/:id', upload.single('file'), async (req, res, next) => {
       });
     }
 
+    // ✅ NEW: Validate currentlyCut if provided
+    if (currentlyCut !== undefined) {
+      const cutAmount = parseInt(currentlyCut);
+      if (isNaN(cutAmount) || cutAmount < 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Currently cut amount must be a non-negative number'
+        });
+      }
+    }
+
     const updateData = {
       projectName,
       pieceName,
@@ -223,7 +262,8 @@ router.put('/:id', upload.single('file'), async (req, res, next) => {
       thickness,
       notes,
       fileStatus,
-      dateFrom
+      dateFrom,
+      currentlyCut  // ✅ NEW: Include currentlyCut in update data
     };
 
     const updatedBy = req.user.id;
@@ -297,6 +337,65 @@ router.patch('/:id/status', async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'File status updated successfully',
+      data: job
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * @route   PATCH /api/cutting/:id/track
+ * @desc    Update cutting progress (currentlyCut) for a job
+ * @access  Private
+ */
+router.patch('/:id/track', async (req, res, next) => {
+  try {
+    const { currentlyCut, fileStatus, notes } = req.body;
+
+    if (currentlyCut === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'currentlyCut is required'
+      });
+    }
+
+    const cutAmount = parseInt(currentlyCut);
+    if (isNaN(cutAmount) || cutAmount < 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Currently cut amount must be a non-negative number'
+      });
+    }
+
+    // Validate fileStatus if provided
+    if (fileStatus) {
+      const validStatuses = ['معلق', 'قيد التنفيذ', 'مكتمل', 'جزئي'];
+      if (!validStatuses.includes(fileStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid file status. Valid values: معلق, قيد التنفيذ, مكتمل, جزئي'
+        });
+      }
+    }
+
+    const updatedBy = req.user.id;
+    const updateData = {
+      currentlyCut: cutAmount,
+      fileStatus,
+      notes
+    };
+
+    const job = await cuttingService.updateCuttingJob(
+      req.params.id,
+      updateData,
+      null,
+      updatedBy
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'Cutting progress updated successfully',
       data: job
     });
   } catch (error) {

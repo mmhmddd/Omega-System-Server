@@ -7,6 +7,7 @@ const atomicWrite = require('../utils/atomic-write.util');
 const CUTTING_JOBS_FILE = path.join(__dirname, '../../data/cutting-jobs/index.json');
 const CUTTING_JOBS_DIR = path.join(__dirname, '../../data/cutting-jobs');
 const COUNTERS_FILE = path.join(__dirname, '../../data/counters.json');
+const USERS_FILE = path.join(__dirname, '../../data/users.json');
 
 // Status folders
 const STATUS_FOLDERS = {
@@ -17,6 +18,84 @@ const STATUS_FOLDERS = {
 };
 
 class CuttingService {
+  /**
+   * Load users from file
+   */
+  async loadUsers() {
+    try {
+      if (!fsSync.existsSync(USERS_FILE)) {
+        return [];
+      }
+      const data = await fs.readFile(USERS_FILE, 'utf8');
+      return JSON.parse(data);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get user info by ID
+   */
+  async getUserInfo(userId) {
+    try {
+      const users = await this.loadUsers();
+      const user = users.find(u => u.id === userId);
+      
+      if (user) {
+        return {
+          id: user.id,
+          name: user.name || user.username,
+          username: user.username,
+          email: user.email
+        };
+      }
+      
+      return {
+        id: userId,
+        name: userId,
+        username: userId,
+        email: ''
+      };
+    } catch (error) {
+      console.error('Error getting user info:', error);
+      return {
+        id: userId,
+        name: userId,
+        username: userId,
+        email: ''
+      };
+    }
+  }
+
+  /**
+   * Enrich job with user information
+   */
+  async enrichJobWithUserInfo(job) {
+    try {
+      // Get uploaded by user info
+      const uploadedByInfo = await this.getUserInfo(job.uploadedBy);
+      
+      // Get cutBy users info
+      const cutByInfo = [];
+      if (job.cutBy && Array.isArray(job.cutBy)) {
+        for (const userId of job.cutBy) {
+          const userInfo = await this.getUserInfo(userId);
+          cutByInfo.push(userInfo);
+        }
+      }
+
+      return {
+        ...job,
+        uploadedByInfo: uploadedByInfo,
+        cutByInfo: cutByInfo
+      };
+    } catch (error) {
+      console.error('Error enriching job with user info:', error);
+      return job;
+    }
+  }
+
   /**
    * Initialize cutting jobs directory structure
    */
@@ -135,6 +214,34 @@ class CuttingService {
   }
 
   /**
+   * Download file
+   */
+  async downloadFile(filePath) {
+    try {
+      // Remove 'data/' prefix if present and construct absolute path
+      const relativePath = filePath.replace(/^data\//, '');
+      const absolutePath = path.join(__dirname, '../../data', relativePath);
+
+      // Check if file exists
+      if (!fsSync.existsSync(absolutePath)) {
+        throw new Error('File not found');
+      }
+
+      // Read file
+      const buffer = await fs.readFile(absolutePath);
+      const stats = await fs.stat(absolutePath);
+
+      return {
+        buffer: buffer,
+        size: stats.size
+      };
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Create new cutting job
    */
   async createCuttingJob(jobData, file, uploadedBy) {
@@ -181,6 +288,7 @@ class CuttingService {
         projectName: jobData.projectName,
         pieceName: jobData.pieceName || '',
         quantity: parseInt(jobData.quantity),
+        currentlyCut: 0, // Initialize cutting progress
         materialType: jobData.materialType,
         thickness: parseFloat(jobData.thickness),
         notes: jobData.notes || '',
@@ -197,7 +305,8 @@ class CuttingService {
       jobs.push(newJob);
       await this.saveCuttingJobs(jobs);
 
-      return newJob;
+      // Enrich with user info before returning
+      return await this.enrichJobWithUserInfo(newJob);
     } catch (error) {
       console.error('Error creating cutting job:', error);
       throw error;
@@ -254,8 +363,13 @@ class CuttingService {
 
       const paginatedJobs = jobs.slice(startIndex, endIndex);
 
+      // Enrich all jobs with user info
+      const enrichedJobs = await Promise.all(
+        paginatedJobs.map(job => this.enrichJobWithUserInfo(job))
+      );
+
       return {
-        jobs: paginatedJobs,
+        jobs: enrichedJobs,
         pagination: {
           currentPage: page,
           totalPages: Math.ceil(jobs.length / limit),
@@ -281,7 +395,8 @@ class CuttingService {
         throw new Error('Cutting job not found');
       }
 
-      return job;
+      // Enrich with user info before returning
+      return await this.enrichJobWithUserInfo(job);
     } catch (error) {
       console.error('Error getting cutting job:', error);
       throw error;
@@ -312,7 +427,38 @@ class CuttingService {
       if (updateData.notes !== undefined) job.notes = updateData.notes;
       if (updateData.dateFrom !== undefined) job.dateFrom = updateData.dateFrom;
 
-      // Handle file status change
+      // ✅ Handle currentlyCut update with improved validation
+      if (updateData.currentlyCut !== undefined) {
+        const newCutAmount = parseInt(updateData.currentlyCut);
+        
+        // Validate the cut amount
+        if (isNaN(newCutAmount)) {
+          throw new Error('Cut amount must be a valid number');
+        }
+        
+        if (newCutAmount < 0) {
+          throw new Error('Cut amount cannot be negative');
+        }
+        
+        if (newCutAmount > job.quantity) {
+          throw new Error(`Cut amount (${newCutAmount}) cannot exceed total quantity (${job.quantity})`);
+        }
+        
+        job.currentlyCut = newCutAmount;
+        
+        // Auto-update status based on progress if status is not explicitly provided
+        if (!updateData.fileStatus) {
+          if (newCutAmount === 0) {
+            job.fileStatus = 'معلق';
+          } else if (newCutAmount < job.quantity) {
+            job.fileStatus = 'قيد التنفيذ';
+          } else if (newCutAmount === job.quantity) {
+            job.fileStatus = 'مكتمل';
+          }
+        }
+      }
+
+      // Handle file status change (override auto-status if explicitly provided)
       if (updateData.fileStatus && updateData.fileStatus !== oldStatus) {
         job.fileStatus = updateData.fileStatus;
 
@@ -366,7 +512,8 @@ class CuttingService {
       jobs[jobIndex] = job;
       await this.saveCuttingJobs(jobs);
 
-      return job;
+      // Enrich with user info before returning
+      return await this.enrichJobWithUserInfo(job);
     } catch (error) {
       console.error('Error updating cutting job:', error);
       throw error;
