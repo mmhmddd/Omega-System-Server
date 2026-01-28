@@ -1,4 +1,4 @@
-// src/services/cutting.service.js
+// src/services/cutting.service.js (ENHANCED VERSION)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -7,7 +7,7 @@ const atomicWrite = require('../utils/atomic-write.util');
 const CUTTING_JOBS_FILE = path.join(__dirname, '../../data/cutting-jobs/index.json');
 const CUTTING_JOBS_DIR = path.join(__dirname, '../../data/cutting-jobs');
 const COUNTERS_FILE = path.join(__dirname, '../../data/counters.json');
-const USERS_FILE = path.join(__dirname, '../../data/users.json');
+const USERS_FILE = path.join(__dirname, '../../data/users/users.json'); // FIXED: Corrected path
 
 // Status folders
 const STATUS_FOLDERS = {
@@ -53,7 +53,7 @@ class CuttingService {
       
       return {
         id: userId,
-        name: userId,
+        name: 'Unknown User',
         username: userId,
         email: ''
       };
@@ -61,7 +61,7 @@ class CuttingService {
       console.error('Error getting user info:', error);
       return {
         id: userId,
-        name: userId,
+        name: 'Unknown User',
         username: userId,
         email: ''
       };
@@ -76,7 +76,7 @@ class CuttingService {
       // Get uploaded by user info
       const uploadedByInfo = await this.getUserInfo(job.uploadedBy);
       
-      // Get cutBy users info
+      // Get cutBy users info (all users who worked on this job)
       const cutByInfo = [];
       if (job.cutBy && Array.isArray(job.cutBy)) {
         for (const userId of job.cutBy) {
@@ -85,10 +85,32 @@ class CuttingService {
         }
       }
 
+      // Get last updated by user info
+      let lastUpdatedByInfo = null;
+      if (job.lastUpdatedBy) {
+        lastUpdatedByInfo = await this.getUserInfo(job.lastUpdatedBy);
+      }
+
+      // Get update history with user info
+      let updateHistoryWithUsers = [];
+      if (job.updateHistory && Array.isArray(job.updateHistory)) {
+        updateHistoryWithUsers = await Promise.all(
+          job.updateHistory.map(async (update) => {
+            const userInfo = await this.getUserInfo(update.updatedBy);
+            return {
+              ...update,
+              updatedByInfo: userInfo
+            };
+          })
+        );
+      }
+
       return {
         ...job,
         uploadedByInfo: uploadedByInfo,
-        cutByInfo: cutByInfo
+        cutByInfo: cutByInfo,
+        lastUpdatedByInfo: lastUpdatedByInfo,
+        updateHistory: updateHistoryWithUsers
       };
     } catch (error) {
       console.error('Error enriching job with user info:', error);
@@ -242,6 +264,17 @@ class CuttingService {
   }
 
   /**
+   * Create update history entry
+   */
+  createUpdateHistoryEntry(updatedBy, changes) {
+    return {
+      updatedBy: updatedBy,
+      timestamp: new Date().toISOString(),
+      changes: changes
+    };
+  }
+
+  /**
    * Create new cutting job
    */
   async createCuttingJob(jobData, file, uploadedBy) {
@@ -282,21 +315,28 @@ class CuttingService {
         savedFileName = fileName;
       }
 
-      // Create job object
+      // Create job object with enhanced tracking
       const newJob = {
         id: jobId,
         projectName: jobData.projectName,
         pieceName: jobData.pieceName || '',
         quantity: parseInt(jobData.quantity),
-        currentlyCut: 0, // Initialize cutting progress
+        currentlyCut: 0,
         materialType: jobData.materialType,
         thickness: parseFloat(jobData.thickness),
         notes: jobData.notes || '',
-        fileStatus: 'معلق', // Default status: pending
+        fileStatus: 'معلق',
         fileName: savedFileName,
         filePath: savedFileName ? `data/cutting-jobs/${STATUS_FOLDERS['معلق']}/${savedFileName}` : null,
         uploadedBy: uploadedBy,
-        cutBy: [], // Array to track all users who worked on this job
+        cutBy: [],
+        lastUpdatedBy: uploadedBy, // Track last person who updated
+        updateHistory: [ // NEW: Track all updates
+          this.createUpdateHistoryEntry(uploadedBy, {
+            action: 'created',
+            description: 'Job created'
+          })
+        ],
         dateFrom: null,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
@@ -417,17 +457,80 @@ class CuttingService {
 
       const job = jobs[jobIndex];
       const oldStatus = job.fileStatus;
+      
+      // Initialize updateHistory if it doesn't exist
+      if (!job.updateHistory) {
+        job.updateHistory = [];
+      }
+
+      // Track changes for history
+      const changes = { action: 'updated', modifications: [] };
 
       // Update basic fields
-      if (updateData.projectName) job.projectName = updateData.projectName;
-      if (updateData.pieceName !== undefined) job.pieceName = updateData.pieceName;
-      if (updateData.quantity) job.quantity = parseInt(updateData.quantity);
-      if (updateData.materialType) job.materialType = updateData.materialType;
-      if (updateData.thickness) job.thickness = parseFloat(updateData.thickness);
-      if (updateData.notes !== undefined) job.notes = updateData.notes;
-      if (updateData.dateFrom !== undefined) job.dateFrom = updateData.dateFrom;
+      if (updateData.projectName && updateData.projectName !== job.projectName) {
+        changes.modifications.push({
+          field: 'projectName',
+          oldValue: job.projectName,
+          newValue: updateData.projectName
+        });
+        job.projectName = updateData.projectName;
+      }
 
-      // ✅ Handle currentlyCut update with improved validation
+      if (updateData.pieceName !== undefined && updateData.pieceName !== job.pieceName) {
+        changes.modifications.push({
+          field: 'pieceName',
+          oldValue: job.pieceName,
+          newValue: updateData.pieceName
+        });
+        job.pieceName = updateData.pieceName;
+      }
+
+      if (updateData.quantity && parseInt(updateData.quantity) !== job.quantity) {
+        changes.modifications.push({
+          field: 'quantity',
+          oldValue: job.quantity,
+          newValue: parseInt(updateData.quantity)
+        });
+        job.quantity = parseInt(updateData.quantity);
+      }
+
+      if (updateData.materialType && updateData.materialType !== job.materialType) {
+        changes.modifications.push({
+          field: 'materialType',
+          oldValue: job.materialType,
+          newValue: updateData.materialType
+        });
+        job.materialType = updateData.materialType;
+      }
+
+      if (updateData.thickness && parseFloat(updateData.thickness) !== job.thickness) {
+        changes.modifications.push({
+          field: 'thickness',
+          oldValue: job.thickness,
+          newValue: parseFloat(updateData.thickness)
+        });
+        job.thickness = parseFloat(updateData.thickness);
+      }
+
+      if (updateData.notes !== undefined && updateData.notes !== job.notes) {
+        changes.modifications.push({
+          field: 'notes',
+          oldValue: job.notes,
+          newValue: updateData.notes
+        });
+        job.notes = updateData.notes;
+      }
+
+      if (updateData.dateFrom !== undefined && updateData.dateFrom !== job.dateFrom) {
+        changes.modifications.push({
+          field: 'dateFrom',
+          oldValue: job.dateFrom,
+          newValue: updateData.dateFrom
+        });
+        job.dateFrom = updateData.dateFrom;
+      }
+
+      // Handle currentlyCut update with improved validation
       if (updateData.currentlyCut !== undefined) {
         const newCutAmount = parseInt(updateData.currentlyCut);
         
@@ -444,22 +547,46 @@ class CuttingService {
           throw new Error(`Cut amount (${newCutAmount}) cannot exceed total quantity (${job.quantity})`);
         }
         
-        job.currentlyCut = newCutAmount;
-        
-        // Auto-update status based on progress if status is not explicitly provided
-        if (!updateData.fileStatus) {
-          if (newCutAmount === 0) {
-            job.fileStatus = 'معلق';
-          } else if (newCutAmount < job.quantity) {
-            job.fileStatus = 'قيد التنفيذ';
-          } else if (newCutAmount === job.quantity) {
-            job.fileStatus = 'مكتمل';
+        if (newCutAmount !== job.currentlyCut) {
+          changes.modifications.push({
+            field: 'currentlyCut',
+            oldValue: job.currentlyCut,
+            newValue: newCutAmount,
+            progress: `${newCutAmount}/${job.quantity} (${Math.round((newCutAmount/job.quantity)*100)}%)`
+          });
+          job.currentlyCut = newCutAmount;
+          
+          // Auto-update status based on progress if status is not explicitly provided
+          if (!updateData.fileStatus) {
+            let autoStatus;
+            if (newCutAmount === 0) {
+              autoStatus = 'معلق';
+            } else if (newCutAmount < job.quantity) {
+              autoStatus = 'قيد التنفيذ';
+            } else if (newCutAmount === job.quantity) {
+              autoStatus = 'مكتمل';
+            }
+            
+            if (autoStatus && autoStatus !== job.fileStatus) {
+              changes.modifications.push({
+                field: 'fileStatus',
+                oldValue: job.fileStatus,
+                newValue: autoStatus,
+                reason: 'Auto-updated based on progress'
+              });
+              job.fileStatus = autoStatus;
+            }
           }
         }
       }
 
       // Handle file status change (override auto-status if explicitly provided)
       if (updateData.fileStatus && updateData.fileStatus !== oldStatus) {
+        changes.modifications.push({
+          field: 'fileStatus',
+          oldValue: oldStatus,
+          newValue: updateData.fileStatus
+        });
         job.fileStatus = updateData.fileStatus;
 
         // Move file to new status folder if file exists
@@ -472,6 +599,11 @@ class CuttingService {
       // Handle cutBy field - add user if not already in array
       if (updatedBy && !job.cutBy.includes(updatedBy)) {
         job.cutBy.push(updatedBy);
+        changes.modifications.push({
+          field: 'cutBy',
+          action: 'added_user',
+          userId: updatedBy
+        });
       }
 
       // Handle new file upload
@@ -503,11 +635,24 @@ class CuttingService {
 
         await fs.writeFile(filePath, file.buffer);
 
+        changes.modifications.push({
+          field: 'file',
+          oldValue: job.fileName,
+          newValue: fileName
+        });
+
         job.fileName = fileName;
         job.filePath = `data/cutting-jobs/${statusFolder}/${fileName}`;
       }
 
+      // Update tracking fields
+      job.lastUpdatedBy = updatedBy;
       job.updatedAt = new Date().toISOString();
+
+      // Add to update history only if there were actual changes
+      if (changes.modifications.length > 0) {
+        job.updateHistory.push(this.createUpdateHistoryEntry(updatedBy, changes));
+      }
 
       jobs[jobIndex] = job;
       await this.saveCuttingJobs(jobs);
@@ -567,16 +712,33 @@ class CuttingService {
           مكتمل: jobs.filter(j => j.fileStatus === 'مكتمل').length,
           جزئي: jobs.filter(j => j.fileStatus === 'جزئي').length
         },
-        byMaterial: {}
+        byMaterial: {},
+        totalProgress: {
+          totalQuantity: 0,
+          totalCut: 0,
+          percentageComplete: 0
+        }
       };
 
-      // Count by material type
+      // Count by material type and calculate total progress
       jobs.forEach(job => {
+        // Material stats
         if (!stats.byMaterial[job.materialType]) {
           stats.byMaterial[job.materialType] = 0;
         }
         stats.byMaterial[job.materialType]++;
+
+        // Progress stats
+        stats.totalProgress.totalQuantity += job.quantity || 0;
+        stats.totalProgress.totalCut += job.currentlyCut || 0;
       });
+
+      // Calculate overall percentage
+      if (stats.totalProgress.totalQuantity > 0) {
+        stats.totalProgress.percentageComplete = Math.round(
+          (stats.totalProgress.totalCut / stats.totalProgress.totalQuantity) * 100
+        );
+      }
 
       return stats;
     } catch (error) {

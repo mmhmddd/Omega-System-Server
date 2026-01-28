@@ -18,6 +18,9 @@ const AR_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/AR-Uploads');
 const EN_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/EN-Uploads');
 const LOGO_PATH = path.join(__dirname, '../../assets/images/OmegaLogo.png');
 
+// ✅ NEW: Path to users file for user info enrichment
+const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
+
 class PriceQuoteService {
   async initialize() {
     try {
@@ -35,6 +38,61 @@ class PriceQuoteService {
       console.error('Error initializing price quotes:', error);
       throw error;
     }
+  }
+
+  // ✅ NEW: Load users for user info enrichment
+  async loadUsers() {
+    try {
+      if (!fsSync.existsSync(USERS_FILE)) {
+        return [];
+      }
+      const data = await fs.readFile(USERS_FILE, 'utf8');
+      return JSON.parse(data);
+    } catch (error) {
+      console.error('Error loading users:', error);
+      return [];
+    }
+  }
+
+  // ✅ NEW: Get user info by ID
+  async getUserInfo(userId) {
+    const users = await this.loadUsers();
+    const user = users.find(u => u.id === userId);
+    
+    if (user) {
+      return {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email
+      };
+    }
+    
+    return null;
+  }
+
+  // ✅ NEW: Enrich quotes with user information
+  async enrichQuotesWithUserInfo(quotes) {
+    const users = await this.loadUsers();
+    
+    return quotes.map(quote => {
+      const enrichedQuote = { ...quote };
+      
+      // Find creator info
+      if (quote.createdBy) {
+        const creator = users.find(u => u.id === quote.createdBy);
+        if (creator) {
+          enrichedQuote.createdByInfo = {
+            id: creator.id,
+            name: creator.name,
+            username: creator.username,
+            email: creator.email
+          };
+        }
+      }
+      
+      return enrichedQuote;
+    });
   }
 
   async loadQuotes() {
@@ -404,7 +462,6 @@ class PriceQuoteService {
   // CRUD Operations
   // ──────────────────────────────────────────────
 
-  // ✅ FIXED: Now accepts currentUser object instead of just userId
   async createQuote(quoteData, currentUser, attachmentFile = null) {
     const quotes = await this.loadQuotes();
     const quoteNumber = await this.generateQuoteNumber();
@@ -424,8 +481,8 @@ class PriceQuoteService {
       taxRate: quoteData.includeTax ? (quoteData.taxRate || 0) : 0,
       items: quoteData.items || [],
       customNotes: quoteData.customNotes || null,
-      createdBy: currentUser.id,           // ✅ Store user ID
-      createdByName: currentUser.name,     // ✅ Store user name
+      createdBy: currentUser.id,
+      createdByName: currentUser.name,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -447,7 +504,9 @@ class PriceQuoteService {
     quotes.push(newQuote);
     await this.saveQuotes(quotes);
 
-    return newQuote;
+    // ✅ Enrich with user info before returning
+    const enrichedQuotes = await this.enrichQuotesWithUserInfo([newQuote]);
+    return enrichedQuotes[0];
   }
 
   async getAllQuotes(filters = {}) {
@@ -475,8 +534,11 @@ class PriceQuoteService {
 
     const paginatedQuotes = quotes.slice(startIndex, endIndex);
 
+    // ✅ Enrich with user info
+    const enrichedQuotes = await this.enrichQuotesWithUserInfo(paginatedQuotes);
+
     return {
-      quotes: paginatedQuotes,
+      quotes: enrichedQuotes,
       pagination: {
         currentPage: page,
         totalPages: Math.ceil(quotes.length / limit),
@@ -493,7 +555,10 @@ class PriceQuoteService {
     if (userQuotes.length === 0) return null;
 
     userQuotes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return userQuotes[0];
+    
+    // ✅ Enrich with user info
+    const enrichedQuotes = await this.enrichQuotesWithUserInfo([userQuotes[0]]);
+    return enrichedQuotes[0];
   }
 
   async getQuoteById(id) {
@@ -504,7 +569,9 @@ class PriceQuoteService {
       throw new Error('Quote not found');
     }
 
-    return quote;
+    // ✅ Enrich with user info
+    const enrichedQuotes = await this.enrichQuotesWithUserInfo([quote]);
+    return enrichedQuotes[0];
   }
 
   async updateQuote(id, updateData, attachmentFile = null) {
@@ -531,7 +598,7 @@ class PriceQuoteService {
     if (updateData.items) quote.items = updateData.items;
     if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
 
-    // ✅ DO NOT update createdBy and createdByName - they should remain unchanged
+    // DO NOT update createdBy and createdByName - they should remain unchanged
 
     const totals = this.calculateTotals(quote.items, quote.includeTax, quote.taxRate);
     quote.subtotal = totals.subtotal;
@@ -555,7 +622,9 @@ class PriceQuoteService {
     quotes[quoteIndex] = quote;
     await this.saveQuotes(quotes);
 
-    return quote;
+    // ✅ Enrich with user info before returning
+    const enrichedQuotes = await this.enrichQuotesWithUserInfo([quote]);
+    return enrichedQuotes[0];
   }
 
   async deleteQuote(id) {
