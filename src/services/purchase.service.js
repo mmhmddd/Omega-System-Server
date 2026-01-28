@@ -1,4 +1,5 @@
-// src/services/purchase.service.js - COMPLETE PURCHASE ORDER SERVICE
+// src/services/purchase.service.js - WITH CREATOR NAME SUPPORT
+
 const fs = require('fs').promises;
 const path = require('path');
 const atomicWrite = require('../utils/atomic-write.util');
@@ -9,6 +10,94 @@ const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
 class PurchaseService {
+  /**
+   * Load users from JSON file
+   */
+  async loadUsers() {
+    try {
+      console.log('Loading users from:', USERS_FILE);
+      const data = await fs.readFile(USERS_FILE, 'utf8');
+      const users = JSON.parse(data);
+      console.log('Loaded users count:', users.length);
+      return users;
+    } catch (error) {
+      console.error('Error loading users file:', error);
+      if (error.code === 'ENOENT') {
+        console.error('Users file does not exist at:', USERS_FILE);
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get user name by ID
+   */
+async getUserNameById(userId) {
+  try {
+    const users = await this.loadUsers();
+    
+    if (!userId) {
+      console.log('⚠️ No userId provided');
+      return null;
+    }
+    
+    console.log('\n=== USER LOOKUP ===');
+    console.log('Looking for userId:', userId);
+    console.log('Type:', typeof userId);
+    
+    // Convert to string and trim for comparison
+    const searchId = String(userId).trim().toLowerCase();
+    
+    // Search with multiple strategies
+    let foundUser = null;
+    
+    // Strategy 1: Direct match
+    foundUser = users.find(u => u.id === userId);
+    if (foundUser) {
+      console.log('✓ Found (direct match):', foundUser.name);
+      return foundUser.name;
+    }
+    
+    // Strategy 2: String comparison (case-insensitive)
+    foundUser = users.find(u => {
+      const dbId = String(u.id).trim().toLowerCase();
+      return dbId === searchId;
+    });
+    
+    if (foundUser) {
+      console.log('✓ Found (string match):', foundUser.name);
+      return foundUser.name;
+    }
+    
+    // Strategy 3: Check by username if userId looks like username
+    foundUser = users.find(u => {
+      const username = String(u.username || '').trim().toLowerCase();
+      return username === searchId;
+    });
+    
+    if (foundUser) {
+      console.log('✓ Found (username match):', foundUser.name);
+      return foundUser.name;
+    }
+    
+    // Not found - log for debugging
+    console.log('✗ User not found');
+    console.log('Searched for:', searchId);
+    console.log('Available users:');
+    users.forEach(u => {
+      console.log(`  - ID: "${u.id}" | Username: "${u.username}" | Name: "${u.name}"`);
+    });
+    console.log('==================\n');
+    
+    return null;
+    
+  } catch (error) {
+    console.error('❌ Error getting user name:', error);
+    return null;
+  }
+}
+
   /**
    * Load POs from JSON file
    */
@@ -66,25 +155,6 @@ class PurchaseService {
       await atomicWrite(COUNTER_FILE, JSON.stringify(counters, null, 2));
     } catch (error) {
       throw error;
-    }
-  }
-
-  /**
-   * Get user name by user ID
-   */
-  async getUserName(userId) {
-    try {
-      const data = await fs.readFile(USERS_FILE, 'utf8');
-      const users = JSON.parse(data);
-      const user = users.find(u => u.id === userId);
-      
-      if (user) {
-        return user.name || user.username || userId;
-      }
-      
-      return userId;
-    } catch (error) {
-      return userId;
     }
   }
 
@@ -163,57 +233,116 @@ class PurchaseService {
   }
 
   /**
+   * Add creator names to POs
+   */
+  async enrichPOsWithCreatorNames(pos) {
+    const users = await this.loadUsers();
+    
+    return Promise.all(pos.map(async po => {
+      // Always look up the current user name from users database
+      const user = users.find(u => u.id === po.createdBy);
+      
+      if (user && user.name) {
+        // User found - use their current name
+        return {
+          ...po,
+          createdByName: user.name
+        };
+      } else {
+        // User not found - use Unknown User
+        return {
+          ...po,
+          createdByName: 'Unknown User'
+        };
+      }
+    }));
+  }
+
+  /**
    * Create a new Purchase Order
    */
-  async createPO(poData, userId, userRole) {
-    const pos = await this.loadPOs();
+async createPO(poData, userId, userRole) {
+  console.log('\n=== CREATE PO ===');
+  console.log('User ID:', userId);
+  console.log('User Role:', userRole);
+  
+  const pos = await this.loadPOs();
+  
+  const counter = await this.loadCounter();
+  const newCounter = counter + 1;
+  
+  const paddedCounter = String(newCounter).padStart(5, '0');
+  const id = `PO-${paddedCounter}`;
+  const poNumber = this.generatePONumber(newCounter);
+  
+  await this.saveCounter(newCounter);
+
+  const today = new Date().toISOString().split('T')[0];
+  const detectedLanguage = poData.forceLanguage || this.detectPOLanguage(poData);
+
+  // Get user name
+  let createdByName = await this.getUserNameById(userId);
+  
+  // Fallback: If name not found, try to get from users by role
+  if (!createdByName) {
+    console.log('⚠️ getUserNameById returned null, trying alternative lookup...');
+    const users = await this.loadUsers();
+    const user = users.find(u => 
+      u.id === userId || 
+      String(u.id).trim() === String(userId).trim()
+    );
     
-    const counter = await this.loadCounter();
-    const newCounter = counter + 1;
-    
-    const paddedCounter = String(newCounter).padStart(5, '0');
-    const id = `PO-${paddedCounter}`;
-    const poNumber = this.generatePONumber(newCounter);
-    
-    await this.saveCounter(newCounter);
-
-    const today = new Date().toISOString().split('T')[0];
-    const detectedLanguage = poData.forceLanguage || this.detectPOLanguage(poData);
-
-    const newPO = {
-      id,
-      poNumber,
-      date: poData.date || today,
-      supplier: poData.supplier || '',
-      supplierAddress: poData.supplierAddress || '',
-      supplierPhone: poData.supplierPhone || '',
-      receiver: poData.receiver || '',
-      receiverCity: poData.receiverCity || '',
-      receiverAddress: poData.receiverAddress || '',
-      receiverPhone: poData.receiverPhone || '',
-      tableHeaderText: poData.tableHeaderText || '',
-      taxRate: poData.taxRate || 0,
-      items: poData.items || [],
-      notes: poData.notes || '',
-      language: detectedLanguage,
-      status: 'pending',
-      createdBy: userId,
-      createdByRole: userRole,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    pos.push(newPO);
-    await this.savePOs(pos);
-
-    return newPO;
+    if (user) {
+      createdByName = user.name;
+      console.log('✓ Found via alternative lookup:', createdByName);
+    } else {
+      createdByName = 'Unknown User';
+      console.log('✗ User not found in alternative lookup');
+    }
   }
+
+  const newPO = {
+    id,
+    poNumber,
+    date: poData.date || today,
+    supplier: poData.supplier || '',
+    supplierAddress: poData.supplierAddress || '',
+    supplierPhone: poData.supplierPhone || '',
+    receiver: poData.receiver || '',
+    receiverCity: poData.receiverCity || '',
+    receiverAddress: poData.receiverAddress || '',
+    receiverPhone: poData.receiverPhone || '',
+    tableHeaderText: poData.tableHeaderText || '',
+    taxRate: poData.taxRate || 0,
+    items: poData.items || [],
+    notes: poData.notes || '',
+    language: detectedLanguage,
+    status: 'pending',
+    createdBy: userId,
+    createdByName: createdByName,
+    createdByRole: userRole,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  pos.push(newPO);
+  await this.savePOs(pos);
+
+  console.log('✓ PO created successfully');
+  console.log('Creator name:', newPO.createdByName);
+  console.log('=================\n');
+  
+  return newPO;
+}
 
   /**
    * Get all POs with filtering and pagination
    */
   async getAllPOs(filters = {}, userId, userRole) {
     let pos = await this.loadPOs();
+
+    // Add creator names to all POs
+    pos = await this.enrichPOsWithCreatorNames(pos);
 
     if (userRole === 'employee' || userRole === 'admin') {
       pos = pos.filter(p => p.createdBy === userId);
@@ -247,8 +376,9 @@ class PurchaseService {
       pos = pos.filter(p =>
         p.poNumber.toLowerCase().includes(searchLower) ||
         p.supplier.toLowerCase().includes(searchLower) ||
-        p.shipment.toLowerCase().includes(searchLower) ||
-        p.notes.toLowerCase().includes(searchLower)
+        p.receiver.toLowerCase().includes(searchLower) ||
+        (p.notes && p.notes.toLowerCase().includes(searchLower)) ||
+        (p.createdByName && p.createdByName.toLowerCase().includes(searchLower))
       );
     }
 
@@ -289,7 +419,13 @@ class PurchaseService {
       }
     }
 
-    return po;
+    // Add creator name
+    const createdByName = await this.getUserNameById(po.createdBy);
+
+    return {
+      ...po,
+      createdByName: createdByName || po.createdByName || 'Unknown User'
+    };
   }
 
   /**
@@ -333,7 +469,13 @@ class PurchaseService {
     pos[poIndex] = po;
     await this.savePOs(pos);
 
-    return po;
+    // Add creator name
+    const createdByName = await this.getUserNameById(po.createdBy);
+
+    return {
+      ...po,
+      createdByName: createdByName || po.createdByName || 'Unknown User'
+    };
   }
 
   /**

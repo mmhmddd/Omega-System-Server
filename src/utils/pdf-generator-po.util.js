@@ -79,6 +79,19 @@ class POPDFGenerator {
         grandTotal: 'المبلغ الإجمالي',
         notes: 'ملاحظات',
         paymentDetails: 'تفاصيل الدفع',
+        paymentCash: 'نقدي',
+        paymentCheck: 'شيك',
+        paymentAccountNumber: 'رقم الحساب',
+        paymentName: 'الاسم',
+        paymentTotalAmount: 'المبلغ الإجمالي',
+        paymentCardNumber: 'رقم البطاقة',
+        paymentExpiryDate: 'تاريخ الانتهاء',
+        approvalSection: 'الموافقة',
+        approvalDate: 'الموافقة',
+        approvalTheDate: 'التاريخ',
+        approvalActionNumber: 'رقم العمل',
+        approvalSalesRep: 'مندوب المبيعات',
+        approvalShippingStatus: 'الشحن عبر',
         approvedBy: 'موافق من قبل',
         purchaseManager: 'مدير المشتريات',
         productionManager: 'مدير الإنتاج',
@@ -121,6 +134,19 @@ class POPDFGenerator {
         grandTotal: 'Grand Total',
         notes: 'Notes',
         paymentDetails: 'Payment Details',
+        paymentCash: 'Cash',
+        paymentCheck: 'Check',
+        paymentAccountNumber: 'Account Number',
+        paymentName: 'Name',
+        paymentTotalAmount: 'Total Amount',
+        paymentCardNumber: 'Card Number',
+        paymentExpiryDate: 'Expiry Date',
+        approvalSection: 'Approval',
+        approvalDate: 'Approval',
+        approvalTheDate: 'Date',
+        approvalActionNumber: 'Action Number',
+        approvalSalesRep: 'Sales Representative',
+        approvalShippingStatus: 'Shipping Via',
         approvedBy: 'Approved By',
         purchaseManager: 'Purchase Manager',
         productionManager: 'Production Manager',
@@ -425,6 +451,66 @@ body {
   text-align: ${isRTL ? 'left' : 'right'};
 }
 
+.two-column-sections {
+  display: flex;
+  gap: 15px;
+  margin: 20px 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.payment-approval-section {
+  flex: 1;
+  background-color: #F8F9FA;
+  padding: 15px;
+  border-radius: 4px;
+  border: 1px dashed #ADB5BD;
+}
+
+.section-title {
+  font-weight: bold;
+  color: #2B4C8C;
+  margin-bottom: 12px;
+  font-size: 14px;
+  text-align: center;
+  padding-bottom: 8px;
+}
+
+.section-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.grid-row {
+  display: flex;
+  gap: 10px;
+}
+
+.grid-item {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+
+.grid-item .field-label {
+  font-weight: bold;
+  color: #495057;
+  white-space: nowrap;
+}
+
+.grid-item .field-value {
+  color: #6C757D;
+  text-align: ${isRTL ? 'left' : 'right'};
+  min-width: 80px;
+  border-bottom: 1px dashed #ADB5BD;
+  padding-bottom: 2px;
+  flex: 1;
+  margin-${isRTL ? 'right' : 'left'}: 8px;
+}
+
 .notes-section {
   background-color: #FFFBEA;
   padding: 15px;
@@ -630,6 +716,86 @@ body {
       <div class="total-row">
         <span class="total-label">${labels.grandTotal}:</span>
         <span class="total-value">${totals.grandTotal}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="two-column-sections">
+    <div class="payment-approval-section">
+      <div class="section-title">${labels.paymentDetails}</div>
+      <div class="section-grid">
+        <div class="grid-row">
+          <div class="grid-item">
+            <span class="field-label">${labels.paymentCash}:</span>
+            <span class="field-value">${po.paymentCash || ''}</span>
+          </div>
+          <div class="grid-item">
+            <span class="field-label">${labels.paymentCheck}:</span>
+            <span class="field-value">${po.paymentCheck || ''}</span>
+          </div>
+        </div>
+        <div class="grid-row">
+          <div class="grid-item">
+            <span class="field-label">${labels.paymentAccountNumber}:</span>
+            <span class="field-value">${po.paymentAccountNumber || ''}</span>
+          </div>
+        </div>
+        <div class="grid-row">
+          <div class="grid-item">
+            <span class="field-label">${labels.paymentName}:</span>
+            <span class="field-value">${po.paymentName || ''}</span>
+          </div>
+          <div class="grid-item">
+            <span class="field-label">${labels.paymentTotalAmount}:</span>
+            <span class="field-value">${po.paymentTotalAmount || totals.grandTotal}</span>
+          </div>
+        </div>
+        <div class="grid-row">
+          <div class="grid-item">
+            <span class="field-label">${labels.paymentCardNumber}:</span>
+            <span class="field-value">${po.paymentCardNumber || ''}</span>
+          </div>
+        </div>
+        <div class="grid-row">
+          <div class="grid-item">
+            <span class="field-label">${labels.paymentExpiryDate}:</span>
+            <span class="field-value">${po.paymentExpiryDate || ''}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="payment-approval-section">
+      <div class="section-title">${labels.approvalSection}</div>
+      <div class="section-grid">
+        <div class="grid-row">
+          <div class="grid-item">
+            <span class="field-label">${labels.approvalDate}:</span>
+            <span class="field-value">${po.approvalDate || ''}</span>
+          </div>
+          <div class="grid-item">
+            <span class="field-label">${labels.approvalTheDate}:</span>
+            <span class="field-value">${po.approvalTheDate || ''}</span>
+          </div>
+        </div>
+        <div class="grid-row">
+          <div class="grid-item">
+            <span class="field-label">${labels.approvalActionNumber}:</span>
+            <span class="field-value">${po.approvalActionNumber || ''}</span>
+          </div>
+        </div>
+        <div class="grid-row">
+          <div class="grid-item">
+            <span class="field-label">${labels.approvalSalesRep}:</span>
+            <span class="field-value">${po.approvalSalesRep || ''}</span>
+          </div>
+        </div>
+        <div class="grid-row">
+          <div class="grid-item">
+            <span class="field-label">${labels.approvalShippingStatus}:</span>
+            <span class="field-value">${po.approvalShippingStatus || ''}</span>
+          </div>
+        </div>
       </div>
     </div>
   </div>

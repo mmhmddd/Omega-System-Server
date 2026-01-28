@@ -1,5 +1,5 @@
 // ============================================================
-// MATERIAL ROUTES - UPDATED TO MATCH RECEIPT SYSTEM
+// MATERIAL ROUTES - FIXED JSON PARSING
 // src/routes/materials.routes.js
 // ============================================================
 const express = require('express');
@@ -177,17 +177,40 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * UPDATE MATERIAL REQUEST (NO AUTO PDF GENERATION)
+ * UPDATE MATERIAL REQUEST (NO AUTO PDF GENERATION) - ✅ FIXED
  */
 router.put('/:id', async (req, res, next) => {
   try {
+    // ✅ Parse items - handle both JSON string and object
+    let items = undefined;
+    if (req.body.items) {
+      if (typeof req.body.items === 'string') {
+        try {
+          items = JSON.parse(req.body.items);
+        } catch (e) {
+          console.error('JSON Parse Error:', e);
+          console.error('Received items:', req.body.items);
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid items format. Must be valid JSON array.',
+            received: typeof req.body.items,
+            error: e.message
+          });
+        }
+      } else if (Array.isArray(req.body.items)) {
+        items = req.body.items;
+      } else {
+        items = [req.body.items];
+      }
+    }
+
     const updateData = {
       date: req.body.date,
       section: req.body.section,
       project: req.body.project,
       requestPriority: req.body.requestPriority,
       requestReason: req.body.requestReason,
-      items: req.body.items ? JSON.parse(req.body.items) : undefined,
+      items: items,
       additionalNotes: req.body.additionalNotes,
       status: req.body.status
     };

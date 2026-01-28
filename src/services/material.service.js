@@ -1,5 +1,5 @@
 // ============================================================
-// MATERIAL SERVICE - UPDATED TO MATCH RECEIPT SYSTEM
+// MATERIAL SERVICE - UPDATED WITH USER NAME LOOKUP
 // src/services/material.service.js
 // ============================================================
 const fs = require('fs').promises;
@@ -10,8 +10,75 @@ const materialPdfGenerator = require('../utils/pdf-generator-material.util');
 
 const MATERIALS_FILE = path.join(__dirname, '../../data/materials-requests/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
+const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
 class MaterialService {
+  /**
+   * Load users from JSON file
+   */
+  async loadUsers() {
+    try {
+      console.log('Loading users from:', USERS_FILE);
+      const data = await fs.readFile(USERS_FILE, 'utf8');
+      const users = JSON.parse(data);
+      console.log('Loaded users count:', users.length);
+      return users;
+    } catch (error) {
+      console.error('Error loading users file:', error);
+      if (error.code === 'ENOENT') {
+        console.error('Users file does not exist at:', USERS_FILE);
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get user name by ID
+   */
+  async getUserNameById(userId) {
+    try {
+      const users = await this.loadUsers();
+      console.log('=== USER LOOKUP DEBUG ===');
+      console.log('Looking for userId:', userId);
+      console.log('Type of userId:', typeof userId);
+      console.log('All user IDs in database:');
+      users.forEach(u => {
+        console.log(`  - ID: "${u.id}" (type: ${typeof u.id}) | Name: "${u.name}"`);
+      });
+      
+      // Try exact match first
+      let user = users.find(u => u.id === userId);
+      
+      // If not found, try string comparison
+      if (!user && typeof userId !== 'string') {
+        const userIdStr = String(userId);
+        console.log('Trying string conversion:', userIdStr);
+        user = users.find(u => u.id === userIdStr);
+      }
+      
+      // If still not found, try trimming whitespace
+      if (!user && typeof userId === 'string') {
+        const userIdTrimmed = userId.trim();
+        console.log('Trying trimmed version:', userIdTrimmed);
+        user = users.find(u => u.id.trim() === userIdTrimmed);
+      }
+      
+      if (user) {
+        console.log('✓ Found user:', user.name);
+        console.log('========================');
+        return user.name;
+      } else {
+        console.log('✗ User not found for ID:', userId);
+        console.log('========================');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error getting user name:', error);
+      return null;
+    }
+  }
+
   async loadMaterialRequests() {
     try {
       const data = await fs.readFile(MATERIALS_FILE, 'utf8');
@@ -92,9 +159,40 @@ class MaterialService {
   }
 
   /**
+   * Add creator names to materials
+   */
+  async enrichMaterialsWithCreatorNames(materials) {
+    const users = await this.loadUsers();
+    
+    return Promise.all(materials.map(async material => {
+      // Always look up the current user name from users database
+      const user = users.find(u => u.id === material.createdBy);
+      
+      if (user && user.name) {
+        // User found - use their current name
+        return {
+          ...material,
+          createdByName: user.name
+        };
+      } else {
+        // User not found - use Unknown User
+        return {
+          ...material,
+          createdByName: 'Unknown User'
+        };
+      }
+    }));
+  }
+
+  /**
    * CREATE MATERIAL REQUEST (NO PDF GENERATION)
    */
   async createMaterialRequest(materialData, userId, userRole) {
+    console.log('\n=== CREATE MATERIAL REQUEST DEBUG ===');
+    console.log('userId:', userId);
+    console.log('userId type:', typeof userId);
+    console.log('userRole:', userRole);
+    
     const materials = await this.loadMaterialRequests();
     
     const counter = await this.loadCounter();
@@ -109,6 +207,14 @@ class MaterialService {
     const today = new Date().toISOString().split('T')[0];
     const detectedLanguage = materialData.forceLanguage || this.detectMaterialLanguage(materialData);
 
+    // Get creator name with detailed logging
+    console.log('Calling getUserNameById with:', userId);
+    const createdByName = await this.getUserNameById(userId);
+    console.log('getUserNameById returned:', createdByName);
+    console.log('createdByName is null?', createdByName === null);
+    console.log('createdByName is undefined?', createdByName === undefined);
+    console.log('============================\n');
+
     const newMaterialRequest = {
       id,
       mrNumber,
@@ -122,15 +228,16 @@ class MaterialService {
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
+      createdByName: createdByName || 'Unknown User',
       createdByRole: userRole,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
-      // NO PDF fields here - will be added when PDF is generated
     };
 
     materials.push(newMaterialRequest);
     await this.saveMaterialRequests(materials);
 
+    console.log('Material Request created with name:', newMaterialRequest.createdByName);
     return newMaterialRequest;
   }
 
@@ -170,7 +277,13 @@ class MaterialService {
     materials[materialIndex] = material;
     await this.saveMaterialRequests(materials);
 
-    return material;
+    // Add creator name
+    const createdByName = await this.getUserNameById(material.createdBy);
+
+    return {
+      ...material,
+      createdByName: createdByName || material.createdByName || 'Unknown User'
+    };
   }
 
   /**
@@ -255,6 +368,9 @@ class MaterialService {
   async getAllMaterialRequests(filters = {}, userId, userRole) {
     let materials = await this.loadMaterialRequests();
 
+    // Add creator names to all materials
+    materials = await this.enrichMaterialsWithCreatorNames(materials);
+
     if (userRole === 'employee' || userRole === 'admin') {
       materials = materials.filter(m => m.createdBy === userId);
     }
@@ -278,7 +394,8 @@ class MaterialService {
         m.mrNumber.toLowerCase().includes(searchLower) ||
         m.section.toLowerCase().includes(searchLower) ||
         m.project.toLowerCase().includes(searchLower) ||
-        m.requestReason.toLowerCase().includes(searchLower)
+        m.requestReason.toLowerCase().includes(searchLower) ||
+        (m.createdByName && m.createdByName.toLowerCase().includes(searchLower))
       );
     }
 
@@ -317,7 +434,13 @@ class MaterialService {
       }
     }
 
-    return material;
+    // Add creator name
+    const createdByName = await this.getUserNameById(material.createdBy);
+
+    return {
+      ...material,
+      createdByName: createdByName || material.createdByName || 'Unknown User'
+    };
   }
 
   /**
