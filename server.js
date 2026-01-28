@@ -1,5 +1,9 @@
 // server.js
-require('dotenv').config();
+// Load .env فقط في الـ development (محليًا على جهازك)
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
+}
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -10,7 +14,6 @@ const PORT = process.env.PORT || 4000;
 
 const routes = require('./src/routes');
 const errorMiddleware = require('./src/middleware/error.middleware');
-
 
 const allowedOrigins = [
   'https://omega-system.vercel.app',
@@ -114,12 +117,8 @@ console.log('\n✨ System initialization completed!\n');
 // ────────────────────────────────────────────────
 //                   MIDDLEWARE
 // ────────────────────────────────────────────────
-// ────────────────────────────────────────────────
-//                   MIDDLEWARE
-// ────────────────────────────────────────────────
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, curl, Postman, etc.)
     if (!origin) return callback(null, true);
 
     if (allowedOrigins.indexOf(origin) !== -1) {
