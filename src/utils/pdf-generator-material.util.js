@@ -8,6 +8,43 @@ const puppeteer = require('puppeteer');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
 class MaterialPDFGenerator {
+  
+  // ========================================
+  // DEPARTMENT TRANSLATIONS
+  // ========================================
+  
+  departmentTranslations = {
+    'procurement': { ar: 'المشتريات', en: 'Procurement' },
+    'warehouse': { ar: 'المخزن', en: 'Warehouse' },
+    'maintenance': { ar: 'الصيانة', en: 'Maintenance' },
+    'sales': { ar: 'المبيعات', en: 'Sales' },
+    'marketing': { ar: 'التسويق', en: 'Marketing' },
+    'development': { ar: 'التطوير', en: 'Development' },
+    'other': { ar: 'أخرى', en: 'Other' },
+    // يمكن إضافة المزيد من الأقسام هنا
+    'المشتريات': { ar: 'المشتريات', en: 'Procurement' },
+    'المخزن': { ar: 'المخزن', en: 'Warehouse' },
+    'الصيانة': { ar: 'الصيانة', en: 'Maintenance' },
+    'المبيعات': { ar: 'المبيعات', en: 'Sales' },
+    'التسويق': { ar: 'التسويق', en: 'Marketing' },
+    'التطوير': { ar: 'التطوير', en: 'Development' },
+    'أخرى': { ar: 'أخرى', en: 'Other' }
+  };
+
+  translateDepartment(section, targetLanguage) {
+    if (!section) return '';
+    
+    const sectionLower = section.toLowerCase().trim();
+    const translation = this.departmentTranslations[sectionLower] || 
+                       this.departmentTranslations[section.trim()];
+    
+    if (translation) {
+      return translation[targetLanguage];
+    }
+    
+    return section;
+  }
+
   isArabic(text) {
     if (!text) return false;
     const arabicPattern = /[\u0600-\u06FF]/;
@@ -59,6 +96,7 @@ class MaterialPDFGenerator {
         project: 'المشروع',
         requestPriority: 'أولوية الطلب',
         requestReason: 'سبب الطلب',
+        submittedBy: 'مقدم الطلب',
         requiredMaterials: 'المواد المطلوبة',
         itemNo: '#',
         description: 'الوصف',
@@ -91,6 +129,7 @@ class MaterialPDFGenerator {
         project: 'Project',
         requestPriority: 'Request Priority',
         requestReason: 'Request Reason',
+        submittedBy: 'Submitted By',
         requiredMaterials: 'Required Materials',
         itemNo: '#',
         description: 'Description',
@@ -117,6 +156,9 @@ generateHTML(material) {
   const labels = this.getLabels(language);
   const isRTL = language === 'ar';
   const formattedDate = material.date || new Date().toISOString().split('T')[0];
+
+  // ✅ ترجمة القسم حسب لغة الملف
+  const translatedSection = this.translateDepartment(material.section, language);
 
   let itemsHTML = '';
   if (material.items && material.items.length > 0) {
@@ -444,7 +486,7 @@ body {
     <div class="info-grid">
       <div class="info-field">
         <span class="info-label">${labels.section}:</span>
-        <span class="info-value">${material.section || ''}</span>
+        <span class="info-value">${translatedSection}</span>
       </div>
       <div class="info-field">
         <span class="info-label">${labels.project}:</span>
@@ -457,6 +499,10 @@ body {
       <div class="info-field">
         <span class="info-label">${labels.requestReason}:</span>
         <span class="info-value">${material.requestReason || ''}</span>
+      </div>
+      <div class="info-field">
+        <span class="info-label">${labels.submittedBy}:</span>
+        <span class="info-value">${material.createdByName || ''}</span>
       </div>
     </div>
   </div>

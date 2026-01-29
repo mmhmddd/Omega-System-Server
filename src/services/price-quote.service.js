@@ -17,8 +17,91 @@ const PDF_DIR = path.join(__dirname, '../../data/quotations/pdfs');
 const AR_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/AR-Uploads');
 const EN_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/EN-Uploads');
 const LOGO_PATH = path.join(__dirname, '../../assets/images/OmegaLogo.png');
+const USERS_FILE = path.join(__dirname, '../../data/users/users.json'); // ✅ NEW
 
 class PriceQuoteService {
+  // ✅ NEW: Load users from JSON file
+  async loadUsers() {
+    try {
+      console.log('Loading users from:', USERS_FILE);
+      const data = await fs.readFile(USERS_FILE, 'utf8');
+      const users = JSON.parse(data);
+      console.log('Loaded users count:', users.length);
+      return users;
+    } catch (error) {
+      console.error('Error loading users file:', error);
+      if (error.code === 'ENOENT') {
+        console.error('Users file does not exist at:', USERS_FILE);
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  // ✅ NEW: Get user name by ID
+  async getUserNameById(userId) {
+    try {
+      const users = await this.loadUsers();
+      console.log('=== USER LOOKUP DEBUG (QUOTES) ===');
+      console.log('Looking for userId:', userId);
+      console.log('Type of userId:', typeof userId);
+      
+      // Try exact match first
+      let user = users.find(u => u.id === userId);
+      
+      // If not found, try string comparison
+      if (!user && typeof userId !== 'string') {
+        const userIdStr = String(userId);
+        console.log('Trying string conversion:', userIdStr);
+        user = users.find(u => u.id === userIdStr);
+      }
+      
+      // If still not found, try trimming whitespace
+      if (!user && typeof userId === 'string') {
+        const userIdTrimmed = userId.trim();
+        console.log('Trying trimmed version:', userIdTrimmed);
+        user = users.find(u => u.id.trim() === userIdTrimmed);
+      }
+      
+      if (user) {
+        console.log('✓ Found user:', user.name);
+        console.log('===================================');
+        return user.name;
+      } else {
+        console.log('✗ User not found for ID:', userId);
+        console.log('===================================');
+        return null;
+      }
+    } catch (error) {
+      console.error('Error getting user name:', error);
+      return null;
+    }
+  }
+
+  // ✅ NEW: Add creator names to quotes
+  async enrichQuotesWithCreatorNames(quotes) {
+    const users = await this.loadUsers();
+    
+    return Promise.all(quotes.map(async quote => {
+      // Always look up the current user name from users database
+      const user = users.find(u => u.id === quote.createdBy);
+      
+      if (user && user.name) {
+        // User found - use their current name
+        return {
+          ...quote,
+          createdByName: user.name
+        };
+      } else {
+        // User not found - use Unknown User
+        return {
+          ...quote,
+          createdByName: 'Unknown User'
+        };
+      }
+    }));
+  }
+
   async initialize() {
     try {
       const dirs = [QUOTES_DIR, PDF_DIR, AR_UPLOADS_DIR, EN_UPLOADS_DIR];
@@ -404,10 +487,18 @@ class PriceQuoteService {
   // CRUD Operations
   // ──────────────────────────────────────────────
 
-  // ✅ FIXED: Now accepts currentUser object instead of just userId
   async createQuote(quoteData, currentUser, attachmentFile = null) {
+    console.log('\n=== CREATE QUOTE DEBUG ===');
+    console.log('currentUser.id:', currentUser.id);
+    console.log('currentUser.name:', currentUser.name);
+    
     const quotes = await this.loadQuotes();
     const quoteNumber = await this.generateQuoteNumber();
+
+    // Get creator name from users database (to ensure consistency)
+    const createdByName = await this.getUserNameById(currentUser.id);
+    console.log('getUserNameById returned:', createdByName);
+    console.log('==========================\n');
 
     const newQuote = {
       id: generateId('QUOTE'),
@@ -424,8 +515,8 @@ class PriceQuoteService {
       taxRate: quoteData.includeTax ? (quoteData.taxRate || 0) : 0,
       items: quoteData.items || [],
       customNotes: quoteData.customNotes || null,
-      createdBy: currentUser.id,           // ✅ Store user ID
-      createdByName: currentUser.name,     // ✅ Store user name
+      createdBy: currentUser.id,
+      createdByName: createdByName || currentUser.name || 'Unknown User', // ✅ Use fetched name
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -447,11 +538,19 @@ class PriceQuoteService {
     quotes.push(newQuote);
     await this.saveQuotes(quotes);
 
+    console.log('Quote created with name:', newQuote.createdByName);
     return newQuote;
   }
 
+
+
+  
+  // ✅ UPDATED: Enrich quotes with creator names
   async getAllQuotes(filters = {}) {
     let quotes = await this.loadQuotes();
+
+    // ✅ Add creator names to all quotes
+    quotes = await this.enrichQuotesWithCreatorNames(quotes);
 
     if (filters.createdBy) {
       quotes = quotes.filter(q => q.createdBy === filters.createdBy);
@@ -462,7 +561,8 @@ class PriceQuoteService {
       quotes = quotes.filter(q =>
         q.quoteNumber.toLowerCase().includes(searchLower) ||
         q.clientName.toLowerCase().includes(searchLower) ||
-        (q.clientPhone && q.clientPhone.toLowerCase().includes(searchLower))
+        (q.clientPhone && q.clientPhone.toLowerCase().includes(searchLower)) ||
+        (q.createdByName && q.createdByName.toLowerCase().includes(searchLower)) // ✅ Search by creator name
       );
     }
 
@@ -486,6 +586,7 @@ class PriceQuoteService {
     };
   }
 
+  // ✅ UPDATED: Get latest quote with creator name
   async getLatestQuoteByUser(userId) {
     const quotes = await this.loadQuotes();
     const userQuotes = quotes.filter(q => q.createdBy === userId);
@@ -493,9 +594,17 @@ class PriceQuoteService {
     if (userQuotes.length === 0) return null;
 
     userQuotes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    return userQuotes[0];
+    const latestQuote = userQuotes[0];
+
+    // ✅ Add creator name
+    const createdByName = await this.getUserNameById(latestQuote.createdBy);
+    return {
+      ...latestQuote,
+      createdByName: createdByName || latestQuote.createdByName || 'Unknown User'
+    };
   }
 
+  // ✅ UPDATED: Get quote by ID with creator name
   async getQuoteById(id) {
     const quotes = await this.loadQuotes();
     const quote = quotes.find(q => q.id === id);
@@ -504,9 +613,15 @@ class PriceQuoteService {
       throw new Error('Quote not found');
     }
 
-    return quote;
+    // ✅ Add creator name
+    const createdByName = await this.getUserNameById(quote.createdBy);
+    return {
+      ...quote,
+      createdByName: createdByName || quote.createdByName || 'Unknown User'
+    };
   }
 
+  // ✅ UPDATED: Update quote (keep creator info unchanged)
   async updateQuote(id, updateData, attachmentFile = null) {
     const quotes = await this.loadQuotes();
     const quoteIndex = quotes.findIndex(q => q.id === id);
@@ -531,7 +646,7 @@ class PriceQuoteService {
     if (updateData.items) quote.items = updateData.items;
     if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
 
-    // ✅ DO NOT update createdBy and createdByName - they should remain unchanged
+    // ✅ DO NOT update createdBy and createdByName - they remain unchanged
 
     const totals = this.calculateTotals(quote.items, quote.includeTax, quote.taxRate);
     quote.subtotal = totals.subtotal;
@@ -555,7 +670,12 @@ class PriceQuoteService {
     quotes[quoteIndex] = quote;
     await this.saveQuotes(quotes);
 
-    return quote;
+    // ✅ Add creator name before returning
+    const createdByName = await this.getUserNameById(quote.createdBy);
+    return {
+      ...quote,
+      createdByName: createdByName || quote.createdByName || 'Unknown User'
+    };
   }
 
   async deleteQuote(id) {
