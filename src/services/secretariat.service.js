@@ -8,6 +8,7 @@ const { generateId } = require('../utils/id-generator.util');
 const emailService = require('../utils/email.util');
 
 const FORMS_FILE = path.join(__dirname, '../../data/secretariat-forms/index.json');
+const USER_FORMS_FILE = path.join(__dirname, '../../data/secretariat-forms/user-forms.json');
 const FORMS_DIR = path.join(__dirname, '../../data/secretariat-forms');
 const PDF_DIR = path.join(__dirname, '../../data/secretariat-forms/pdfs');
 const LOGO_PATH = path.join(__dirname, '../../assets/images/OmegaLogo.png');
@@ -57,6 +58,19 @@ class SecretariatService {
     }
   }
 
+  async loadUserForms() {
+    try {
+      if (!fsSync.existsSync(USER_FORMS_FILE)) {
+        return [];
+      }
+      const data = await fs.readFile(USER_FORMS_FILE, 'utf8');
+      return JSON.parse(data);
+    } catch (error) {
+      console.error('Error loading user forms:', error);
+      return [];
+    }
+  }
+
   async saveForms(forms) {
     await atomicWrite.writeFile(FORMS_FILE, JSON.stringify(forms, null, 2));
   }
@@ -66,6 +80,18 @@ class SecretariatService {
     const data = await fs.readFile(usersFile, 'utf8');
     const users = JSON.parse(data);
     return users.find(u => u.id === employeeId);
+  }
+
+  /**
+   * UPDATED: Get all employees (for dropdown selection)
+   */
+  async getAllEmployees() {
+    const usersFile = path.join(__dirname, '../../data/users/users.json');
+    const data = await fs.readFile(usersFile, 'utf8');
+    const users = JSON.parse(data);
+    
+    // Return all users except secretariat (employees, admins, super_admin can be selected)
+    return users.filter(u => u.role !== 'secretariat' && u.active !== false);
   }
 
   async generatePDF(formData, formType) {
@@ -98,10 +124,9 @@ class SecretariatService {
 
       const page = await browser.newPage();
       
-      // Set viewport to ensure proper rendering
       await page.setViewport({
-        width: 794,  // A4 width in pixels at 96 DPI
-        height: 1123, // A4 height in pixels at 96 DPI
+        width: 794,
+        height: 1123,
         deviceScaleFactor: 1
       });
 
@@ -111,7 +136,6 @@ class SecretariatService {
       const filename = `${formData.formNumber}_${formData.employeeName.replace(/\s+/g, '_')}_${formData.date}.pdf`;
       const pdfPath = path.join(PDF_DIR, filename);
 
-      // PDF options with proper margins
       const pdfOptions = {
         path: pdfPath,
         format: 'A4',
@@ -211,94 +235,129 @@ class SecretariatService {
     return newForm;
   }
 
+  /**
+   * UPDATED: Get all forms (both secretariat forms AND user forms)
+   */
   async getAllForms(filters = {}) {
-    let forms = await this.loadForms();
+    // Load both secretariat forms and user forms
+    let secretariatForms = await this.loadForms();
+    let userForms = await this.loadUserForms();
 
+    // Add source indicator
+    secretariatForms = secretariatForms.map(f => ({ ...f, source: 'secretariat' }));
+    userForms = userForms.map(f => ({ ...f, source: 'user' }));
+
+    // Combine all forms
+    let allForms = [...secretariatForms, ...userForms];
+
+    // Apply filters
     if (filters.formType) {
-      forms = forms.filter(f => f.formType === filters.formType);
+      allForms = allForms.filter(f => f.formType === filters.formType);
     }
 
     if (filters.employeeId) {
-      forms = forms.filter(f => f.employeeId === filters.employeeId);
+      allForms = allForms.filter(f => f.employeeId === filters.employeeId);
     }
 
     if (filters.status) {
-      forms = forms.filter(f => f.status === filters.status);
+      allForms = allForms.filter(f => f.status === filters.status);
     }
 
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
-      forms = forms.filter(f =>
+      allForms = allForms.filter(f =>
         f.formNumber.toLowerCase().includes(searchLower) ||
         f.employeeName.toLowerCase().includes(searchLower)
       );
     }
 
-    forms.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // Sort by creation date (newest first)
+    allForms.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
+    // Pagination
     const page = filters.page || 1;
     const limit = filters.limit || 10;
     const startIndex = (page - 1) * limit;
     const endIndex = page * limit;
 
-    const paginatedForms = forms.slice(startIndex, endIndex);
+    const paginatedForms = allForms.slice(startIndex, endIndex);
 
     return {
       forms: paginatedForms,
       pagination: {
         currentPage: page,
-        totalPages: Math.ceil(forms.length / limit),
-        totalForms: forms.length,
+        totalPages: Math.ceil(allForms.length / limit),
+        totalForms: allForms.length,
         limit
       }
     };
   }
 
   async getFormById(id) {
-    const forms = await this.loadForms();
-    const form = forms.find(f => f.id === id);
+    // Try to find in secretariat forms
+    const secretariatForms = await this.loadForms();
+    let form = secretariatForms.find(f => f.id === id);
 
-    if (!form) {
-      throw new Error('Form not found');
+    if (form) {
+      return { ...form, source: 'secretariat' };
     }
 
-    return form;
+    // Try to find in user forms
+    const userForms = await this.loadUserForms();
+    form = userForms.find(f => f.id === id);
+
+    if (form) {
+      return { ...form, source: 'user' };
+    }
+
+    throw new Error('Form not found');
   }
 
   async deleteForm(id) {
-    const forms = await this.loadForms();
-    const formIndex = forms.findIndex(f => f.id === id);
+    // Try to delete from secretariat forms
+    const secretariatForms = await this.loadForms();
+    const secretariatFormIndex = secretariatForms.findIndex(f => f.id === id);
 
-    if (formIndex === -1) {
-      throw new Error('Form not found');
+    if (secretariatFormIndex !== -1) {
+      const form = secretariatForms[secretariatFormIndex];
+
+      if (form.pdfPath && fsSync.existsSync(form.pdfPath)) {
+        await fs.unlink(form.pdfPath).catch(() => {});
+      }
+
+      secretariatForms.splice(secretariatFormIndex, 1);
+      await this.saveForms(secretariatForms);
+
+      return { message: 'Form deleted successfully' };
     }
 
-    const form = forms[formIndex];
-
-    if (form.pdfPath && fsSync.existsSync(form.pdfPath)) {
-      await fs.unlink(form.pdfPath).catch(() => {});
-    }
-
-    forms.splice(formIndex, 1);
-    await this.saveForms(forms);
-
-    return { message: 'Form deleted successfully' };
+    throw new Error('Form not found or cannot be deleted');
   }
 
   async updateFormStatus(id, status) {
-    const forms = await this.loadForms();
-    const formIndex = forms.findIndex(f => f.id === id);
+    // Try to update in secretariat forms
+    const secretariatForms = await this.loadForms();
+    const secretariatFormIndex = secretariatForms.findIndex(f => f.id === id);
 
-    if (formIndex === -1) {
-      throw new Error('Form not found');
+    if (secretariatFormIndex !== -1) {
+      secretariatForms[secretariatFormIndex].status = status;
+      secretariatForms[secretariatFormIndex].updatedAt = new Date().toISOString();
+      await this.saveForms(secretariatForms);
+      return secretariatForms[secretariatFormIndex];
     }
 
-    forms[formIndex].status = status;
-    forms[formIndex].updatedAt = new Date().toISOString();
+    // Try to update in user forms
+    const userForms = await this.loadUserForms();
+    const userFormIndex = userForms.findIndex(f => f.id === id);
 
-    await this.saveForms(forms);
+    if (userFormIndex !== -1) {
+      userForms[userFormIndex].status = status;
+      userForms[userFormIndex].updatedAt = new Date().toISOString();
+      await atomicWrite.writeFile(USER_FORMS_FILE, JSON.stringify(userForms, null, 2));
+      return userForms[userFormIndex];
+    }
 
-    return forms[formIndex];
+    throw new Error('Form not found');
   }
 }
 

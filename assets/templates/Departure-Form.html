@@ -90,6 +90,8 @@
       border: 1px solid #ddd;
       border-radius: 4px;
       background: white;
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
     .signatures {
       margin-top: 40px;
@@ -118,14 +120,6 @@
       border-top: 1px solid #ddd;
       padding-top: 15px;
     }
-    .note-box {
-      margin: 20px 0;
-      padding: 15px;
-      background: #fff3cd;
-      border-right: 4px solid #ffc107;
-      border-radius: 4px;
-      font-size: 13px;
-    }
   </style>
 </head>
 <body>
@@ -140,11 +134,9 @@
 
   <h1 class="title">نموذج طلب مغادرة</h1>
 
-
-
   <div class="form-section">
     <div class="form-grid">
-      <div class="form-field">
+      <div class="form-field full-width">
         <label>اسم الموظف:</label>
         <div class="value">{{EMPLOYEE_NAME}}</div>
       </div>
@@ -154,29 +146,25 @@
       </div>
       <div class="form-field">
         <label>المنصب:</label>
-        <div class="value">----------------</div>
+        <div class="value">{{POSITION}}</div>
       </div>
       <div class="form-field">
         <label>القسم:</label>
-        <div class="value">----------------</div>
+        <div class="value">{{DEPARTMENT}}</div>
       </div>
       <div class="form-field">
         <label>الساعة من:</label>
-        <div class="value">----------------</div>
+        <div class="value">{{DEPARTURE_TIME}}</div>
       </div>
       <div class="form-field">
         <label>الساعة إلى:</label>
-        <div class="value">----------------</div>
+        <div class="value">{{RETURN_TIME}}</div>
       </div>
     </div>
 
     <div class="reason-field">
       <label>سبب المغادرة:</label>
-      <div class="value">
-        ---------------------------------------------------------------<br>
-        ---------------------------------------------------------------<br>
-        ---------------------------------------------------------------
-      </div>
+      <div class="value">{{PURPOSE}}</div>
     </div>
   </div>
 
@@ -192,7 +180,7 @@
   </div>
 
   <div class="footer">
-    <p>{{FORM_CODE}} | Page <span class="pageNumber"></span> of <span class="totalPages"></span></p>
+    <p>{{FORM_CODE}} | Page 1 of 1</p>
   </div>
 </body>
 </html>

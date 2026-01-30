@@ -9,6 +9,25 @@ const { restrictTo } = require('../middleware/role.middleware');
 router.use(protect);
 router.use(restrictTo('secretariat', 'super_admin'));
 router.use(checkRouteAccess('secretariatManagement'));
+
+/**
+ * @route   GET /api/secretariat/employees
+ * @desc    Get all employees for selection
+ * @access  Secretariat, Super Admin
+ */
+router.get('/employees', async (req, res, next) => {
+  try {
+    const employees = await secretariatService.getAllEmployees();
+
+    res.status(200).json({
+      success: true,
+      data: employees
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 /**
  * @route   POST /api/secretariat/forms
  * @desc    إنشاء نموذج جديد من قبل السكرتارية
@@ -16,7 +35,7 @@ router.use(checkRouteAccess('secretariatManagement'));
  */
 router.post('/forms', async (req, res, next) => {
   try {
-    const { employeeId, formType, date } = req.body;
+    const { employeeId, formType, date, projectName } = req.body;
 
     // التحقق من المدخلات
     if (!employeeId || !formType) {
@@ -37,6 +56,7 @@ router.post('/forms', async (req, res, next) => {
     const formData = {
       employeeId,
       formType,
+      projectName: projectName || null,
       date: date || new Date().toISOString().split('T')[0]
     };
 
@@ -54,7 +74,7 @@ router.post('/forms', async (req, res, next) => {
 
 /**
  * @route   GET /api/secretariat/forms
- * @desc    الحصول على جميع النماذج التي أنشأتها السكرتارية
+ * @desc    UPDATED: الحصول على جميع النماذج (من السكرتارية والمستخدمين)
  * @access  Secretariat, Super Admin
  */
 router.get('/forms', async (req, res, next) => {
@@ -118,7 +138,7 @@ router.delete('/forms/:id', async (req, res, next) => {
 
 /**
  * @route   PATCH /api/secretariat/forms/:id/status
- * @desc    تحديث حالة النموذج
+ * @desc    تحديث حالة النموذج (يعمل مع كل من نماذج السكرتارية والمستخدمين)
  * @access  Secretariat, Super Admin
  */
 router.patch('/forms/:id/status', async (req, res, next) => {
