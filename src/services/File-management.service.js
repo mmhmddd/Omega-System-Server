@@ -9,13 +9,15 @@ class FileManagementService {
     this.directories = {
       cuttingJobs: path.join(__dirname, '../../data/cutting-jobs'),
       quotations: path.join(__dirname, '../../data/quotations/pdfs'),
-      quotationsAttachments: path.join(__dirname, '../../data/quotations/AR-Uploads'),
+      quotationsAttachmentsAR: path.join(__dirname, '../../data/quotations/AR-Uploads'),
+      quotationsAttachmentsEN: path.join(__dirname, '../../data/quotations/EN-Uploads'),
       receipts: path.join(__dirname, '../../data/receipts/pdfs'),
       secretariatForms: path.join(__dirname, '../../data/secretariat-forms/pdfs'),
       secretariatUserForms: path.join(__dirname, '../../data/secretariat-forms/user-pdfs'),
       rfqs: path.join(__dirname, '../../data/rfqs/pdfs'),
       purchases: path.join(__dirname, '../../data/purchases/pdfs'),
-      materials: path.join(__dirname, '../../data/materials-requests/pdfs')
+      materials: path.join(__dirname, '../../data/materials-requests/pdfs'),
+      filesPhysical: path.join(__dirname, '../../data/files/physical')
     };
 
     // Metadata files
@@ -27,8 +29,54 @@ class FileManagementService {
       secretariatUserForms: path.join(__dirname, '../../data/secretariat-forms/user-forms.json'),
       rfqs: path.join(__dirname, '../../data/rfqs/index.json'),
       purchases: path.join(__dirname, '../../data/purchases/index.json'),
-      materials: path.join(__dirname, '../../data/materials-requests/index.json')
+      materials: path.join(__dirname, '../../data/materials-requests/index.json'),
+      items: path.join(__dirname, '../../data/items/index.json'),
+      suppliers: path.join(__dirname, '../../data/suppliers/index.json'),
+      users: path.join(__dirname, '../../data/users/users.json'),
+      files: path.join(__dirname, '../../data/files/index.json')
     };
+
+    // Cache for users data
+    this.usersCache = null;
+  }
+
+  /**
+   * Load users data and cache it
+   */
+  async loadUsers() {
+    if (this.usersCache) {
+      return this.usersCache;
+    }
+
+    try {
+      const usersPath = this.metadataFiles.users;
+      if (!fsSync.existsSync(usersPath)) {
+        return [];
+      }
+      const data = await fs.readFile(usersPath, 'utf8');
+      const parsed = JSON.parse(data);
+      this.usersCache = Array.isArray(parsed) ? parsed : [];
+      return this.usersCache;
+    } catch (error) {
+      console.error('Error loading users:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Get user name from username
+   */
+  async getUserNameFromUsername(username) {
+    if (!username) return 'غير معروف';
+
+    const users = await this.loadUsers();
+    const user = users.find(u => u.username === username);
+
+    if (user && user.name) {
+      return user.name;
+    }
+
+    return username;
   }
 
   /**
@@ -41,7 +89,7 @@ class FileManagementService {
       pdf: ['pdf'],
       cad: ['dwg', 'dxf', 'dwt'],
       cnc: ['nc', 'txt'],
-      image: ['jpg', 'jpeg', 'png', 'gif', 'bmp'],
+      image: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'],
       document: ['doc', 'docx', 'xls', 'xlsx'],
       other: []
     };
@@ -70,6 +118,7 @@ class FileManagementService {
       '.jpg': '🖼️',
       '.jpeg': '🖼️',
       '.png': '🖼️',
+      '.webp': '🖼️',
       '.doc': '📃',
       '.docx': '📃',
       '.xls': '📊',
@@ -88,7 +137,8 @@ class FileManagementService {
         return [];
       }
       const data = await fs.readFile(metadataPath, 'utf8');
-      return JSON.parse(data);
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed) ? parsed : [];
     } catch (error) {
       console.error(`Error loading metadata from ${metadataPath}:`, error);
       return [];
@@ -98,9 +148,13 @@ class FileManagementService {
   /**
    * Get file metadata from record
    */
-  getFileMetadataFromRecord(record, type) {
+  async getFileMetadataFromRecord(record, type) {
+    const username = record.createdBy || record.uploadedBy || 'Unknown';
+    const userRealName = await this.getUserNameFromUsername(username);
+
     const metadata = {
-      createdBy: record.createdBy || record.uploadedBy || 'Unknown',
+      createdBy: username, // Username (USER-0001)
+      createdByName: userRealName, // Real name from users.json
       createdByRole: record.createdByRole || 'Unknown',
       createdAt: record.createdAt,
       updatedAt: record.updatedAt
@@ -116,6 +170,12 @@ class FileManagementService {
       case 'quotations':
         metadata.documentNumber = record.quoteNumber;
         metadata.clientName = record.clientName;
+        break;
+      case 'quotationsAttachmentsAR':
+      case 'quotationsAttachmentsEN':
+        metadata.documentNumber = record.quoteNumber || 'N/A';
+        metadata.clientName = record.clientName;
+        metadata.attachmentType = type === 'quotationsAttachmentsAR' ? 'Arabic' : 'English';
         break;
       case 'receipts':
         metadata.documentNumber = record.receiptNumber;
@@ -138,6 +198,10 @@ class FileManagementService {
       case 'materials':
         metadata.documentNumber = record.requestNumber;
         metadata.requester = record.requester;
+        break;
+      case 'filesPhysical':
+        metadata.documentNumber = record.fileId || record.id;
+        metadata.description = record.description;
         break;
     }
 
@@ -171,9 +235,10 @@ class FileManagementService {
               if (stats.isFile()) {
                 // Find metadata from cutting jobs records
                 const record = metadata.find(m => m.fileName === filename);
+                const fileMetadata = await this.getFileMetadataFromRecord(record || {}, type);
 
                 files.push({
-                  id: `${type}-${filename}`,
+                  id: `${type}-${folder}-${filename}`,
                   name: filename,
                   path: filePath,
                   relativePath: path.join('cutting-jobs', folder, filename),
@@ -185,7 +250,7 @@ class FileManagementService {
                   sizeFormatted: this.formatFileSize(stats.size),
                   createdAt: record?.createdAt || stats.birthtime.toISOString(),
                   modifiedAt: stats.mtime.toISOString(),
-                  ...this.getFileMetadataFromRecord(record || {}, type),
+                  ...fileMetadata,
                   subFolder: folder
                 });
               }
@@ -205,6 +270,8 @@ class FileManagementService {
             const record = metadata.find(m => {
               if (type === 'quotations') {
                 return m.pdfPath && m.pdfPath.includes(filename);
+              } else if (type === 'quotationsAttachmentsAR' || type === 'quotationsAttachmentsEN') {
+                return m.attachments && m.attachments.some(att => att.includes(filename));
               } else if (type === 'receipts') {
                 return m.pdfFilename === filename;
               } else if (type === 'secretariatForms' || type === 'secretariatUserForms') {
@@ -215,9 +282,13 @@ class FileManagementService {
                 return m.pdfFilename === filename;
               } else if (type === 'materials') {
                 return m.pdfFilename === filename;
+              } else if (type === 'filesPhysical') {
+                return m.filePath && m.filePath.includes(filename);
               }
               return false;
             });
+
+            const fileMetadata = await this.getFileMetadataFromRecord(record || {}, type);
 
             files.push({
               id: `${type}-${filename}`,
@@ -232,7 +303,7 @@ class FileManagementService {
               sizeFormatted: this.formatFileSize(stats.size),
               createdAt: record?.createdAt || stats.birthtime.toISOString(),
               modifiedAt: stats.mtime.toISOString(),
-              ...this.getFileMetadataFromRecord(record || {}, type)
+              ...fileMetadata
             });
           }
         }
@@ -301,7 +372,10 @@ class FileManagementService {
         f.name.toLowerCase().includes(searchLower) ||
         (f.documentNumber && f.documentNumber.toLowerCase().includes(searchLower)) ||
         (f.projectName && f.projectName.toLowerCase().includes(searchLower)) ||
-        (f.clientName && f.clientName.toLowerCase().includes(searchLower))
+        (f.clientName && f.clientName.toLowerCase().includes(searchLower)) ||
+        (f.supplier && f.supplier.toLowerCase().includes(searchLower)) ||
+        (f.requester && f.requester.toLowerCase().includes(searchLower)) ||
+        (f.createdByName && f.createdByName.toLowerCase().includes(searchLower))
       );
     }
 
@@ -391,8 +465,8 @@ class FileManagementService {
       stats.byCategory[file.category] = (stats.byCategory[file.category] || 0) + 1;
       stats.byExtension[file.extension] = (stats.byExtension[file.extension] || 0) + 1;
       
-      if (file.createdBy) {
-        stats.byCreator[file.createdBy] = (stats.byCreator[file.createdBy] || 0) + 1;
+      if (file.createdByName) {
+        stats.byCreator[file.createdByName] = (stats.byCreator[file.createdByName] || 0) + 1;
       }
     });
 
@@ -414,7 +488,7 @@ class FileManagementService {
   }
 
   /**
-   * Delete file
+   * Delete file and update metadata
    */
   async deleteFile(fileId) {
     const file = await this.getFileById(fileId);
@@ -422,7 +496,49 @@ class FileManagementService {
     // Delete the physical file
     await fs.unlink(file.path);
 
+    // Update metadata by removing the record
+    await this.updateMetadataAfterDelete(file);
+
     return { message: 'File deleted successfully', file };
+  }
+
+  /**
+   * Update metadata after file deletion
+   */
+  async updateMetadataAfterDelete(file) {
+    try {
+      const metadataPath = this.metadataFiles[file.type];
+      if (!metadataPath || !fsSync.existsSync(metadataPath)) {
+        return;
+      }
+
+      const metadata = await this.loadMetadata(metadataPath);
+      
+      // Filter out the deleted file's metadata
+      let updatedMetadata = metadata.filter(record => {
+        if (file.type === 'quotations') {
+          return !(record.pdfPath && record.pdfPath.includes(file.name));
+        } else if (file.type === 'receipts') {
+          return record.pdfFilename !== file.name;
+        } else if (file.type === 'secretariatForms' || file.type === 'secretariatUserForms') {
+          return !(record.pdfPath && record.pdfPath.includes(file.name));
+        } else if (file.type === 'rfqs') {
+          return record.pdfFilename !== file.name;
+        } else if (file.type === 'purchases') {
+          return record.pdfFilename !== file.name;
+        } else if (file.type === 'materials') {
+          return record.pdfFilename !== file.name;
+        } else if (file.type === 'cuttingJobs') {
+          return record.fileName !== file.name;
+        }
+        return true;
+      });
+
+      // Write updated metadata back
+      await fs.writeFile(metadataPath, JSON.stringify(updatedMetadata, null, 2), 'utf8');
+    } catch (error) {
+      console.error(`Error updating metadata after deletion:`, error);
+    }
   }
 
   /**
@@ -455,6 +571,7 @@ class FileManagementService {
       '.jpg': 'image/jpeg',
       '.jpeg': 'image/jpeg',
       '.png': 'image/png',
+      '.webp': 'image/webp',
       '.doc': 'application/msword',
       '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       '.xls': 'application/vnd.ms-excel',
@@ -462,6 +579,99 @@ class FileManagementService {
     };
 
     return mimeTypes[extension] || 'application/octet-stream';
+  }
+
+  /**
+   * Get orphaned files (files without metadata records)
+   */
+  async getOrphanedFiles() {
+    const { files } = await this.getAllFiles({ limit: 999999 });
+    
+    const orphanedFiles = files.filter(f => 
+      !f.documentNumber || f.documentNumber === 'N/A' || f.createdBy === 'Unknown'
+    );
+
+    return {
+      files: orphanedFiles,
+      count: orphanedFiles.length,
+      totalSize: orphanedFiles.reduce((sum, f) => sum + f.size, 0)
+    };
+  }
+
+  /**
+   * Clean up orphaned files
+   */
+  async cleanupOrphanedFiles() {
+    const { files } = await this.getOrphanedFiles();
+    const deleted = [];
+    const errors = [];
+
+    for (const file of files) {
+      try {
+        await fs.unlink(file.path);
+        deleted.push(file);
+      } catch (error) {
+        errors.push({ file: file.name, error: error.message });
+      }
+    }
+
+    return {
+      deletedCount: deleted.length,
+      errorCount: errors.length,
+      deleted,
+      errors
+    };
+  }
+
+  /**
+   * Get duplicate files (same name, different locations)
+   */
+  async getDuplicateFiles() {
+    const { files } = await this.getAllFiles({ limit: 999999 });
+    
+    const fileMap = {};
+    files.forEach(file => {
+      if (!fileMap[file.name]) {
+        fileMap[file.name] = [];
+      }
+      fileMap[file.name].push(file);
+    });
+
+    const duplicates = Object.values(fileMap).filter(group => group.length > 1);
+
+    return {
+      groups: duplicates,
+      count: duplicates.length,
+      totalFiles: duplicates.reduce((sum, group) => sum + group.length, 0)
+    };
+  }
+
+  /**
+   * Get storage usage by type
+   */
+  async getStorageUsageByType() {
+    const { files } = await this.getAllFiles({ limit: 999999 });
+    
+    const usage = {};
+    
+    files.forEach(file => {
+      if (!usage[file.type]) {
+        usage[file.type] = {
+          count: 0,
+          size: 0,
+          sizeFormatted: ''
+        };
+      }
+      usage[file.type].count++;
+      usage[file.type].size += file.size;
+    });
+
+    // Format sizes
+    Object.keys(usage).forEach(type => {
+      usage[type].sizeFormatted = this.formatFileSize(usage[type].size);
+    });
+
+    return usage;
   }
 }
 

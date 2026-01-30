@@ -14,7 +14,7 @@ const PurchaseOrderRoutes = require('./purchases.routes');
 const materialsRoutes = require('./materials.routes');
 const supplierRoutes = require('./suppliers.routes');
 const itemsRoutes = require('./Items.routes');
-const filesroutes = require('./files.routes');
+const fileManagementRoutes = require('./file-management.routes');
 // Check if system routes exist
 let systemRoutes;
 try {
@@ -36,7 +36,7 @@ router.use('/purchases', PurchaseOrderRoutes);
 router.use('/materials', materialsRoutes);
 router.use('/suppliers', supplierRoutes);
 router.use('/items', itemsRoutes);
-router.use('/file-management', filesroutes); // NEW
+router.use('/file-management', fileManagementRoutes);
 
 if (systemRoutes) {
   router.use('/system', systemRoutes);

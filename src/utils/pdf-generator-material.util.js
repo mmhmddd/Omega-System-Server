@@ -1,5 +1,5 @@
 // ============================================================
-// 2. PDF GENERATOR MATERIAL - UPDATED WITH MERGE & HEADERS
+// PDF GENERATOR MATERIAL - FIXED: WITH PRIORITY TRANSLATION
 // src/utils/pdf-generator-material.util.js
 // ============================================================
 const fsSync = require('fs');
@@ -8,10 +8,67 @@ const puppeteer = require('puppeteer');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
 class MaterialPDFGenerator {
+  
   isArabic(text) {
     if (!text) return false;
     const arabicPattern = /[\u0600-\u06FF]/;
     return arabicPattern.test(text);
+  }
+
+  // ✅ Translate department/section values based on PDF language
+  translateDepartment(section, language) {
+    const translations = {
+      // English keys
+      'procurement': { ar: 'المشتريات', en: 'Procurement' },
+      'warehouse': { ar: 'المخزن', en: 'Warehouse' },
+      'maintenance': { ar: 'الصيانة', en: 'Maintenance' },
+      'sales': { ar: 'المبيعات', en: 'Sales' },
+      'marketing': { ar: 'التسويق', en: 'Marketing' },
+      'development': { ar: 'التطوير', en: 'Development' },
+      'other': { ar: 'أخرى', en: 'Other' },
+      // Arabic keys
+      'المشتريات': { ar: 'المشتريات', en: 'Procurement' },
+      'المخزن': { ar: 'المخزن', en: 'Warehouse' },
+      'الصيانة': { ar: 'الصيانة', en: 'Maintenance' },
+      'المبيعات': { ar: 'المبيعات', en: 'Sales' },
+      'التسويق': { ar: 'التسويق', en: 'Marketing' },
+      'التطوير': { ar: 'التطوير', en: 'Development' },
+      'أخرى': { ar: 'أخرى', en: 'Other' }
+    };
+    
+    if (!section) return '';
+    
+    const sectionKey = section.trim();
+    const translation = translations[sectionKey] || translations[sectionKey.toLowerCase()];
+    
+    if (translation) {
+      return translation[language];
+    }
+    
+    // If no translation found, return as is
+    return section;
+  }
+
+  // ✅ Translate priority values based on PDF language
+  translatePriority(priority, language) {
+    const translations = {
+      'urgent': { ar: 'عاجل', en: 'Urgent' },
+      'high': { ar: 'عالي', en: 'High' },
+      'medium': { ar: 'متوسط', en: 'Medium' },
+      'low': { ar: 'منخفض', en: 'Low' }
+    };
+    
+    if (!priority) return '';
+    
+    const lowerPriority = priority.toLowerCase().trim();
+    const translation = translations[lowerPriority];
+    
+    if (translation) {
+      return translation[language];
+    }
+    
+    // If already translated, return as is
+    return priority;
   }
 
   detectLanguage(materialData) {
@@ -59,6 +116,7 @@ class MaterialPDFGenerator {
         project: 'المشروع',
         requestPriority: 'أولوية الطلب',
         requestReason: 'سبب الطلب',
+        submittedBy: 'مقدم الطلب',
         requiredMaterials: 'المواد المطلوبة',
         itemNo: '#',
         description: 'الوصف',
@@ -91,6 +149,7 @@ class MaterialPDFGenerator {
         project: 'Project',
         requestPriority: 'Request Priority',
         requestReason: 'Request Reason',
+        submittedBy: 'Submitted By',
         requiredMaterials: 'Required Materials',
         itemNo: '#',
         description: 'Description',
@@ -118,18 +177,29 @@ generateHTML(material) {
   const isRTL = language === 'ar';
   const formattedDate = material.date || new Date().toISOString().split('T')[0];
 
+  // ✅ Translate section/department based on PDF language
+  const translatedSection = this.translateDepartment(material.section, language);
+  
+  // ✅ Translate request priority
+  const translatedRequestPriority = this.translatePriority(material.requestPriority, language);
+
   let itemsHTML = '';
   if (material.items && material.items.length > 0) {
-    itemsHTML = material.items.map((item, index) => `
+    itemsHTML = material.items.map((item, index) => {
+      // ✅ Translate item priority
+      const translatedItemPriority = this.translatePriority(item.priority, language);
+      
+      return `
       <tr>
         <td style="text-align: center; padding: 10px 8px;">${index + 1}</td>
         <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 10px;">${item.description || ''}</td>
         <td style="text-align: center; padding: 10px;">${item.unit || ''}</td>
         <td style="text-align: center; padding: 10px;">${item.quantity || ''}</td>
         <td style="text-align: center; padding: 10px;">${item.requiredDate || ''}</td>
-        <td style="text-align: center; padding: 10px;">${item.priority || ''}</td>
+        <td style="text-align: center; padding: 10px;">${translatedItemPriority}</td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
   } else {
     for (let i = 0; i < 5; i++) {
       itemsHTML += `
@@ -444,7 +514,7 @@ body {
     <div class="info-grid">
       <div class="info-field">
         <span class="info-label">${labels.section}:</span>
-        <span class="info-value">${material.section || ''}</span>
+        <span class="info-value">${translatedSection}</span>
       </div>
       <div class="info-field">
         <span class="info-label">${labels.project}:</span>
@@ -452,11 +522,15 @@ body {
       </div>
       <div class="info-field">
         <span class="info-label">${labels.requestPriority}:</span>
-        <span class="info-value">${material.requestPriority || ''}</span>
+        <span class="info-value">${translatedRequestPriority}</span>
       </div>
       <div class="info-field">
         <span class="info-label">${labels.requestReason}:</span>
         <span class="info-value">${material.requestReason || ''}</span>
+      </div>
+      <div class="info-field">
+        <span class="info-label">${labels.submittedBy}:</span>
+        <span class="info-value">${material.createdByName || ''}</span>
       </div>
     </div>
   </div>
