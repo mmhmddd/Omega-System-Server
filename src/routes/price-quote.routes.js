@@ -69,22 +69,20 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       }
     }
 
-    // Validate items
-    if (!parsedItems || !Array.isArray(parsedItems) || parsedItems.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'At least one item is required'
-      });
-    }
-
-    // Validate each item
-    for (const item of parsedItems) {
-      if (!item.description || item.quantity === undefined || item.unitPrice === undefined) {
-        return res.status(400).json({
-          success: false,
-          message: 'Each item must have description, quantity, and unit price'
-        });
+    // ✅ UPDATED: Make items optional - only validate if provided
+    if (parsedItems && Array.isArray(parsedItems) && parsedItems.length > 0) {
+      // Validate each item if items are provided
+      for (const item of parsedItems) {
+        if (!item.description || item.quantity === undefined || item.unitPrice === undefined) {
+          return res.status(400).json({
+            success: false,
+            message: 'Each item must have description, quantity, and unit price'
+          });
+        }
       }
+    } else {
+      // ✅ If no items provided, set to empty array
+      parsedItems = [];
     }
 
     // FIXED: Parse includeTax as boolean properly
@@ -120,7 +118,7 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       language: language || 'arabic',
       includeTax: includeTaxBool,
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
-      items: parsedItems,
+      items: parsedItems, // ✅ Can be empty array now
       customNotes
     };
 
@@ -306,21 +304,24 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       }
     }
 
-    // Validate items if provided
+    // ✅ UPDATED: Validate items only if provided
     if (parsedItems) {
-      if (!Array.isArray(parsedItems) || parsedItems.length === 0) {
+      if (!Array.isArray(parsedItems)) {
         return res.status(400).json({
           success: false,
-          message: 'At least one item is required'
+          message: 'Items must be an array'
         });
       }
 
-      for (const item of parsedItems) {
-        if (!item.description || item.quantity === undefined || item.unitPrice === undefined) {
-          return res.status(400).json({
-            success: false,
-            message: 'Each item must have description, quantity, and unit price'
-          });
+      // Only validate item content if array is not empty
+      if (parsedItems.length > 0) {
+        for (const item of parsedItems) {
+          if (!item.description || item.quantity === undefined || item.unitPrice === undefined) {
+            return res.status(400).json({
+              success: false,
+              message: 'Each item must have description, quantity, and unit price'
+            });
+          }
         }
       }
     }

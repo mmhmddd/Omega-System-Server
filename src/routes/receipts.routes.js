@@ -1,4 +1,4 @@
-// src/routes/receipts.routes.js
+// src/routes/receipts.routes.js - UPDATED WITH OPTIONAL ITEMS
 const express = require('express');
 const router = express.Router();
 const path = require('path');
@@ -26,10 +26,16 @@ const upload = multer({
 });
 
 /**
- * CREATE receipt - All authenticated users can create
+ * ✅ UPDATED: CREATE receipt - Items are now OPTIONAL
  */
 router.post('/', async (req, res, next) => {
   try {
+    // ✅ Parse items - can be empty array
+    let parsedItems = [];
+    if (req.body.items && Array.isArray(req.body.items)) {
+      parsedItems = req.body.items;
+    }
+    
     const receiptData = {
       to: req.body.to,
       date: req.body.date,
@@ -40,7 +46,7 @@ router.post('/', async (req, res, next) => {
       workLocation: req.body.workLocation,
       companyNumber: req.body.companyNumber,
       additionalText: req.body.additionalText,
-      items: req.body.items || [],
+      items: parsedItems, // ✅ Can be empty array
       notes: req.body.notes
     };
 
@@ -170,10 +176,18 @@ router.get('/number/:receiptNumber', async (req, res, next) => {
 });
 
 /**
- * UPDATE receipt - User can only edit their own
+ * ✅ UPDATED: UPDATE receipt - Items are now OPTIONAL
  */
 router.put('/:id', async (req, res, next) => {
   try {
+    // ✅ Parse items - can be empty array
+    let parsedItems = undefined;
+    if (req.body.items !== undefined) {
+      if (Array.isArray(req.body.items)) {
+        parsedItems = req.body.items; // Can be empty array
+      }
+    }
+    
     const updateData = {
       to: req.body.to,
       date: req.body.date,
@@ -184,7 +198,7 @@ router.put('/:id', async (req, res, next) => {
       workLocation: req.body.workLocation,
       companyNumber: req.body.companyNumber,
       additionalText: req.body.additionalText,
-      items: req.body.items,
+      items: parsedItems, // ✅ Can be empty array or undefined
       notes: req.body.notes
     };
 

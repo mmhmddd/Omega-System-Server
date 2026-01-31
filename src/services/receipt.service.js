@@ -395,7 +395,7 @@ class ReceiptService {
     if (updateData.workLocation !== undefined) receipt.workLocation = updateData.workLocation;
     if (updateData.companyNumber !== undefined) receipt.companyNumber = updateData.companyNumber;
     if (updateData.additionalText !== undefined) receipt.additionalText = updateData.additionalText;
-    if (updateData.items) receipt.items = updateData.items;
+    if (updateData.items !== undefined) receipt.items = updateData.items;
     if (updateData.notes !== undefined) receipt.notes = updateData.notes;
 
     receipt.updatedAt = new Date().toISOString();
@@ -466,6 +466,8 @@ class ReceiptService {
    * Generate receipt PDF with optional attachment merge
    */
   async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
+
+    
     // Get receipt data
     const receipt = await this.getReceiptById(id, userId, userRole);
     

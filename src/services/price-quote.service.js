@@ -17,11 +17,9 @@ const PDF_DIR = path.join(__dirname, '../../data/quotations/pdfs');
 const AR_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/AR-Uploads');
 const EN_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/EN-Uploads');
 const LOGO_PATH = path.join(__dirname, '../../assets/images/OmegaLogo.png');
-// ✅ NEW: Path to users file for user info enrichment
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
 class PriceQuoteService {
-  // ✅ NEW: Load users from JSON file
   async loadUsers() {
     try {
       console.log('Loading users from:', USERS_FILE);
@@ -39,7 +37,6 @@ class PriceQuoteService {
     }
   }
 
-  // ✅ NEW: Get user name by ID
   async getUserNameById(userId) {
     try {
       const users = await this.loadUsers();
@@ -47,17 +44,14 @@ class PriceQuoteService {
       console.log('Looking for userId:', userId);
       console.log('Type of userId:', typeof userId);
       
-      // Try exact match first
       let user = users.find(u => u.id === userId);
       
-      // If not found, try string comparison
       if (!user && typeof userId !== 'string') {
         const userIdStr = String(userId);
         console.log('Trying string conversion:', userIdStr);
         user = users.find(u => u.id === userIdStr);
       }
       
-      // If still not found, try trimming whitespace
       if (!user && typeof userId === 'string') {
         const userIdTrimmed = userId.trim();
         console.log('Trying trimmed version:', userIdTrimmed);
@@ -79,22 +73,18 @@ class PriceQuoteService {
     }
   }
 
-  // ✅ NEW: Add creator names to quotes
   async enrichQuotesWithCreatorNames(quotes) {
     const users = await this.loadUsers();
     
     return Promise.all(quotes.map(async quote => {
-      // Always look up the current user name from users database
       const user = users.find(u => u.id === quote.createdBy);
       
       if (user && user.name) {
-        // User found - use their current name
         return {
           ...quote,
           createdByName: user.name
         };
       } else {
-        // User not found - use Unknown User
         return {
           ...quote,
           createdByName: 'Unknown User'
@@ -121,21 +111,6 @@ class PriceQuoteService {
     }
   }
 
-  // ✅ NEW: Load users for user info enrichment
-  async loadUsers() {
-    try {
-      if (!fsSync.existsSync(USERS_FILE)) {
-        return [];
-      }
-      const data = await fs.readFile(USERS_FILE, 'utf8');
-      return JSON.parse(data);
-    } catch (error) {
-      console.error('Error loading users:', error);
-      return [];
-    }
-  }
-
-  // ✅ NEW: Get user info by ID
   async getUserInfo(userId) {
     const users = await this.loadUsers();
     const user = users.find(u => u.id === userId);
@@ -152,14 +127,12 @@ class PriceQuoteService {
     return null;
   }
 
-  // ✅ NEW: Enrich quotes with user information
   async enrichQuotesWithUserInfo(quotes) {
     const users = await this.loadUsers();
     
     return quotes.map(quote => {
       const enrichedQuote = { ...quote };
       
-      // Find creator info
       if (quote.createdBy) {
         const creator = users.find(u => u.id === quote.createdBy);
         if (creator) {
@@ -204,7 +177,17 @@ class PriceQuoteService {
     return `PQ${(maxNumber + 1).toString().padStart(4, '0')}`;
   }
 
+  // ✅ UPDATED: Handle empty items array
   calculateTotals(items, includeTax, taxRate) {
+    // If no items, return zero totals
+    if (!items || items.length === 0) {
+      return {
+        subtotal: 0,
+        taxAmount: 0,
+        total: 0
+      };
+    }
+
     const subtotal = items.reduce((sum, item) => {
       return sum + (item.quantity || 0) * (item.unitPrice || 0);
     }, 0);
@@ -420,6 +403,9 @@ class PriceQuoteService {
   buildMainContent(data, totals, isArabic) {
     const title = isArabic ? 'عرض سعر' : 'Price Quote';
 
+    // ✅ UPDATED: Only include items table and totals if items exist
+    const hasItems = data.items && data.items.length > 0;
+
     return `
 <div class="main-content">
   <h1 class="title">${title}</h1>
@@ -442,8 +428,8 @@ class PriceQuoteService {
   </section>
 
   ${this.buildClientInfoSection(data, isArabic)}
-  ${this.buildItemsTable(data.items, isArabic)}
-  ${this.buildTotalsSection(totals, data, isArabic)}
+  ${hasItems ? this.buildItemsTable(data.items, isArabic) : ''}
+  ${hasItems ? this.buildTotalsSection(totals, data, isArabic) : ''}
   ${this.buildNotesSection(data.customNotes, isArabic)}
 </div>
     `;
@@ -539,10 +525,6 @@ class PriceQuoteService {
     `;
   }
 
-  // ──────────────────────────────────────────────
-  // CRUD Operations
-  // ──────────────────────────────────────────────
-
   async createQuote(quoteData, currentUser, attachmentFile = null) {
     console.log('\n=== CREATE QUOTE DEBUG ===');
     console.log('currentUser.id:', currentUser.id);
@@ -551,7 +533,6 @@ class PriceQuoteService {
     const quotes = await this.loadQuotes();
     const quoteNumber = await this.generateQuoteNumber();
 
-    // Get creator name from users database (to ensure consistency)
     const createdByName = await this.getUserNameById(currentUser.id);
     console.log('getUserNameById returned:', createdByName);
     console.log('==========================\n');
@@ -569,7 +550,7 @@ class PriceQuoteService {
       language: quoteData.language || 'arabic',
       includeTax: !!quoteData.includeTax,
       taxRate: quoteData.includeTax ? (quoteData.taxRate || 0) : 0,
-      items: quoteData.items || [],
+      items: quoteData.items || [], // ✅ Can be empty array
       customNotes: quoteData.customNotes || null,
       createdBy: currentUser.id,
       createdByName: createdByName || currentUser.name || 'Unknown User', 
@@ -598,14 +579,9 @@ class PriceQuoteService {
     return newQuote;
   }
 
-
-
-  
-  // ✅ UPDATED: Enrich quotes with creator names
   async getAllQuotes(filters = {}) {
     let quotes = await this.loadQuotes();
 
-    // ✅ Add creator names to all quotes
     quotes = await this.enrichQuotesWithCreatorNames(quotes);
 
     if (filters.createdBy) {
@@ -618,7 +594,7 @@ class PriceQuoteService {
         q.quoteNumber.toLowerCase().includes(searchLower) ||
         q.clientName.toLowerCase().includes(searchLower) ||
         (q.clientPhone && q.clientPhone.toLowerCase().includes(searchLower)) ||
-        (q.createdByName && q.createdByName.toLowerCase().includes(searchLower)) // ✅ Search by creator name
+        (q.createdByName && q.createdByName.toLowerCase().includes(searchLower))
       );
     }
 
@@ -631,7 +607,6 @@ class PriceQuoteService {
 
     const paginatedQuotes = quotes.slice(startIndex, endIndex);
 
-    // ✅ Enrich with user info
     const enrichedQuotes = await this.enrichQuotesWithUserInfo(paginatedQuotes);
 
     return {
@@ -645,7 +620,6 @@ class PriceQuoteService {
     };
   }
 
-  // ✅ UPDATED: Get latest quote with creator name
   async getLatestQuoteByUser(userId) {
     const quotes = await this.loadQuotes();
     const userQuotes = quotes.filter(q => q.createdBy === userId);
@@ -655,7 +629,6 @@ class PriceQuoteService {
     userQuotes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     const latestQuote = userQuotes[0];
 
-    // ✅ Add creator name
     const createdByName = await this.getUserNameById(latestQuote.createdBy);
     return {
       ...latestQuote,
@@ -663,7 +636,6 @@ class PriceQuoteService {
     };
   }
 
-  // ✅ UPDATED: Get quote by ID with creator name
   async getQuoteById(id) {
     const quotes = await this.loadQuotes();
     const quote = quotes.find(q => q.id === id);
@@ -672,7 +644,6 @@ class PriceQuoteService {
       throw new Error('Quote not found');
     }
 
-    // ✅ Add creator name
     const createdByName = await this.getUserNameById(quote.createdBy);
     return {
       ...quote,
@@ -680,7 +651,6 @@ class PriceQuoteService {
     };
   }
 
-  // ✅ UPDATED: Update quote (keep creator info unchanged)
   async updateQuote(id, updateData, attachmentFile = null) {
     const quotes = await this.loadQuotes();
     const quoteIndex = quotes.findIndex(q => q.id === id);
@@ -691,7 +661,6 @@ class PriceQuoteService {
 
     const quote = quotes[quoteIndex];
 
-    // Update fields if provided
     if (updateData.clientName) quote.clientName = updateData.clientName;
     if (updateData.clientPhone) quote.clientPhone = updateData.clientPhone;
     if (updateData.clientAddress !== undefined) quote.clientAddress = updateData.clientAddress;
@@ -702,10 +671,9 @@ class PriceQuoteService {
     if (updateData.language) quote.language = updateData.language;
     if (updateData.includeTax !== undefined) quote.includeTax = !!updateData.includeTax;
     if (updateData.taxRate !== undefined) quote.taxRate = updateData.taxRate;
-    if (updateData.items) quote.items = updateData.items;
-    if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
+    if (updateData.items !== undefined) quote.items = updateData.items; // ✅ Can be empty array
 
-    // ✅ DO NOT update createdBy and createdByName - they remain unchanged
+    if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
 
     const totals = this.calculateTotals(quote.items, quote.includeTax, quote.taxRate);
     quote.subtotal = totals.subtotal;
@@ -729,7 +697,6 @@ class PriceQuoteService {
     quotes[quoteIndex] = quote;
     await this.saveQuotes(quotes);
 
-    // ✅ Add creator name before returning
     const createdByName = await this.getUserNameById(quote.createdBy);
     return {
       ...quote,
