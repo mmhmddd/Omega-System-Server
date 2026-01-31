@@ -1,4 +1,4 @@
-// src/utils/pdf-generator-po.util.js - PURCHASE ORDER PDF GENERATOR
+// src/utils/pdf-generator-po.util.js - PURCHASE ORDER PDF GENERATOR WITH CONDITIONAL RENDERING
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -11,35 +11,41 @@ class POPDFGenerator {
     return arabicPattern.test(text);
   }
 
+  // ✅ UPDATED: Detect language based on CONTENT ONLY (exclude date)
   detectLanguage(poData) {
-    const fieldsToCheck = [
-      poData.supplier,
-      poData.supplierAddress,
-      poData.receiver,
-      poData.receiverCity,
-      poData.receiverAddress,
-      poData.tableHeaderText,
-      poData.notes
-    ];
+    const fieldsToCheck = [];
+    
+    // Add content fields (NOT date)
+    if (poData.supplier) fieldsToCheck.push(poData.supplier);
+    if (poData.supplierAddress) fieldsToCheck.push(poData.supplierAddress);
+    if (poData.receiver) fieldsToCheck.push(poData.receiver);
+    if (poData.receiverCity) fieldsToCheck.push(poData.receiverCity);
+    if (poData.receiverAddress) fieldsToCheck.push(poData.receiverAddress);
+    if (poData.tableHeaderText) fieldsToCheck.push(poData.tableHeaderText);
+    if (poData.notes) fieldsToCheck.push(poData.notes);
 
     if (poData.items && poData.items.length > 0) {
       poData.items.forEach(item => {
         if (item.description) fieldsToCheck.push(item.description);
+        if (item.unit) fieldsToCheck.push(item.unit);
       });
     }
 
+    // If no content fields, return default language
+    if (fieldsToCheck.length === 0) {
+      return 'ar'; // Default to Arabic
+    }
+
     let arabicCount = 0;
-    let totalFields = 0;
+    let totalFields = fieldsToCheck.length;
 
     fieldsToCheck.forEach(field => {
-      if (field) {
-        totalFields++;
-        if (this.isArabic(field)) {
-          arabicCount++;
-        }
+      if (this.isArabic(field)) {
+        arabicCount++;
       }
     });
 
+    // Return language based on majority of content
     return arabicCount > (totalFields / 2) ? 'ar' : 'en';
   }
 
@@ -97,7 +103,6 @@ class POPDFGenerator {
         productionManager: 'مدير الإنتاج',
         accountant: 'المحاسب',
         docCode: 'OMEGA-PUR-05',
-        revision: 'REV. No: 01',
         issueDate: 'DATE OF ISSUE'
       },
       en: {
@@ -152,12 +157,46 @@ class POPDFGenerator {
         productionManager: 'Production Manager',
         accountant: 'Accountant',
         docCode: 'OMEGA-PUR-05',
-        revision: 'REV. No: 01',
         issueDate: 'DATE OF ISSUE'
       }
     };
 
     return labels[lang] || labels.ar;
+  }
+
+  // ✅ Helper: Check if any field has data
+  hasData(value) {
+    if (value === null || value === undefined || value === '') return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    return true;
+  }
+
+  // ✅ Helper: Check if items have any data
+  hasItemsData(items) {
+    if (!items || items.length === 0) return false;
+    
+    // Check if at least one item has at least one filled field
+    return items.some(item => 
+      this.hasData(item.description) ||
+      this.hasData(item.unit) ||
+      this.hasData(item.quantity) ||
+      this.hasData(item.unitPrice)
+    );
+  }
+
+  // ✅ Helper: Check if supplier info section has data
+  hasSupplierInfoData(po) {
+    return this.hasData(po.supplier) ||
+           this.hasData(po.supplierAddress) ||
+           this.hasData(po.supplierPhone);
+  }
+
+  // ✅ Helper: Check if receiver info section has data
+  hasReceiverInfoData(po) {
+    return this.hasData(po.receiver) ||
+           this.hasData(po.receiverCity) ||
+           this.hasData(po.receiverAddress) ||
+           this.hasData(po.receiverPhone);
   }
 
   calculateTotals(items, taxRate = 0) {
@@ -184,15 +223,33 @@ class POPDFGenerator {
   }
 
   generateHTML(po) {
+    // ✅ UPDATED: Detect language based on content only
     const language = this.detectLanguage(po);
     const labels = this.getLabels(language);
     const isRTL = language === 'ar';
     const formattedDate = po.date || new Date().toISOString().split('T')[0];
     const totals = this.calculateTotals(po.items, po.taxRate || 0);
 
+    // ✅ Check what data exists
+    const hasItems = this.hasItemsData(po.items);
+    const hasSupplierInfo = this.hasSupplierInfoData(po);
+    const hasReceiverInfo = this.hasReceiverInfoData(po);
+    const hasTableHeaderText = this.hasData(po.tableHeaderText);
+    const hasNotes = this.hasData(po.notes);
+    const hasPONumber = this.hasData(po.poNumber);
+    const hasDate = this.hasData(po.date);
+
     let itemsHTML = '';
-    if (po.items && po.items.length > 0) {
+    if (hasItems) {
       itemsHTML = po.items.map((item, index) => {
+        // Only render row if at least one field has data
+        const hasRowData = this.hasData(item.description) ||
+                          this.hasData(item.unit) ||
+                          this.hasData(item.quantity) ||
+                          this.hasData(item.unitPrice);
+        
+        if (!hasRowData) return '';
+        
         const qty = parseFloat(item.quantity) || 0;
         const price = parseFloat(item.unitPrice) || 0;
         const total = (qty * price).toFixed(2);
@@ -207,19 +264,85 @@ class POPDFGenerator {
           <td style="text-align: center; padding: 10px;">${total}</td>
         </tr>
       `}).join('');
-    } else {
-      for (let i = 0; i < 5; i++) {
-        itemsHTML += `
-        <tr>
-          <td style="padding: 10px 8px; height: 40px;">&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-          <td>&nbsp;</td>
-        </tr>
-        `;
+    }
+
+    // ✅ Build supplier info fields conditionally
+    let supplierInfoFields = '';
+    if (hasSupplierInfo) {
+      const fields = [];
+      
+      if (this.hasData(po.supplier)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.supplierName}:</span>
+            <span class="info-value">${po.supplier}</span>
+          </div>
+        `);
       }
+      
+      if (this.hasData(po.supplierAddress)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.supplierAddress}:</span>
+            <span class="info-value">${po.supplierAddress}</span>
+          </div>
+        `);
+      }
+      
+      if (this.hasData(po.supplierPhone)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.supplierPhone}:</span>
+            <span class="info-value">${po.supplierPhone}</span>
+          </div>
+        `);
+      }
+      
+      supplierInfoFields = fields.join('');
+    }
+
+    // ✅ Build receiver info fields conditionally
+    let receiverInfoFields = '';
+    if (hasReceiverInfo) {
+      const fields = [];
+      
+      if (this.hasData(po.receiver)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.receiverName}:</span>
+            <span class="info-value">${po.receiver}</span>
+          </div>
+        `);
+      }
+      
+      if (this.hasData(po.receiverCity)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.receiverCity}:</span>
+            <span class="info-value">${po.receiverCity}</span>
+          </div>
+        `);
+      }
+      
+      if (this.hasData(po.receiverAddress)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.receiverAddress}:</span>
+            <span class="info-value">${po.receiverAddress}</span>
+          </div>
+        `);
+      }
+      
+      if (this.hasData(po.receiverPhone)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.receiverPhone}:</span>
+            <span class="info-value">${po.receiverPhone}</span>
+          </div>
+        `);
+      }
+      
+      receiverInfoFields = fields.join('');
     }
 
     return `
@@ -252,46 +375,56 @@ body {
   background: #fff;
 }
 
-.header-box {
-  background-color: #f0f0f0;
-  padding: 15px;
-  margin-bottom: 15px;
-  border: 1px solid #ddd;
+/* ✅ NEW: Company info section without gray background */
+.company-info {
+  padding: 10px 0;
+  margin-bottom: 10px;
   direction: ltr;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
-.header-row {
+.company-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   direction: ltr;
 }
 
-.header-left, .header-right {
+.company-left, .company-right {
   width: 48%;
 }
 
-.header-left {
+.company-left {
   text-align: left;
   direction: ltr;
 }
 
-.header-right {
+.company-right {
   text-align: right;
   direction: rtl;
 }
 
-.header-left p, .header-right p {
-  margin: 4px 0;
+.company-left p, .company-right p {
+  margin: 3px 0;
   font-size: 11px;
   line-height: 1.4;
+  color: #333;
+}
+
+/* ✅ NEW: Blue line separator */
+.separator-line {
+  width: 100%;
+  height: 2px;
+  background-color: #2B4C8C;
+  margin: 15px 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .title {
   text-align: center;
-  margin: 20px 0 15px 0;
+  margin: 15px 0;
   font-size: 22px;
   color: #2B4C8C;
   font-weight: bold;
@@ -595,16 +728,17 @@ body {
 
 <div class="page-content">
 
-  <div class="header-box">
-    <div class="header-row">
-      <div class="header-left">
+  <!-- ✅ NEW LAYOUT: Company info without gray background -->
+  <div class="company-info">
+    <div class="company-row">
+      <div class="company-left">
         <p><strong>${labels.companyNameEn}</strong></p>
         <p>${labels.taglineEn}</p>
         <p>${labels.country}</p>
         <p>${labels.tel}</p>
         <p>${labels.website}</p>
       </div>
-      <div class="header-right">
+      <div class="company-right">
         <p><strong>${labels.companyNameAr}</strong></p>
         <p>${labels.tagline}</p>
         <p>${labels.country}</p>
@@ -614,79 +748,59 @@ body {
     </div>
   </div>
 
+  <!-- ✅ NEW: Blue separator line -->
+  <div class="separator-line"></div>
+
+  <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>
 
+  <!-- ✅ Doc info - only show if data exists -->
+  ${(hasPONumber || hasDate) ? `
   <div class="doc-info">
+    ${hasPONumber ? `
     <div class="doc-info-item">
       <span class="doc-info-label">${labels.poNo}:</span>
-      <span>${po.poNumber || ''}</span>
+      <span>${po.poNumber}</span>
     </div>
+    ` : ''}
+    ${hasDate ? `
     <div class="doc-info-item">
       <span class="doc-info-label">${labels.date}:</span>
       <span>${formattedDate}</span>
     </div>
+    ` : ''}
     <div class="doc-info-item">
       <span class="doc-info-label">${labels.revNo}:</span>
       <span>01</span>
     </div>
   </div>
+  ` : ''}
 
+  <!-- ✅ Supplier info section - only show if data exists -->
+  ${hasSupplierInfo ? `
   <div class="info-section">
     <div class="info-title">${labels.supplierInfo}</div>
-    <div class="info-field">
-      <span class="info-label">${labels.supplierName}:</span>
-      <span class="info-value">${po.supplier || ''}</span>
-    </div>
-    ${po.supplierAddress ? `
-    <div class="info-field">
-      <span class="info-label">${labels.supplierAddress}:</span>
-      <span class="info-value">${po.supplierAddress}</span>
-    </div>
-    ` : ''}
-    ${po.supplierPhone ? `
-    <div class="info-field">
-      <span class="info-label">${labels.supplierPhone}:</span>
-      <span class="info-value">${po.supplierPhone}</span>
-    </div>
-    ` : ''}
-  </div>
-
-  ${po.receiver || po.receiverCity || po.receiverAddress || po.receiverPhone ? `
-  <div class="info-section">
-    <div class="info-title">${labels.receiverInfo}</div>
-    ${po.receiver ? `
-    <div class="info-field">
-      <span class="info-label">${labels.receiverName}:</span>
-      <span class="info-value">${po.receiver}</span>
-    </div>
-    ` : ''}
-    ${po.receiverCity ? `
-    <div class="info-field">
-      <span class="info-label">${labels.receiverCity}:</span>
-      <span class="info-value">${po.receiverCity}</span>
-    </div>
-    ` : ''}
-    ${po.receiverAddress ? `
-    <div class="info-field">
-      <span class="info-label">${labels.receiverAddress}:</span>
-      <span class="info-value">${po.receiverAddress}</span>
-    </div>
-    ` : ''}
-    ${po.receiverPhone ? `
-    <div class="info-field">
-      <span class="info-label">${labels.receiverPhone}:</span>
-      <span class="info-value">${po.receiverPhone}</span>
-    </div>
-    ` : ''}
+    ${supplierInfoFields}
   </div>
   ` : ''}
 
-  ${po.tableHeaderText ? `
+  <!-- ✅ Receiver info section - only show if data exists -->
+  ${hasReceiverInfo ? `
+  <div class="info-section">
+    <div class="info-title">${labels.receiverInfo}</div>
+    ${receiverInfoFields}
+  </div>
+  ` : ''}
+
+  <!-- ✅ Table header text - only show if data exists -->
+  ${hasTableHeaderText ? `
   <div class="table-header-notice">
     <p>${po.tableHeaderText}</p>
   </div>
   ` : ''}
 
+  <!-- ✅ Items table - only show if data exists -->
+  ${hasItems ? `
   <table class="items-table">
     <thead>
       <tr>
@@ -719,6 +833,7 @@ body {
       </div>
     </div>
   </div>
+  ` : ''}
 
   <div class="two-column-sections">
     <div class="payment-approval-section">
@@ -800,10 +915,13 @@ body {
     </div>
   </div>
 
+  <!-- ✅ Notes section - only show if data exists -->
+  ${hasNotes ? `
   <div class="notes-section">
     <div class="notes-title">${labels.notes}</div>
-    <div class="notes-content">${po.notes || ''}</div>
+    <div class="notes-content">${po.notes}</div>
   </div>
+  ` : ''}
 
   <div class="approval-section">
     <div class="approval-box">
@@ -961,7 +1079,6 @@ body {
         continue;
       }
       
-      const revNo = 'REV. No: 01';
       const dateOfIssue = `DATE OF ISSUE: ${new Date().toISOString().split('T')[0]}`;
       const docCode = 'OMEGA-PUR-05';
       const pageNumber = `Page ${i + 1} of ${totalPages}`;
@@ -1005,13 +1122,7 @@ body {
       });
 
       if (isRTL) {
-        page.drawText(revNo, {
-          x: width - 200,
-          y: height - 50,
-          size: 9,
-          font: font,
-          color: textGray
-        });
+
         page.drawText(dateOfIssue, {
           x: width - 200,
           y: height - 63,
@@ -1020,13 +1131,7 @@ body {
           color: textGray
         });
       } else {
-        page.drawText(revNo, {
-          x: 60,
-          y: height - 50,
-          size: 9,
-          font: font,
-          color: textGray
-        });
+
         page.drawText(dateOfIssue, {
           x: 60,
           y: height - 63,

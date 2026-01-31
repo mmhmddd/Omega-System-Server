@@ -1,4 +1,4 @@
-// src/utils/pdf-generator-rfq.util.js - UPDATED WITH NEW TABLE STRUCTURE
+// src/utils/pdf-generator-rfq.util.js - UPDATED WITH IMPROVED LANGUAGE DETECTION & DEPARTMENT TRANSLATION
 
 const fs = require('fs');
 const path = require('path');
@@ -12,33 +12,72 @@ class RFQPDFGenerator {
     return arabicPattern.test(text);
   }
 
+  // ✅ UPDATED: Detect language based on CONTENT ONLY (exclude date and time)
   detectLanguage(rfqData) {
-    const fieldsToCheck = [
-      rfqData.production,
-      rfqData.supplier,
-      rfqData.supplierAddress,
-      rfqData.notes
-    ];
+    const fieldsToCheck = [];
+    
+    // ✅ Add content fields (NOT date/time)
+    if (rfqData.requester) fieldsToCheck.push(rfqData.requester);
+    if (rfqData.production) fieldsToCheck.push(rfqData.production);
+    if (rfqData.supplier) fieldsToCheck.push(rfqData.supplier);
+    if (rfqData.supplierAddress) fieldsToCheck.push(rfqData.supplierAddress);
+    if (rfqData.notes) fieldsToCheck.push(rfqData.notes);
 
+    // Add item descriptions
     if (rfqData.items && rfqData.items.length > 0) {
       rfqData.items.forEach(item => {
         if (item.description) fieldsToCheck.push(item.description);
+        if (item.unit) fieldsToCheck.push(item.unit);
       });
     }
 
+    // If no content fields, return default language
+    if (fieldsToCheck.length === 0) {
+      return 'ar'; // Default to Arabic
+    }
+
     let arabicCount = 0;
-    let totalFields = 0;
+    let totalFields = fieldsToCheck.length;
 
     fieldsToCheck.forEach(field => {
-      if (field) {
-        totalFields++;
-        if (this.isArabic(field)) {
-          arabicCount++;
-        }
+      if (this.isArabic(field)) {
+        arabicCount++;
       }
     });
 
+    // Return language based on majority of content
     return arabicCount > (totalFields / 2) ? 'ar' : 'en';
+  }
+
+  // ✅ NEW: Department translation mapping
+  getDepartmentTranslation(departmentLabel, targetLanguage) {
+    const departmentMap = {
+      // Arabic labels
+      'المشتريات': { ar: 'المشتريات', en: 'Procurement' },
+      'المخزن': { ar: 'المخزن', en: 'Warehouse' },
+      'الصيانة': { ar: 'الصيانة', en: 'Maintenance' },
+      'المبيعات': { ar: 'المبيعات', en: 'Sales' },
+      'التسويق': { ar: 'التسويق', en: 'Marketing' },
+      'التطوير': { ar: 'التطوير', en: 'Development' },
+      'أخرى': { ar: 'أخرى', en: 'Other' },
+      
+      // English labels
+      'Procurement': { ar: 'المشتريات', en: 'Procurement' },
+      'Warehouse': { ar: 'المخزن', en: 'Warehouse' },
+      'Maintenance': { ar: 'الصيانة', en: 'Maintenance' },
+      'Sales': { ar: 'المبيعات', en: 'Sales' },
+      'Marketing': { ar: 'التسويق', en: 'Marketing' },
+      'Development': { ar: 'التطوير', en: 'Development' },
+      'Other': { ar: 'أخرى', en: 'Other' }
+    };
+
+    // If department is in the map, return translated version
+    if (departmentMap[departmentLabel]) {
+      return departmentMap[departmentLabel][targetLanguage];
+    }
+
+    // If not in map, return as-is
+    return departmentLabel;
   }
 
   getLabels(lang) {
@@ -78,7 +117,6 @@ class RFQPDFGenerator {
         purchaseSig: 'مدير المشتريات',
         productionSig: 'مدير الإنتاج',
         docCode: 'OMEGA-PUR-04',
-        revision: 'REV. No: 00',
         issueDate: 'DATE OF ISSUE'
       },
       en: {
@@ -116,12 +154,42 @@ class RFQPDFGenerator {
         purchaseSig: 'Purchase Manager',
         productionSig: 'Production Manager',
         docCode: 'OMEGA-PUR-04',
-        revision: 'REV. No: 00',
         issueDate: 'DATE OF ISSUE'
       }
     };
 
     return labels[lang] || labels.ar;
+  }
+
+  // ✅ Helper: Check if any field has data
+  hasData(value) {
+    if (value === null || value === undefined || value === '') return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    return true;
+  }
+
+  // ✅ Helper: Check if items have any data
+  hasItemsData(items) {
+    if (!items || items.length === 0) return false;
+    
+    // Check if at least one item has at least one filled field
+    return items.some(item => 
+      this.hasData(item.description) ||
+      this.hasData(item.unit) ||
+      this.hasData(item.quantity) ||
+      this.hasData(item.jobNo) ||
+      this.hasData(item.taskNo) ||
+      this.hasData(item.estimatedUnitPrice)
+    );
+  }
+
+  // ✅ Helper: Check if request info section has data
+  hasRequestInfoData(rfq) {
+    return this.hasData(rfq.requester) ||
+           this.hasData(rfq.production) ||
+           this.hasData(rfq.supplier) ||
+           this.hasData(rfq.supplierAddress) ||
+           rfq.urgent === true;
   }
 
   // حساب السعر الإجمالي (الكمية × السعر التقديري للوحدة)
@@ -144,49 +212,114 @@ class RFQPDFGenerator {
     return total.toFixed(2);
   }
 
-generateHTML(rfq) {
-  const language = this.detectLanguage(rfq);
-  const labels = this.getLabels(language);
-  const isRTL = language === 'ar';
-  const formattedDate = rfq.date || new Date().toISOString().split('T')[0];
-  const grandTotal = this.calculateGrandTotal(rfq.items);
+  generateHTML(rfq) {
+    // ✅ UPDATED: Detect language based on content only
+    const language = this.detectLanguage(rfq);
+    const labels = this.getLabels(language);
+    const isRTL = language === 'ar';
+    const formattedDate = rfq.date || new Date().toISOString().split('T')[0];
+    
+    // ✅ NEW: Translate department based on detected language
+    const translatedDepartment = rfq.production 
+      ? this.getDepartmentTranslation(rfq.production, language)
+      : '';
+    
+    // ✅ Check what data exists
+    const hasItems = this.hasItemsData(rfq.items);
+    const hasRequestInfo = this.hasRequestInfoData(rfq);
+    const hasNotes = this.hasData(rfq.notes);
+    const hasRFQNumber = this.hasData(rfq.rfqNumber);
+    const hasDate = this.hasData(rfq.date);
 
-  let itemsHTML = '';
-  if (rfq.items && rfq.items.length > 0) {
-    itemsHTML = rfq.items.map((item, index) => {
-      const totalPrice = this.calculateItemTotal(item.quantity, item.estimatedUnitPrice);
+    let itemsHTML = '';
+    let grandTotal = '0.00';
+    
+    if (hasItems) {
+      grandTotal = this.calculateGrandTotal(rfq.items);
       
-      return `
-      <tr>
-        <td style="text-align: center; padding: 8px 6px;">${index + 1}</td>
-        <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 8px;">${item.description || ''}</td>
-        <td style="text-align: center; padding: 8px;">${item.unit || ''}</td>
-        <td style="text-align: center; padding: 8px;">${item.quantity || ''}</td>
-        <td style="text-align: center; padding: 8px;">${item.jobNo || ''}</td>
-        <td style="text-align: center; padding: 8px;">${item.taskNo || ''}</td>
-        <td style="text-align: center; padding: 8px;">${item.estimatedUnitPrice || ''}</td>
-        <td style="text-align: center; padding: 8px; font-weight: 600;">${totalPrice}</td>
-      </tr>
-    `;
-    }).join('');
-  } else {
-    for (let i = 0; i < 5; i++) {
-      itemsHTML += `
-      <tr>
-        <td style="padding: 8px 6px; height: 35px;">&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-      </tr>
+      itemsHTML = rfq.items.map((item, index) => {
+        // Only render row if at least one field has data
+        const hasRowData = this.hasData(item.description) ||
+                          this.hasData(item.unit) ||
+                          this.hasData(item.quantity) ||
+                          this.hasData(item.jobNo) ||
+                          this.hasData(item.taskNo) ||
+                          this.hasData(item.estimatedUnitPrice);
+        
+        if (!hasRowData) return '';
+        
+        const totalPrice = this.calculateItemTotal(item.quantity, item.estimatedUnitPrice);
+        
+        return `
+        <tr>
+          <td style="text-align: center; padding: 8px 6px;">${index + 1}</td>
+          <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 8px;">${item.description || ''}</td>
+          <td style="text-align: center; padding: 8px;">${item.unit || ''}</td>
+          <td style="text-align: center; padding: 8px;">${item.quantity || ''}</td>
+          <td style="text-align: center; padding: 8px;">${item.jobNo || ''}</td>
+          <td style="text-align: center; padding: 8px;">${item.taskNo || ''}</td>
+          <td style="text-align: center; padding: 8px;">${item.estimatedUnitPrice || ''}</td>
+          <td style="text-align: center; padding: 8px; font-weight: 600;">${totalPrice}</td>
+        </tr>
       `;
+      }).join('');
     }
-  }
 
-  return `
+    // ✅ Build request info fields conditionally
+    let requestInfoFields = '';
+    if (hasRequestInfo) {
+      const fields = [];
+      
+      if (this.hasData(rfq.requester)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.requester}:</span>
+            <span class="info-value">${rfq.requester}</span>
+          </div>
+        `);
+      }
+      
+      // ✅ UPDATED: Use translated department
+      if (this.hasData(translatedDepartment)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.department}:</span>
+            <span class="info-value">${translatedDepartment}</span>
+          </div>
+        `);
+      }
+      
+      if (this.hasData(rfq.supplier)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.supplier}:</span>
+            <span class="info-value">${rfq.supplier}</span>
+          </div>
+        `);
+      }
+      
+      if (this.hasData(rfq.supplierAddress)) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.supplierAddress}:</span>
+            <span class="info-value">${rfq.supplierAddress}</span>
+          </div>
+        `);
+      }
+      
+      if (rfq.urgent === true) {
+        fields.push(`
+          <div class="info-field">
+            <span class="info-label">${labels.urgent}:</span>
+            <span class="info-value">${labels.yes}</span>
+          </div>
+        `);
+      }
+      
+      requestInfoFields = fields.join('');
+    }
+
+    return `
 <!DOCTYPE html>
 <html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
 <head>
@@ -216,46 +349,56 @@ body {
   background: #fff;
 }
 
-.header-box {
-  background-color: #f0f0f0;
-  padding: 15px;
-  margin-bottom: 15px;
-  border: 1px solid #ddd;
+/* ✅ NEW: Company info section without gray background */
+.company-info {
+  padding: 10px 0;
+  margin-bottom: 10px;
   direction: ltr;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
-.header-row {
+.company-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   direction: ltr;
 }
 
-.header-left, .header-right {
+.company-left, .company-right {
   width: 48%;
 }
 
-.header-left {
+.company-left {
   text-align: left;
   direction: ltr;
 }
 
-.header-right {
+.company-right {
   text-align: right;
   direction: rtl;
 }
 
-.header-left p, .header-right p {
-  margin: 4px 0;
+.company-left p, .company-right p {
+  margin: 3px 0;
   font-size: 11px;
   line-height: 1.4;
+  color: #333;
+}
+
+/* ✅ NEW: Blue line separator */
+.separator-line {
+  width: 100%;
+  height: 2px;
+  background-color: #2B4C8C;
+  margin: 15px 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .title {
   text-align: center;
-  margin: 20px 0 15px 0;
+  margin: 15px 0;
   font-size: 22px;
   color: #2B4C8C;
   font-weight: bold;
@@ -457,16 +600,17 @@ body {
 
 <div class="page-content">
 
-  <div class="header-box">
-    <div class="header-row">
-      <div class="header-left">
+  <!-- ✅ NEW LAYOUT: Company info without gray background -->
+  <div class="company-info">
+    <div class="company-row">
+      <div class="company-left">
         <p><strong>${labels.companyNameEn}</strong></p>
         <p>${labels.taglineEn}</p>
         <p>${labels.country}</p>
         <p>${labels.tel}</p>
         <p>${labels.website}</p>
       </div>
-      <div class="header-right">
+      <div class="company-right">
         <p><strong>${labels.companyNameAr}</strong></p>
         <p>${labels.tagline}</p>
         <p>${labels.country}</p>
@@ -476,45 +620,42 @@ body {
     </div>
   </div>
 
+  <!-- ✅ NEW: Blue separator line -->
+  <div class="separator-line"></div>
+
+  <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>
 
+  <!-- ✅ Doc info - only show if data exists -->
+  ${(hasRFQNumber || hasDate) ? `
   <div class="doc-info">
+    ${hasRFQNumber ? `
     <div class="doc-info-item">
       <span class="doc-info-label">${labels.rfqNo}:</span>
-      <span>${rfq.rfqNumber || ''}</span>
+      <span>${rfq.rfqNumber}</span>
     </div>
+    ` : ''}
+    ${hasDate ? `
     <div class="doc-info-item">
       <span class="doc-info-label">${labels.dateLabel}:</span>
       <span>${formattedDate}</span>
     </div>
+    ` : ''}
   </div>
+  ` : ''}
 
+  <!-- ✅ Request info section - only show if data exists -->
+  ${hasRequestInfo ? `
   <div class="info-section">
     <div class="info-title">${labels.requestInfo}</div>
     <div class="info-grid">
-      <div class="info-field">
-        <span class="info-label">${labels.requester}:</span>
-        <span class="info-value">${rfq.requester || ''}</span>
-      </div>
-      <div class="info-field">
-        <span class="info-label">${labels.department}:</span>
-        <span class="info-value">${rfq.production || ''}</span>
-      </div>
-      <div class="info-field">
-        <span class="info-label">${labels.supplier}:</span>
-        <span class="info-value">${rfq.supplier || ''}</span>
-      </div>
-      <div class="info-field">
-        <span class="info-label">${labels.supplierAddress}:</span>
-        <span class="info-value">${rfq.supplierAddress || ''}</span>
-      </div>
-      <div class="info-field">
-        <span class="info-label">${labels.urgent}:</span>
-        <span class="info-value">${rfq.urgent ? labels.yes : labels.no}</span>
-      </div>
+      ${requestInfoFields}
     </div>
   </div>
+  ` : ''}
 
+  <!-- ✅ Items table - only show if data exists -->
+  ${hasItems ? `
   <table class="items-table">
     <thead>
       <tr>
@@ -538,11 +679,15 @@ body {
       </tr>
     </tbody>
   </table>
+  ` : ''}
 
+  <!-- ✅ Notes section - only show if data exists -->
+  ${hasNotes ? `
   <div class="notes-section">
     <div class="notes-title">${labels.notes}</div>
-    <div class="notes-content">${rfq.notes || ''}</div>
+    <div class="notes-content">${rfq.notes}</div>
   </div>
+  ` : ''}
 
   <div class="signature-section">
     <div class="signature-box">
@@ -564,7 +709,7 @@ body {
 </body>
 </html>
   `;
-}
+  }
 
   async generateRFQPDF(rfq) {
     const language = this.detectLanguage(rfq);
@@ -700,7 +845,6 @@ body {
         continue;
       }
       
-      const revNo = 'REV. No: 00';
       const dateOfIssue = `DATE OF ISSUE: ${new Date().toISOString().split('T')[0]}`;
       const docCode = 'OMEGA-PUR-04';
       const pageNumber = `Page ${i + 1} of ${totalPages}`;
@@ -744,13 +888,7 @@ body {
       });
 
       if (isRTL) {
-        page.drawText(revNo, {
-          x: width - 200,
-          y: height - 50,
-          size: 9,
-          font: font,
-          color: textGray
-        });
+
         page.drawText(dateOfIssue, {
           x: width - 200,
           y: height - 63,
@@ -759,13 +897,7 @@ body {
           color: textGray
         });
       } else {
-        page.drawText(revNo, {
-          x: 60,
-          y: height - 50,
-          size: 9,
-          font: font,
-          color: textGray
-        });
+
         page.drawText(dateOfIssue, {
           x: 60,
           y: height - 63,

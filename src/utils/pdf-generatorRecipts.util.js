@@ -1,4 +1,4 @@
-// src/utils/pdf-generator.util.js - COMPLETE FIXED VERSION
+// src/utils/pdf-generator.util.js - UPDATED: SINGLE BLUE LINE, NO REV NO
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -59,7 +59,6 @@ class PDFGenerator {
         name: 'الاسم',
         dateField: 'التاريخ',
         docCode: 'OMEGA-RIC-01',
-        revNo: 'REV. No',
         dateOfIssue: 'DATE OF ISSUE',
         additionalInfo: 'يرجى استلام ما تم إدراجه أدناه',
         additionalNotes: 'ملاحظات إضافية'
@@ -87,7 +86,6 @@ class PDFGenerator {
         name: 'Name',
         dateField: 'Date',
         docCode: 'OMEGA-RIC-01',
-        revNo: 'REV. No',
         dateOfIssue: 'DATE OF ISSUE',
         additionalInfo: 'Please receive the items listed below:',
         additionalNotes: 'Additional Notes'
@@ -97,81 +95,100 @@ class PDFGenerator {
     return labels[lang] || labels.ar;
   }
 
-generateHTML(receipt) {
-  const language = this.detectLanguage(receipt);
-  const labels = this.getLabels(language);
-  const isRTL = language === 'ar';
-  const formattedDate = receipt.date || new Date().toISOString().split('T')[0];
+  generateHTML(receipt) {
+    const language = this.detectLanguage(receipt);
+    const labels = this.getLabels(language);
+    const isRTL = language === 'ar';
+    const formattedDate = receipt.date || new Date().toISOString().split('T')[0];
 
-  console.log('╔════════════════════════════════════════════════════════════╗');
-  console.log('║           PDF GENERATOR: PROCESSING RECEIPT                ║');
-  console.log('╚════════════════════════════════════════════════════════════╝');
-  console.log('📄 Receipt data:');
-  console.log('   - companyNumber:', receipt.companyNumber);
-  console.log('   - additionalText:', receipt.additionalText);
-  console.log('   - notes:', receipt.notes);
-  console.log('════════════════════════════════════════════════════════════');
+    console.log('╔════════════════════════════════════════════════════════════╗');
+    console.log('║           PDF GENERATOR: PROCESSING RECEIPT                ║');
+    console.log('╚════════════════════════════════════════════════════════════╝');
+    console.log('📄 Receipt data:');
+    console.log('   - companyNumber:', receipt.companyNumber);
+    console.log('   - additionalText:', receipt.additionalText);
+    console.log('   - notes:', receipt.notes);
+    console.log('   - items:', receipt.items?.length || 0);
+    console.log('════════════════════════════════════════════════════════════');
 
-  let itemsHTML = '';
-  if (receipt.items && receipt.items.length > 0) {
-    itemsHTML = receipt.items.map(item => `
-      <tr>
-        <td style="text-align: center; padding: 12px 8px;">${item.quantity || ''}</td>
-        <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 12px 10px;">${item.description || ''}</td>
-        <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 12px 10px;">${item.element || ''}</td>
-      </tr>
-    `).join('');
-  } else {
-    for (let i = 0; i < 3; i++) {
-      itemsHTML += `
-      <tr>
-        <td style="text-align: center; padding: 12px 8px; height: 45px;">&nbsp;</td>
-        <td style="text-align: left; padding: 12px 10px;">&nbsp;</td>
-        <td style="text-align: left; padding: 12px 10px;">&nbsp;</td>
-      </tr>
+    // ✅ Check if we have items with data
+    const hasItems = receipt.items && receipt.items.length > 0;
+    
+    // ✅ Generate items HTML only if items exist
+    let itemsTableHTML = '';
+    if (hasItems) {
+      const itemsHTML = receipt.items.map(item => `
+        <tr>
+          <td style="text-align: center; padding: 12px 8px;">${item.quantity || ''}</td>
+          <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 12px 10px;">${item.description || ''}</td>
+          <td style="text-align: ${isRTL ? 'right' : 'left'}; padding: 12px 10px;">${item.element || ''}</td>
+        </tr>
+      `).join('');
+
+      itemsTableHTML = `
+        <table class="items-table">
+          <thead>
+            <tr>
+              <th style="width: 15%;">${labels.quantity}</th>
+              <th style="width: 40%; text-align: ${isRTL ? 'right' : 'center'};">${labels.description}</th>
+              <th style="width: 45%; text-align: ${isRTL ? 'right' : 'center'};">${labels.element}</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHTML}
+          </tbody>
+        </table>
       `;
     }
-  }
 
-  // 🔥 FIXED: الجملة الثابتة + النص الإضافي من الفورم
-  const fixedSentence = isRTL 
-    ? 'يرجى استلام ما تجد إدراجه أدناه:' 
-    : 'Please receive what is listed below:';
+    // ✅ Generate additional text box only if additionalText exists
+    let additionalTextHTML = '';
+    if (receipt.additionalText && receipt.additionalText.trim() !== '') {
+      const fixedSentence = '' ;
 
-  const additionalTextHTML = `
-    <div style="
-      text-align: ${isRTL ? 'right' : 'left'}; 
-      margin: 20px 0; 
-      padding: 15px 20px; 
-      border: 2px solid #1565C0; 
-      border-radius: 8px; 
-      background-color: #f0f7ff; 
-      line-height: 1.8;
-      break-inside: avoid;
-      page-break-inside: avoid;
-    ">
-      <div style="
-        margin-bottom: ${receipt.additionalText ? '10px' : '0'}; 
-        font-weight: bold; 
-        color: #0D47A1; 
-        font-size: 14px;
-      ">
-        ${fixedSentence}
-      </div>
-      ${receipt.additionalText ? `
+      additionalTextHTML = `
         <div style="
-          color: #1565C0; 
-          font-size: 13px; 
-          line-height: 1.6;
-          font-weight: 500;
+          text-align: ${isRTL ? 'right' : 'left'}; 
+          margin: 5px 0; 
+          padding: 10px 15px; 
+          border: 2px solid #1565C0; 
+          border-radius: 8px; 
+          background-color: #f0f7ff; 
+          line-height: 1.8;
+          break-inside: avoid;
+          page-break-inside: avoid;
         ">
-          ${receipt.additionalText}
+          <div style="
+            margin-bottom: 10px; 
+            font-weight: bold; 
+            color: #0D47A1; 
+            font-size: 14px;
+          ">
+            ${fixedSentence}
+          </div>
+          <div style="
+            color: #1565C0; 
+            font-size: 13px; 
+            line-height: 1.6;
+            font-weight: 500;
+          ">
+            ${receipt.additionalText}
+          </div>
         </div>
-      ` : ''}
-    </div>
-  `;
+      `;
+    }
 
-  return `
+    // ✅ Generate notes box only if notes exist
+    let notesHTML = '';
+    if (receipt.notes && receipt.notes.trim() !== '') {
+      notesHTML = `
+        <div class="additional-notes-box">
+          <div class="additional-notes-content">${receipt.notes}</div>
+        </div>
+      `;
+    }
+
+    return `
 <!DOCTYPE html>
 <html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
 <head>
@@ -209,21 +226,10 @@ body {
   background: #fff;
 }
 
-.title {
-  text-align: center;
-  margin: 25px 0 20px 0;
-  font-size: 24px;
-  color: var(--primary);
-  font-weight: bold;
-  break-inside: avoid;
-  page-break-inside: avoid;
-}
-
-.company-box {
-  background-color: var(--box-bg);
-  padding: 12px 18px;
-  margin-bottom: 20px;
-  border: none;
+/* ✅ Company info section - directly under logo, no background */
+.company-info {
+  padding: 5px 0 10px 0;
+  margin-bottom: 10px;
   break-inside: avoid;
   page-break-inside: avoid;
 }
@@ -253,6 +259,25 @@ body {
 
 .company-col p {
   margin: 4px 0;
+}
+
+/* ✅ Single blue separator line */
+.blue-separator {
+  width: 100%;
+  height: 3px;
+  background-color: var(--primary);
+  margin: 10px 0 20px 0;
+}
+
+/* ✅ Title after blue line */
+.title {
+  text-align: center;
+  margin: 0 0 25px 0;
+  font-size: 24px;
+  color: var(--primary);
+  font-weight: bold;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .details-box {
@@ -432,9 +457,8 @@ body {
 
 <div class="page-content">
 
-  <h1 class="title">${labels.title}</h1>
-
-  <div class="company-box">
+  <!-- ✅ Company info directly under logo (no background) -->
+  <div class="company-info">
     <div class="company-row">
       ${isRTL ? `
       <div class="company-col company-col-right">
@@ -466,6 +490,13 @@ body {
     </div>
   </div>
 
+  <!-- ✅ Single blue separator line -->
+  <div class="blue-separator"></div>
+
+  <!-- ✅ Title after blue line -->
+  <h1 class="title">${labels.title}</h1>
+
+  <!-- Details Box -->
   <div class="details-box">
     ${receipt.to ? `
     <div class="detail-row">
@@ -522,28 +553,16 @@ body {
     ` : ''}
   </div>
 
+  <!-- ✅ Additional Text Box (only if exists) -->
   ${additionalTextHTML}
 
-  <table class="items-table">
-    <thead>
-      <tr>
-        <th style="width: 15%;">${labels.quantity}</th>
-        <th style="width: 40%; text-align: ${isRTL ? 'right' : 'center'};">${labels.description}</th>
-        <th style="width: 45%; text-align: ${isRTL ? 'right' : 'center'};">${labels.element}</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${itemsHTML}
-    </tbody>
-  </table>
+  <!-- ✅ Items Table (only if exists) -->
+  ${itemsTableHTML}
 
-  ${receipt.notes ? `
-  <div class="additional-notes-box">
-    <div class="additional-notes-title">${labels.additionalNotes}:</div>
-    <div class="additional-notes-content">${receipt.notes}</div>
-  </div>
-  ` : ''}
+  <!-- ✅ Notes Box (only if exists) -->
+  ${notesHTML}
 
+  <!-- Signature Section -->
   <div class="signature-section">
     <div class="signature-box">
       <div class="signature-label">${labels.receiverSignature}</div>
@@ -563,8 +582,8 @@ body {
 
 </body>
 </html>
-  `;
-}
+    `;
+  }
 
   async generateReceiptPDF(receipt) {
     const language = this.detectLanguage(receipt);
@@ -700,7 +719,7 @@ body {
         continue;
       }
       
-      const revNo = 'REV. No: 00';
+      // ✅ REMOVED: REV. No: 00
       const dateOfIssue = `DATE OF ISSUE: ${new Date().toISOString().split('T')[0]}`;
       const docCode = 'OMEGA-RIC-01';
       const pageNumber = `Page ${i + 1} of ${totalPages}`;
@@ -743,32 +762,19 @@ body {
         color: primaryBlue
       });
 
+      // ✅ UPDATED: Only show DATE OF ISSUE (no REV No)
       if (isRTL) {
-        page.drawText(revNo, {
-          x: width - 200,
-          y: height - 50,
-          size: 9,
-          font: font,
-          color: textGray
-        });
         page.drawText(dateOfIssue, {
           x: width - 200,
-          y: height - 63,
+          y: height - 55,
           size: 9,
           font: font,
           color: textGray
         });
       } else {
-        page.drawText(revNo, {
-          x: 60,
-          y: height - 50,
-          size: 9,
-          font: font,
-          color: textGray
-        });
         page.drawText(dateOfIssue, {
           x: 60,
-          y: height - 63,
+          y: height - 55,
           size: 9,
           font: font,
           color: textGray

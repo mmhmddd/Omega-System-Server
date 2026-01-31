@@ -1,5 +1,5 @@
 // ============================================================
-// PDF GENERATOR MATERIAL - FIXED: WITH PRIORITY TRANSLATION
+// PDF GENERATOR MATERIAL - WITH CONDITIONAL RENDERING & NEW LAYOUT
 // src/utils/pdf-generator-material.util.js
 // ============================================================
 const fsSync = require('fs');
@@ -71,30 +71,36 @@ class MaterialPDFGenerator {
     return priority;
   }
 
+  // ✅ UPDATED: Detect language based on CONTENT ONLY (exclude date)
   detectLanguage(materialData) {
-    const fieldsToCheck = [
-      materialData.section,
-      materialData.project,
-      materialData.requestReason,
-      materialData.additionalNotes
-    ];
+    const fieldsToCheck = [];
+    
+    // Add content fields (NOT date)
+    if (materialData.section) fieldsToCheck.push(materialData.section);
+    if (materialData.project) fieldsToCheck.push(materialData.project);
+    if (materialData.requestReason) fieldsToCheck.push(materialData.requestReason);
+    if (materialData.additionalNotes) fieldsToCheck.push(materialData.additionalNotes);
 
     if (materialData.items && materialData.items.length > 0) {
       materialData.items.forEach(item => {
         if (item.description) fieldsToCheck.push(item.description);
+        if (item.unit) fieldsToCheck.push(item.unit);
       });
     }
 
+    // If no content fields, return default language
+    if (fieldsToCheck.length === 0) {
+      return 'ar'; // Default to Arabic
+    }
+
     let arabicCount = 0;
-    let totalFields = 0;
+    let totalFields = fieldsToCheck.length;
 
     fieldsToCheck.forEach(field => {
-      if (field) {
-        totalFields++;
-        if (this.isArabic(field)) arabicCount++;
-      }
+      if (this.isArabic(field)) arabicCount++;
     });
 
+    // Return language based on majority of content
     return arabicCount > (totalFields / 2) ? 'ar' : 'en';
   }
 
@@ -130,7 +136,6 @@ class MaterialPDFGenerator {
         sectionManager: 'مدير القسم',
         purchaseManager: 'أمين المشتريات',
         docCode: 'OMEGA-MAT-01',
-        revision: 'REV. No: 01',
         issueDate: 'DATE OF ISSUE'
       },
       en: {
@@ -163,7 +168,6 @@ class MaterialPDFGenerator {
         sectionManager: 'Section Manager',
         purchaseManager: 'Purchase Manager',
         docCode: 'OMEGA-MAT-01',
-        revision: 'REV. No: 01',
         issueDate: 'DATE OF ISSUE'
       }
     };
@@ -171,11 +175,49 @@ class MaterialPDFGenerator {
     return labels[lang] || labels.ar;
   }
 
+  // ✅ Helper: Check if any field has data
+  hasData(value) {
+    if (value === null || value === undefined || value === '') return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    return true;
+  }
+
+  // ✅ Helper: Check if items have any data
+  hasItemsData(items) {
+    if (!items || items.length === 0) return false;
+    
+    // Check if at least one item has at least one filled field
+    return items.some(item => 
+      this.hasData(item.description) ||
+      this.hasData(item.unit) ||
+      this.hasData(item.quantity) ||
+      this.hasData(item.requiredDate) ||
+      this.hasData(item.priority)
+    );
+  }
+
+  // ✅ Helper: Check if request info section has data
+  hasRequestInfoData(material) {
+    return this.hasData(material.section) ||
+           this.hasData(material.project) ||
+           this.hasData(material.requestPriority) ||
+           this.hasData(material.requestReason) ||
+           this.hasData(material.createdByName);
+  }
+
 generateHTML(material) {
+  // ✅ UPDATED: Detect language based on content only
   const language = this.detectLanguage(material);
   const labels = this.getLabels(language);
   const isRTL = language === 'ar';
   const formattedDate = material.date || new Date().toISOString().split('T')[0];
+
+  // ✅ Check what data exists
+  const hasItems = this.hasItemsData(material.items);
+  const hasRequestInfo = this.hasRequestInfoData(material);
+  const hasNotes = this.hasData(material.additionalNotes);
+  const hasMRNumber = this.hasData(material.mrNumber);
+  const hasDate = this.hasData(material.date);
 
   // ✅ Translate section/department based on PDF language
   const translatedSection = this.translateDepartment(material.section, language);
@@ -184,8 +226,17 @@ generateHTML(material) {
   const translatedRequestPriority = this.translatePriority(material.requestPriority, language);
 
   let itemsHTML = '';
-  if (material.items && material.items.length > 0) {
+  if (hasItems) {
     itemsHTML = material.items.map((item, index) => {
+      // Only render row if at least one field has data
+      const hasRowData = this.hasData(item.description) ||
+                        this.hasData(item.unit) ||
+                        this.hasData(item.quantity) ||
+                        this.hasData(item.requiredDate) ||
+                        this.hasData(item.priority);
+      
+      if (!hasRowData) return '';
+      
       // ✅ Translate item priority
       const translatedItemPriority = this.translatePriority(item.priority, language);
       
@@ -200,19 +251,59 @@ generateHTML(material) {
       </tr>
     `;
     }).join('');
-  } else {
-    for (let i = 0; i < 5; i++) {
-      itemsHTML += `
-      <tr>
-        <td style="padding: 10px 8px; height: 40px;">&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-        <td>&nbsp;</td>
-      </tr>
-      `;
+  }
+
+  // ✅ Build request info fields conditionally
+  let requestInfoFields = '';
+  if (hasRequestInfo) {
+    const fields = [];
+    
+    if (this.hasData(translatedSection)) {
+      fields.push(`
+        <div class="info-field">
+          <span class="info-label">${labels.section}:</span>
+          <span class="info-value">${translatedSection}</span>
+        </div>
+      `);
     }
+    
+    if (this.hasData(material.project)) {
+      fields.push(`
+        <div class="info-field">
+          <span class="info-label">${labels.project}:</span>
+          <span class="info-value">${material.project}</span>
+        </div>
+      `);
+    }
+    
+    if (this.hasData(translatedRequestPriority)) {
+      fields.push(`
+        <div class="info-field">
+          <span class="info-label">${labels.requestPriority}:</span>
+          <span class="info-value">${translatedRequestPriority}</span>
+        </div>
+      `);
+    }
+    
+    if (this.hasData(material.requestReason)) {
+      fields.push(`
+        <div class="info-field">
+          <span class="info-label">${labels.requestReason}:</span>
+          <span class="info-value">${material.requestReason}</span>
+        </div>
+      `);
+    }
+    
+    if (this.hasData(material.createdByName)) {
+      fields.push(`
+        <div class="info-field">
+          <span class="info-label">${labels.submittedBy}:</span>
+          <span class="info-value">${material.createdByName}</span>
+        </div>
+      `);
+    }
+    
+    requestInfoFields = fields.join('');
   }
 
   return `
@@ -245,46 +336,56 @@ body {
   background: #fff;
 }
 
-.header-box {
-  background-color: #f0f0f0;
-  padding: 15px;
-  margin-bottom: 15px;
-  border: 1px solid #ddd;
+/* ✅ NEW: Company info section without gray background */
+.company-info {
+  padding: 10px 0;
+  margin-bottom: 10px;
   direction: ltr;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
-.header-row {
+.company-row {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   direction: ltr;
 }
 
-.header-left, .header-right {
+.company-left, .company-right {
   width: 48%;
 }
 
-.header-left {
+.company-left {
   text-align: left;
   direction: ltr;
 }
 
-.header-right {
+.company-right {
   text-align: right;
   direction: rtl;
 }
 
-.header-left p, .header-right p {
-  margin: 4px 0;
+.company-left p, .company-right p {
+  margin: 3px 0;
   font-size: 11px;
   line-height: 1.4;
+  color: #333;
+}
+
+/* ✅ NEW: Green line separator */
+.separator-line {
+  width: 100%;
+  height: 2px;
+  background-color: #1F6B3D;
+  margin: 15px 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 .title {
   text-align: center;
-  margin: 20px 0 15px 0;
+  margin: 15px 0;
   font-size: 22px;
   color: #1F6B3D;
   font-weight: bold;
@@ -477,16 +578,17 @@ body {
 
 <div class="page-content">
 
-  <div class="header-box">
-    <div class="header-row">
-      <div class="header-left">
+  <!-- ✅ NEW LAYOUT: Company info without gray background -->
+  <div class="company-info">
+    <div class="company-row">
+      <div class="company-left">
         <p><strong>${labels.companyNameEn}</strong></p>
         <p>${labels.taglineEn}</p>
         <p>${labels.country}</p>
         <p>${labels.tel}</p>
         <p>${labels.website}</p>
       </div>
-      <div class="header-right">
+      <div class="company-right">
         <p><strong>${labels.companyNameAr}</strong></p>
         <p>${labels.tagline}</p>
         <p>${labels.country}</p>
@@ -496,45 +598,42 @@ body {
     </div>
   </div>
 
+  <!-- ✅ NEW: Green separator line -->
+  <div class="separator-line"></div>
+
+  <!-- ✅ Title after green line -->
   <h1 class="title">${labels.title}</h1>
 
+  <!-- ✅ Doc info - only show if data exists -->
+  ${(hasMRNumber || hasDate) ? `
   <div class="doc-info">
+    ${hasMRNumber ? `
     <div class="doc-info-item">
       <span class="doc-info-label">${labels.mrNumber}:</span>
-      <span>${material.mrNumber || ''}</span>
+      <span>${material.mrNumber}</span>
     </div>
+    ` : ''}
+    ${hasDate ? `
     <div class="doc-info-item">
       <span class="doc-info-label">${labels.date}:</span>
       <span>${formattedDate}</span>
     </div>
+    ` : ''}
   </div>
+  ` : ''}
 
+  <!-- ✅ Request info section - only show if data exists -->
+  ${hasRequestInfo ? `
   <div class="info-section">
     <div class="info-title">${labels.requestInfo}</div>
     <div class="info-grid">
-      <div class="info-field">
-        <span class="info-label">${labels.section}:</span>
-        <span class="info-value">${translatedSection}</span>
-      </div>
-      <div class="info-field">
-        <span class="info-label">${labels.project}:</span>
-        <span class="info-value">${material.project || ''}</span>
-      </div>
-      <div class="info-field">
-        <span class="info-label">${labels.requestPriority}:</span>
-        <span class="info-value">${translatedRequestPriority}</span>
-      </div>
-      <div class="info-field">
-        <span class="info-label">${labels.requestReason}:</span>
-        <span class="info-value">${material.requestReason || ''}</span>
-      </div>
-      <div class="info-field">
-        <span class="info-label">${labels.submittedBy}:</span>
-        <span class="info-value">${material.createdByName || ''}</span>
-      </div>
+      ${requestInfoFields}
     </div>
   </div>
+  ` : ''}
 
+  <!-- ✅ Items table - only show if data exists -->
+  ${hasItems ? `
   <table class="items-table">
     <thead>
       <tr>
@@ -550,11 +649,15 @@ body {
       ${itemsHTML}
     </tbody>
   </table>
+  ` : ''}
 
+  <!-- ✅ Notes section - only show if data exists -->
+  ${hasNotes ? `
   <div class="notes-section">
     <div class="notes-title">${labels.additionalNotes}</div>
-    <div class="notes-content">${material.additionalNotes || ''}</div>
+    <div class="notes-content">${material.additionalNotes}</div>
   </div>
+  ` : ''}
 
   <div class="signature-section">
     <div class="signature-box">
@@ -710,7 +813,6 @@ body {
         continue;
       }
       
-      const revNo = 'REV. No: 01';
       const dateOfIssue = `DATE OF ISSUE: ${new Date().toISOString().split('T')[0]}`;
       const docCode = 'OMEGA-MAT-01';
       const pageNumber = `Page ${i + 1} of ${totalPages}`;
@@ -754,13 +856,7 @@ body {
       });
 
       if (isRTL) {
-        page.drawText(revNo, {
-          x: width - 200,
-          y: height - 50,
-          size: 9,
-          font: font,
-          color: textGray
-        });
+
         page.drawText(dateOfIssue, {
           x: width - 200,
           y: height - 63,
@@ -769,13 +865,7 @@ body {
           color: textGray
         });
       } else {
-        page.drawText(revNo, {
-          x: 60,
-          y: height - 50,
-          size: 9,
-          font: font,
-          color: textGray
-        });
+
         page.drawText(dateOfIssue, {
           x: 60,
           y: height - 63,
