@@ -177,9 +177,7 @@ class PriceQuoteService {
     return `PQ${(maxNumber + 1).toString().padStart(4, '0')}`;
   }
 
-  // ✅ UPDATED: Handle empty items array
   calculateTotals(items, includeTax, taxRate) {
-    // If no items, return zero totals
     if (!items || items.length === 0) {
       return {
         subtotal: 0,
@@ -270,7 +268,6 @@ class PriceQuoteService {
     return `
       <div style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:10px 30px; border-bottom:3px solid #0b4fa2;">
         <div style="text-align:left; font-family:'Roboto',Arial,sans-serif; font-size:11px;">
-          <p style="margin:3px 0;"><strong style="color:#0b4fa2;">REV. No:</strong> ${quoteData.revNumber || '00'}</p>
           <p style="margin:3px 0;"><strong style="color:#0b4fa2;">Quote No:</strong> ${quoteData.quoteNumber}</p>
           <p style="margin:3px 0;"><strong style="color:#0b4fa2;">DATE:</strong> ${quoteData.date}</p>
         </div>
@@ -328,8 +325,21 @@ class PriceQuoteService {
       background: white;
     }
     .main-content { padding: 20px 30px; }
-    .title { text-align: center; margin: 20px 0 25px; font-size: 26px; font-weight: 700; color: #0b4fa2; }
-    .company { margin-bottom: 25px; background: #ecebeb; padding: 15px 20px; border-radius: 7px; }
+    .title { text-align: center; margin: 20px 0 15px; font-size: 26px; font-weight: 700; color: #0b4fa2; }
+    .project-name { 
+      text-align: center; 
+      margin: 0 0 25px; 
+      font-size: 20px; 
+      font-weight: 600; 
+      color: #2563eb;
+      padding: 12px 20px;
+      background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+      border-radius: 8px;
+      border-left: 4px solid #2563eb;
+      border-right: 4px solid #2563eb;
+      box-shadow: 0 2px 4px rgba(37, 99, 235, 0.1);
+    }
+    .company { margin-bottom: 25px; padding: 15px 20px; border-radius: 7px; }
     .row { display: flex; justify-content: space-between; align-items: flex-start; }
     .col-left, .col-right { width: 48%; font-size: 13px; line-height: 1.6; }
     .col-right { text-align: right; direction: rtl; }
@@ -400,23 +410,43 @@ class PriceQuoteService {
     }
   }
 
+  // ✅ FIXED: Proper projectName display with escaping and validation
   buildMainContent(data, totals, isArabic) {
     const title = isArabic ? 'عرض سعر' : 'Price Quote';
-
-    // ✅ UPDATED: Only include items table and totals if items exist
     const hasItems = data.items && data.items.length > 0;
+
+    // ✅ Escape HTML in project name to prevent XSS and display issues
+    const escapeHtml = (text) => {
+      if (!text) return '';
+      return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    // ✅ Check if projectName exists and is not empty
+    const hasProjectName = data.projectName && String(data.projectName).trim() !== '';
+    const projectNameHtml = hasProjectName 
+      ? `<h2 class="project-name">${escapeHtml(data.projectName)}</h2>` 
+      : '';
+
+    console.log('=== PDF PROJECT NAME DEBUG ===');
+    console.log('Raw projectName:', data.projectName);
+    console.log('Has projectName:', hasProjectName);
+    console.log('Escaped projectName:', hasProjectName ? escapeHtml(data.projectName) : 'N/A');
+    console.log('==============================');
 
     return `
 <div class="main-content">
-  <h1 class="title">${title}</h1>
-
   <section class="company">
     <div class="row">
       <div class="col-right">
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
-        <p>تصميع – تركيب – تصنيع</p>
+        <p>تصميم – تصنيع – تركيب</p>
         <p>المملكة الأردنية الهاشمية</p>
-        <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+        <p>+تلفون: 96264161060+ | فاكس: +96264162060</p>
       </div>
       <div class="col-left">
         <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
@@ -426,6 +456,10 @@ class PriceQuoteService {
       </div>
     </div>
   </section>
+
+  <h1 class="title">${title}</h1>
+  
+  ${projectNameHtml}
 
   ${this.buildClientInfoSection(data, isArabic)}
   ${hasItems ? this.buildItemsTable(data.items, isArabic) : ''}
@@ -525,10 +559,12 @@ class PriceQuoteService {
     `;
   }
 
+  // ✅ UPDATED: Add projectName field
   async createQuote(quoteData, currentUser, attachmentFile = null) {
     console.log('\n=== CREATE QUOTE DEBUG ===');
     console.log('currentUser.id:', currentUser.id);
     console.log('currentUser.name:', currentUser.name);
+    console.log('quoteData.projectName:', quoteData.projectName);
     
     const quotes = await this.loadQuotes();
     const quoteNumber = await this.generateQuoteNumber();
@@ -544,13 +580,14 @@ class PriceQuoteService {
       clientPhone: quoteData.clientPhone,
       clientAddress: quoteData.clientAddress || null,
       clientCity: quoteData.clientCity || null,
+      projectName: quoteData.projectName || null, // ✅ NEW FIELD
       date: quoteData.date,
       revNumber: quoteData.revNumber || '00',
       validForDays: quoteData.validForDays || null,
       language: quoteData.language || 'arabic',
       includeTax: !!quoteData.includeTax,
       taxRate: quoteData.includeTax ? (quoteData.taxRate || 0) : 0,
-      items: quoteData.items || [], // ✅ Can be empty array
+      items: quoteData.items || [],
       customNotes: quoteData.customNotes || null,
       createdBy: currentUser.id,
       createdByName: createdByName || currentUser.name || 'Unknown User', 
@@ -576,6 +613,7 @@ class PriceQuoteService {
     await this.saveQuotes(quotes);
 
     console.log('Quote created with name:', newQuote.createdByName);
+    console.log('Quote created with projectName:', newQuote.projectName);
     return newQuote;
   }
 
@@ -594,6 +632,7 @@ class PriceQuoteService {
         q.quoteNumber.toLowerCase().includes(searchLower) ||
         q.clientName.toLowerCase().includes(searchLower) ||
         (q.clientPhone && q.clientPhone.toLowerCase().includes(searchLower)) ||
+        (q.projectName && q.projectName.toLowerCase().includes(searchLower)) ||
         (q.createdByName && q.createdByName.toLowerCase().includes(searchLower))
       );
     }
@@ -665,13 +704,14 @@ class PriceQuoteService {
     if (updateData.clientPhone) quote.clientPhone = updateData.clientPhone;
     if (updateData.clientAddress !== undefined) quote.clientAddress = updateData.clientAddress;
     if (updateData.clientCity !== undefined) quote.clientCity = updateData.clientCity;
+    if (updateData.projectName !== undefined) quote.projectName = updateData.projectName; // ✅ NEW FIELD
     if (updateData.date) quote.date = updateData.date;
     if (updateData.revNumber !== undefined) quote.revNumber = updateData.revNumber;
     if (updateData.validForDays !== undefined) quote.validForDays = updateData.validForDays;
     if (updateData.language) quote.language = updateData.language;
     if (updateData.includeTax !== undefined) quote.includeTax = !!updateData.includeTax;
     if (updateData.taxRate !== undefined) quote.taxRate = updateData.taxRate;
-    if (updateData.items !== undefined) quote.items = updateData.items; // ✅ Can be empty array
+    if (updateData.items !== undefined) quote.items = updateData.items;
 
     if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
 
@@ -691,6 +731,7 @@ class PriceQuoteService {
       quote.attachmentPath = attachmentPath;
     }
 
+    console.log('Updating quote with projectName:', quote.projectName);
     const pdfPath = await this.generatePDF(quote, attachmentPath);
     quote.pdfPath = pdfPath;
 

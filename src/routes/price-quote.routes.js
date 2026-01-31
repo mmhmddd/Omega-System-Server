@@ -38,6 +38,7 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       clientPhone,
       clientAddress,
       clientCity,
+      projectName, // ✅ NEW FIELD
       date,
       revNumber,
       validForDays,
@@ -69,9 +70,7 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       }
     }
 
-    // ✅ UPDATED: Make items optional - only validate if provided
     if (parsedItems && Array.isArray(parsedItems) && parsedItems.length > 0) {
-      // Validate each item if items are provided
       for (const item of parsedItems) {
         if (!item.description || item.quantity === undefined || item.unitPrice === undefined) {
           return res.status(400).json({
@@ -81,14 +80,11 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
         }
       }
     } else {
-      // ✅ If no items provided, set to empty array
       parsedItems = [];
     }
 
-    // FIXED: Parse includeTax as boolean properly
     const includeTaxBool = includeTax === 'true' || includeTax === true;
     
-    // FIXED: Only validate tax rate if includeTax is actually true
     if (includeTaxBool === true) {
       const parsedTaxRate = parseFloat(taxRate);
       if (!parsedTaxRate || parsedTaxRate <= 0) {
@@ -99,7 +95,6 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       }
     }
 
-    // Validate language
     if (language && !['arabic', 'english'].includes(language)) {
       return res.status(400).json({
         success: false,
@@ -112,21 +107,21 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       clientPhone,
       clientAddress,
       clientCity,
+      projectName, // ✅ NEW FIELD
       date,
       revNumber,
       validForDays,
       language: language || 'arabic',
       includeTax: includeTaxBool,
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
-      items: parsedItems, // ✅ Can be empty array now
+      items: parsedItems,
       customNotes
     };
 
-    // Pass the full user object from req.user
     const quote = await priceQuoteService.createQuote(
       quoteData,
-      req.user,      // Pass full user object (contains id, name, email, etc.)
-      req.file       // PDF attachment file
+      req.user,
+      req.file
     );
 
     res.status(201).json({
@@ -148,17 +143,13 @@ router.get('/', async (req, res, next) => {
   try {
     const { search, page, limit, createdBy } = req.query;
 
-    // Determine filtering based on role
     let filterCreatedBy = createdBy;
 
     if (req.user.role === 'super_admin') {
-      // Super admin can see all quotes or filter by specific user
       filterCreatedBy = createdBy;
     } else if (req.user.role === 'admin' || req.user.role === 'employee') {
-      // Admin and employee can only see their own quotes
       filterCreatedBy = req.user.id;
     } else {
-      // Other roles (if any) cannot access
       return res.status(403).json({
         success: false,
         message: 'You do not have permission to access price quotes'
@@ -242,7 +233,6 @@ router.get('/:id', async (req, res, next) => {
   try {
     const quote = await priceQuoteService.getQuoteById(req.params.id);
 
-    // Check permissions: super_admin can see all, others only their own
     if (req.user.role !== 'super_admin' && quote.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -268,7 +258,6 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
   try {
     const quote = await priceQuoteService.getQuoteById(req.params.id);
 
-    // Check permissions: super_admin can edit all, others only their own
     if (req.user.role !== 'super_admin' && quote.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -281,6 +270,7 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       clientPhone,
       clientAddress,
       clientCity,
+      projectName, // ✅ NEW FIELD
       date,
       revNumber,
       validForDays,
@@ -291,7 +281,6 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       customNotes
     } = req.body;
 
-    // Parse items if it's a string (from form-data)
     let parsedItems = items;
     if (items && typeof items === 'string') {
       try {
@@ -304,7 +293,6 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       }
     }
 
-    // ✅ UPDATED: Validate items only if provided
     if (parsedItems) {
       if (!Array.isArray(parsedItems)) {
         return res.status(400).json({
@@ -313,7 +301,6 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
         });
       }
 
-      // Only validate item content if array is not empty
       if (parsedItems.length > 0) {
         for (const item of parsedItems) {
           if (!item.description || item.quantity === undefined || item.unitPrice === undefined) {
@@ -326,7 +313,6 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       }
     }
 
-    // FIXED: Parse includeTax as boolean properly
     const includeTaxBool = includeTax === 'true' || includeTax === true;
 
     const updateData = {
@@ -334,6 +320,7 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       clientPhone,
       clientAddress,
       clientCity,
+      projectName, // ✅ NEW FIELD
       date,
       revNumber,
       validForDays,
@@ -365,12 +352,9 @@ router.delete('/:id', async (req, res, next) => {
   try {
     const quote = await priceQuoteService.getQuoteById(req.params.id);
 
-    // Check permissions
     if (req.user.role === 'super_admin') {
-      // Super admin can delete any quote
       await priceQuoteService.deleteQuote(req.params.id);
     } else if (req.user.role === 'admin' || req.user.role === 'employee') {
-      // Admin/Employee can only delete their own quotes
       if (quote.createdBy !== req.user.id) {
         return res.status(403).json({
           success: false,
@@ -403,7 +387,6 @@ router.get('/:id/pdf', async (req, res, next) => {
   try {
     const quote = await priceQuoteService.getQuoteById(req.params.id);
 
-    // Check permissions: super_admin can download all, others only their own
     if (req.user.role !== 'super_admin' && quote.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -411,10 +394,8 @@ router.get('/:id/pdf', async (req, res, next) => {
       });
     }
 
-    // Extract filename from path
     const filename = quote.pdfPath.split('/').pop();
 
-    // Send PDF file
     res.download(quote.pdfPath, filename, (err) => {
       if (err) {
         next(err);

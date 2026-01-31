@@ -1,4 +1,4 @@
-// src/services/cutting.service.js (ENHANCED VERSION)
+// src/services/cutting.service.js (COMPLETE READY-TO-PASTE VERSION)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -7,7 +7,7 @@ const atomicWrite = require('../utils/atomic-write.util');
 const CUTTING_JOBS_FILE = path.join(__dirname, '../../data/cutting-jobs/index.json');
 const CUTTING_JOBS_DIR = path.join(__dirname, '../../data/cutting-jobs');
 const COUNTERS_FILE = path.join(__dirname, '../../data/counters.json');
-const USERS_FILE = path.join(__dirname, '../../data/users/users.json'); // FIXED: Corrected path
+const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
 // Status folders
 const STATUS_FOLDERS = {
@@ -264,13 +264,148 @@ class CuttingService {
   }
 
   /**
-   * Create update history entry
+   * Create detailed update history entry
    */
   createUpdateHistoryEntry(updatedBy, changes) {
     return {
       updatedBy: updatedBy,
       timestamp: new Date().toISOString(),
       changes: changes
+    };
+  }
+
+  /**
+   * Build detailed change description for history - ENHANCED VERSION
+   */
+  buildChangeDescription(modifications) {
+    const descriptions = [];
+
+    modifications.forEach(mod => {
+      switch (mod.field) {
+        case 'currentlyCut':
+          const progressPercent = mod.progressPercentage || 0;
+          descriptions.push({
+            field: 'currentlyCut',
+            description: `Updated progress: cut ${mod.difference > 0 ? '+' : ''}${mod.difference} pieces (from ${mod.oldValue} to ${mod.newValue})`,
+            descriptionAr: `تحديث التقدم: تم قص ${mod.difference > 0 ? '+' : ''}${mod.difference} قطعة (من ${mod.oldValue} إلى ${mod.newValue})`,
+            oldValue: mod.oldValue,
+            newValue: mod.newValue,
+            difference: mod.difference,
+            progress: mod.progress,
+            progressPercentage: progressPercent,
+            notes: mod.notes || null
+          });
+          break;
+
+        case 'fileStatus':
+          descriptions.push({
+            field: 'fileStatus',
+            description: `Changed status from "${mod.oldValue}" to "${mod.newValue}"`,
+            descriptionAr: `تم تغيير الحالة من "${mod.oldValue}" إلى "${mod.newValue}"`,
+            oldValue: mod.oldValue,
+            newValue: mod.newValue,
+            reason: mod.reason || 'Manual update',
+            notes: mod.notes || null
+          });
+          break;
+
+        case 'quantity':
+          descriptions.push({
+            field: 'quantity',
+            description: `Updated total quantity from ${mod.oldValue} to ${mod.newValue}`,
+            descriptionAr: `تم تحديث الكمية الإجمالية من ${mod.oldValue} إلى ${mod.newValue}`,
+            oldValue: mod.oldValue,
+            newValue: mod.newValue
+          });
+          break;
+
+        case 'projectName':
+          descriptions.push({
+            field: 'projectName',
+            description: `Changed project name from "${mod.oldValue}" to "${mod.newValue}"`,
+            descriptionAr: `تم تغيير اسم المشروع من "${mod.oldValue}" إلى "${mod.newValue}"`,
+            oldValue: mod.oldValue,
+            newValue: mod.newValue
+          });
+          break;
+
+        case 'materialType':
+          descriptions.push({
+            field: 'materialType',
+            description: `Changed material from "${mod.oldValue}" to "${mod.newValue}"`,
+            descriptionAr: `تم تغيير المادة من "${mod.oldValue}" إلى "${mod.newValue}"`,
+            oldValue: mod.oldValue,
+            newValue: mod.newValue
+          });
+          break;
+
+        case 'thickness':
+          descriptions.push({
+            field: 'thickness',
+            description: `Updated thickness from ${mod.oldValue}mm to ${mod.newValue}mm`,
+            descriptionAr: `تم تحديث السماكة من ${mod.oldValue} مم إلى ${mod.newValue} مم`,
+            oldValue: mod.oldValue,
+            newValue: mod.newValue
+          });
+          break;
+
+        case 'file':
+          descriptions.push({
+            field: 'file',
+            description: `Replaced file "${mod.oldValue || 'none'}" with "${mod.newValue}"`,
+            descriptionAr: `تم استبدال الملف "${mod.oldValue || 'لا يوجد'}" بـ "${mod.newValue}"`,
+            oldValue: mod.oldValue,
+            newValue: mod.newValue
+          });
+          break;
+
+        default:
+          descriptions.push({
+            field: mod.field,
+            description: `Updated ${mod.field} from "${mod.oldValue}" to "${mod.newValue}"`,
+            descriptionAr: `تم تحديث ${mod.field} من "${mod.oldValue}" إلى "${mod.newValue}"`,
+            oldValue: mod.oldValue,
+            newValue: mod.newValue
+          });
+      }
+    });
+
+    return descriptions;
+  }
+
+  /**
+   * Generate a human-readable summary of updates - ENHANCED VERSION
+   */
+  generateUpdateSummary(modifications, actionType, notes) {
+    const summaryEn = [];
+    const summaryAr = [];
+
+    modifications.forEach(mod => {
+      switch (mod.field) {
+        case 'currentlyCut':
+          summaryEn.push(`Cut ${mod.difference > 0 ? '+' : ''}${mod.difference} pieces (total: ${mod.newValue}/${mod.quantity || '?'})`);
+          summaryAr.push(`تم قص ${mod.difference > 0 ? '+' : ''}${mod.difference} قطعة (الإجمالي: ${mod.newValue}/${mod.quantity || '؟'})`);
+          break;
+        case 'fileStatus':
+          summaryEn.push(`Status: ${mod.oldValue} → ${mod.newValue}`);
+          summaryAr.push(`الحالة: ${mod.oldValue} ← ${mod.newValue}`);
+          break;
+        case 'quantity':
+          summaryEn.push(`Total quantity updated to ${mod.newValue}`);
+          summaryAr.push(`تم تحديث الكمية الإجمالية إلى ${mod.newValue}`);
+          break;
+      }
+    });
+
+    // Add notes indicator to summary if provided
+    if (notes) {
+      summaryEn.push(`Note added`);
+      summaryAr.push(`تمت إضافة ملاحظة`);
+    }
+
+    return {
+      en: summaryEn.join(', ') || 'Job updated',
+      ar: summaryAr.join('، ') || 'تم تحديث المهمة'
     };
   }
 
@@ -308,7 +443,7 @@ class CuttingService {
           new Date()
         );
 
-        const statusFolder = STATUS_FOLDERS['معلق']; // Default status is pending
+        const statusFolder = STATUS_FOLDERS['معلق'];
         const filePath = path.join(CUTTING_JOBS_DIR, statusFolder, fileName);
 
         await fs.writeFile(filePath, file.buffer);
@@ -330,11 +465,21 @@ class CuttingService {
         filePath: savedFileName ? `data/cutting-jobs/${STATUS_FOLDERS['معلق']}/${savedFileName}` : null,
         uploadedBy: uploadedBy,
         cutBy: [],
-        lastUpdatedBy: uploadedBy, // Track last person who updated
-        updateHistory: [ // NEW: Track all updates
+        lastUpdatedBy: uploadedBy,
+        updateHistory: [
           this.createUpdateHistoryEntry(uploadedBy, {
             action: 'created',
-            description: 'Job created'
+            actionType: 'job_created',
+            description: 'Job created',
+            descriptionAr: 'تم إنشاء مهمة القص',
+            details: {
+              projectName: jobData.projectName,
+              pieceName: jobData.pieceName || '',
+              quantity: parseInt(jobData.quantity),
+              materialType: jobData.materialType,
+              thickness: parseFloat(jobData.thickness),
+              fileName: savedFileName
+            }
           })
         ],
         dateFrom: null,
@@ -345,7 +490,6 @@ class CuttingService {
       jobs.push(newJob);
       await this.saveCuttingJobs(jobs);
 
-      // Enrich with user info before returning
       return await this.enrichJobWithUserInfo(newJob);
     } catch (error) {
       console.error('Error creating cutting job:', error);
@@ -435,7 +579,6 @@ class CuttingService {
         throw new Error('Cutting job not found');
       }
 
-      // Enrich with user info before returning
       return await this.enrichJobWithUserInfo(job);
     } catch (error) {
       console.error('Error getting cutting job:', error);
@@ -444,7 +587,7 @@ class CuttingService {
   }
 
   /**
-   * Update cutting job
+   * Update cutting job - ✅ ENHANCED VERSION WITH DETAILED NOTES TRACKING
    */
   async updateCuttingJob(id, updateData, file, updatedBy) {
     try {
@@ -464,11 +607,13 @@ class CuttingService {
       }
 
       // Track changes for history
-      const changes = { action: 'updated', modifications: [] };
+      const modifications = [];
+      let actionType = 'job_updated';
+      let updateNotes = updateData.notes; // ✅ Capture notes from update
 
-      // Update basic fields
+      // Update basic fields with tracking
       if (updateData.projectName && updateData.projectName !== job.projectName) {
-        changes.modifications.push({
+        modifications.push({
           field: 'projectName',
           oldValue: job.projectName,
           newValue: updateData.projectName
@@ -477,7 +622,7 @@ class CuttingService {
       }
 
       if (updateData.pieceName !== undefined && updateData.pieceName !== job.pieceName) {
-        changes.modifications.push({
+        modifications.push({
           field: 'pieceName',
           oldValue: job.pieceName,
           newValue: updateData.pieceName
@@ -486,7 +631,7 @@ class CuttingService {
       }
 
       if (updateData.quantity && parseInt(updateData.quantity) !== job.quantity) {
-        changes.modifications.push({
+        modifications.push({
           field: 'quantity',
           oldValue: job.quantity,
           newValue: parseInt(updateData.quantity)
@@ -495,7 +640,7 @@ class CuttingService {
       }
 
       if (updateData.materialType && updateData.materialType !== job.materialType) {
-        changes.modifications.push({
+        modifications.push({
           field: 'materialType',
           oldValue: job.materialType,
           newValue: updateData.materialType
@@ -504,7 +649,7 @@ class CuttingService {
       }
 
       if (updateData.thickness && parseFloat(updateData.thickness) !== job.thickness) {
-        changes.modifications.push({
+        modifications.push({
           field: 'thickness',
           oldValue: job.thickness,
           newValue: parseFloat(updateData.thickness)
@@ -512,17 +657,8 @@ class CuttingService {
         job.thickness = parseFloat(updateData.thickness);
       }
 
-      if (updateData.notes !== undefined && updateData.notes !== job.notes) {
-        changes.modifications.push({
-          field: 'notes',
-          oldValue: job.notes,
-          newValue: updateData.notes
-        });
-        job.notes = updateData.notes;
-      }
-
       if (updateData.dateFrom !== undefined && updateData.dateFrom !== job.dateFrom) {
-        changes.modifications.push({
+        modifications.push({
           field: 'dateFrom',
           oldValue: job.dateFrom,
           newValue: updateData.dateFrom
@@ -530,7 +666,7 @@ class CuttingService {
         job.dateFrom = updateData.dateFrom;
       }
 
-      // Handle currentlyCut update with improved validation
+      // ✅ Handle currentlyCut update with detailed tracking and notes
       if (updateData.currentlyCut !== undefined) {
         const newCutAmount = parseInt(updateData.currentlyCut);
         
@@ -548,13 +684,23 @@ class CuttingService {
         }
         
         if (newCutAmount !== job.currentlyCut) {
-          changes.modifications.push({
+          const difference = newCutAmount - job.currentlyCut;
+          const progressPercentage = Math.round((newCutAmount / job.quantity) * 100);
+          
+          // ✅ ATTACH NOTES TO THE PROGRESS MODIFICATION
+          modifications.push({
             field: 'currentlyCut',
             oldValue: job.currentlyCut,
             newValue: newCutAmount,
-            progress: `${newCutAmount}/${job.quantity} (${Math.round((newCutAmount/job.quantity)*100)}%)`
+            difference: difference,
+            progress: `${newCutAmount}/${job.quantity} (${progressPercentage}%)`,
+            progressPercentage: progressPercentage,
+            quantity: job.quantity,
+            notes: updateNotes || null // ✅ Include notes here
           });
+          
           job.currentlyCut = newCutAmount;
+          actionType = 'progress_updated';
           
           // Auto-update status based on progress if status is not explicitly provided
           if (!updateData.fileStatus) {
@@ -568,26 +714,31 @@ class CuttingService {
             }
             
             if (autoStatus && autoStatus !== job.fileStatus) {
-              changes.modifications.push({
+              modifications.push({
                 field: 'fileStatus',
                 oldValue: job.fileStatus,
                 newValue: autoStatus,
-                reason: 'Auto-updated based on progress'
+                reason: 'Auto-updated based on progress',
+                notes: updateNotes || null // ✅ Include notes with auto status change
               });
               job.fileStatus = autoStatus;
+              actionType = 'status_changed';
             }
           }
         }
       }
 
-      // Handle file status change (override auto-status if explicitly provided)
+      // ✅ Handle file status change with tracking
       if (updateData.fileStatus && updateData.fileStatus !== oldStatus) {
-        changes.modifications.push({
+        modifications.push({
           field: 'fileStatus',
           oldValue: oldStatus,
-          newValue: updateData.fileStatus
+          newValue: updateData.fileStatus,
+          reason: 'Manual status update',
+          notes: updateNotes || null // ✅ Include notes with manual status change
         });
         job.fileStatus = updateData.fileStatus;
+        actionType = 'status_changed';
 
         // Move file to new status folder if file exists
         if (job.fileName) {
@@ -599,14 +750,14 @@ class CuttingService {
       // Handle cutBy field - add user if not already in array
       if (updatedBy && !job.cutBy.includes(updatedBy)) {
         job.cutBy.push(updatedBy);
-        changes.modifications.push({
+        modifications.push({
           field: 'cutBy',
           action: 'added_user',
           userId: updatedBy
         });
       }
 
-      // Handle new file upload
+      // Handle new file upload with tracking
       if (file) {
         const allowedExtensions = ['.dwg', '.dxf', '.dwt', '.nc', '.txt'];
         const ext = path.extname(file.originalname).toLowerCase();
@@ -635,7 +786,7 @@ class CuttingService {
 
         await fs.writeFile(filePath, file.buffer);
 
-        changes.modifications.push({
+        modifications.push({
           field: 'file',
           oldValue: job.fileName,
           newValue: fileName
@@ -643,21 +794,32 @@ class CuttingService {
 
         job.fileName = fileName;
         job.filePath = `data/cutting-jobs/${statusFolder}/${fileName}`;
+        actionType = 'file_updated';
       }
 
       // Update tracking fields
       job.lastUpdatedBy = updatedBy;
       job.updatedAt = new Date().toISOString();
 
-      // Add to update history only if there were actual changes
-      if (changes.modifications.length > 0) {
-        job.updateHistory.push(this.createUpdateHistoryEntry(updatedBy, changes));
+      // ✅ Add to update history with detailed information
+      if (modifications.length > 0) {
+        const detailedDescriptions = this.buildChangeDescription(modifications);
+        
+        job.updateHistory.push(
+          this.createUpdateHistoryEntry(updatedBy, {
+            action: 'updated',
+            actionType: actionType,
+            modifications: modifications,
+            detailedDescriptions: detailedDescriptions,
+            summary: this.generateUpdateSummary(modifications, actionType, updateNotes),
+            notes: updateNotes || null // ✅ Store notes at top level too
+          })
+        );
       }
 
       jobs[jobIndex] = job;
       await this.saveCuttingJobs(jobs);
 
-      // Enrich with user info before returning
       return await this.enrichJobWithUserInfo(job);
     } catch (error) {
       console.error('Error updating cutting job:', error);
