@@ -13,10 +13,10 @@ const { restrictTo } = require('../middleware/role.middleware');
 router.post('/', protect, restrictTo('admin', 'super_admin'), async (req, res) => {
 router.use(checkRouteAccess('items'));
   try {
-    const { name, description } = req.body;
+    const { name, description, unit } = req.body;
 
     const item = await itemsService.createItem(
-      { name, description },
+      { name, description, unit },
       req.user.id
     );
 
@@ -114,11 +114,11 @@ router.get('/:id', protect, async (req, res) => {
  */
 router.put('/:id', protect, restrictTo('admin', 'super_admin'), async (req, res) => {
   try {
-    const { name, description } = req.body;
+    const { name, description, unit } = req.body;
 
     const item = await itemsService.updateItem(
       req.params.id,
-      { name, description },
+      { name, description, unit },
       req.user.id
     );
 

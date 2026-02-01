@@ -76,6 +76,7 @@ class ItemsService {
       id: itemId,
       name: itemData.name.trim(),
       description: itemData.description ? itemData.description.trim() : null,
+      unit: itemData.unit ? itemData.unit.trim() : null,
       createdBy,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -95,7 +96,8 @@ class ItemsService {
       const searchLower = filters.search.toLowerCase();
       items = items.filter(item =>
         item.name.toLowerCase().includes(searchLower) ||
-        (item.description && item.description.toLowerCase().includes(searchLower))
+        (item.description && item.description.toLowerCase().includes(searchLower)) ||
+        (item.unit && item.unit.toLowerCase().includes(searchLower))
       );
     }
 
@@ -165,6 +167,10 @@ class ItemsService {
       items[itemIndex].description = updateData.description ? updateData.description.trim() : null;
     }
 
+    if (updateData.unit !== undefined) {
+      items[itemIndex].unit = updateData.unit ? updateData.unit.trim() : null;
+    }
+
     items[itemIndex].updatedBy = updatedBy;
     items[itemIndex].updatedAt = new Date().toISOString();
 
@@ -192,7 +198,8 @@ class ItemsService {
     const items = await this.loadItems();
     return items.map(item => ({
       id: item.id,
-      name: item.name
+      name: item.name,
+      unit: item.unit || null
     }));
   }
 }
