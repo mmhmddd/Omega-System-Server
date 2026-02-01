@@ -1,4 +1,4 @@
-// src/services/user.service.js (UPDATED with routeAccess)
+// src/services/user.service.js (FIXED with correct route keys)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -8,19 +8,107 @@ const emailService = require('../utils/email.util');
 
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
-// Available routes that can be assigned to employees
+// ✅ FIXED: Available routes matching app.routes.ts exactly
 const AVAILABLE_ROUTES = [
-  { key: 'priceQuotes', label: 'Price Quotes', path: '/api/price-quotes' },
-  { key: 'receipts', label: 'Receipts', path: '/api/receipts' },
-  { key: 'cutting', label: 'Laser Cutting', path: '/api/cutting' },
-  { key: 'rfqs', label: 'RFQs', path: '/api/rfqs' },
-  { key: 'purchases', label: 'Purchase Orders', path: '/api/purchases' },
-  { key: 'materials', label: 'Material Requests', path: '/api/materials' },
-  { key: 'suppliers', label: 'Suppliers', path: '/api/suppliers' },
-  { key: 'items', label: 'Items', path: '/api/items' },
-  { key: 'userForms', label: 'User Forms', path: '/api/user-forms' },
-  { key: 'secretariatUserManagement', label: 'Secretariat User Management', path: '/api/secretariat-user' }
-  
+  // إدارة النظام
+  { 
+    key: 'dashboard', 
+    label: 'لوحة التحكم', 
+    path: '/dashboard',
+    category: 'management'
+  },
+  { 
+    key: 'users', 
+    label: 'إدارة المستخدمين', 
+    path: '/users',
+    category: 'management'
+  },
+  { 
+    key: 'items-control', 
+    label: 'إدارة الأصناف', 
+    path: '/items-control',
+    category: 'management'
+  },
+  { 
+    key: 'files-control', 
+    label: 'إدارة الملفات', 
+    path: '/files-control',
+    category: 'management'
+  },
+
+  // المشتريات والموردين
+  { 
+    key: 'suppliers', 
+    label: 'إدارة الموردين', 
+    path: '/suppliers',
+    category: 'procurement'
+  },
+  { 
+    key: 'rfqs', 
+    label: 'طلبات عروض الأسعار', 
+    path: '/rfqs',
+    category: 'procurement'
+  },
+  { 
+    key: 'price-quotes', 
+    label: 'عروض الأسعار', 
+    path: '/price-quotes',
+    category: 'procurement'
+  },
+  { 
+    key: 'purchases', 
+    label: 'أوامر الشراء', 
+    path: '/purchases',
+    category: 'procurement'
+  },
+
+  // المخزون والمواد
+  { 
+    key: 'material-requests', 
+    label: 'طلبات المواد', 
+    path: '/material-requests',
+    category: 'inventory'
+  },
+  { 
+    key: 'receipts', 
+    label: 'إيصالات الاستلام', 
+    path: '/receipts',
+    category: 'inventory'
+  },
+
+  // العمليات التشغيلية
+  { 
+    key: 'Proforma-invoice', 
+    label: 'فاتورة مُقدمة', 
+    path: '/Proforma-invoice',
+    category: 'operations'
+  },
+  { 
+    key: 'cutting', 
+    label: 'إدارة أعمال القص', 
+    path: '/cutting',
+    category: 'operations'
+  },
+  { 
+    key: 'secretariat-user', 
+    label: 'نماذج الموظف', 
+    path: '/secretariat-user',
+    category: 'operations'
+  },
+  { 
+    key: 'secretariat', 
+    label: 'إدارة السكرتارية', 
+    path: '/secretariat',
+    category: 'operations'
+  },
+
+  // التقارير والتحليلات
+  { 
+    key: 'analysis', 
+    label: 'التحليلات والإحصائيات', 
+    path: '/analysis',
+    category: 'reports'
+  }
 ];
 
 class UserService {
@@ -49,7 +137,7 @@ class UserService {
             systemAccess: {
               laserCuttingManagement: true,
             },
-            routeAccess: [], // Super admins don't need routeAccess
+            routeAccess: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
           }
@@ -192,7 +280,7 @@ class UserService {
       role: userData.role,
       active: true,
       systemAccess,
-      routeAccess, // NEW FIELD
+      routeAccess,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -298,7 +386,6 @@ class UserService {
         }
         user.routeAccess = updateData.routeAccess;
       } else {
-        // Non-employees don't use routeAccess
         user.routeAccess = [];
       }
     }
@@ -464,7 +551,7 @@ class UserService {
   }
 
   /**
-   * NEW: Update route access for employee users
+   * ✅ FIXED: Update route access for employee users
    */
   async updateRouteAccess(id, routeAccessArray) {
     const users = await this.loadUsers();
@@ -480,14 +567,21 @@ class UserService {
       throw new Error('Route access can only be assigned to employees');
     }
 
-    // Validate routeAccess
+    // ✅ Validate that routeAccessArray is an array
+    if (!Array.isArray(routeAccessArray)) {
+      throw new Error('Route access must be an array');
+    }
+
+    // ✅ Validate routeAccess keys
     const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
     const invalidRoutes = routeAccessArray.filter(r => !validRouteKeys.includes(r));
+    
     if (invalidRoutes.length > 0) {
       throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
     }
 
-    user.routeAccess = routeAccessArray;
+    // ✅ Remove duplicates
+    user.routeAccess = [...new Set(routeAccessArray)];
     user.updatedAt = new Date().toISOString();
 
     users[userIndex] = user;
@@ -498,7 +592,7 @@ class UserService {
   }
 
   /**
-   * NEW: Get available routes
+   * Get available routes
    */
   getAvailableRoutes() {
     return AVAILABLE_ROUTES;

@@ -12,7 +12,6 @@ const PORT = process.env.PORT || 4000;
 const routes = require('./src/routes');
 const errorMiddleware = require('./src/middleware/error.middleware');
 
-
 // Create required directories
 const directories = [
   'data',
@@ -30,6 +29,12 @@ const directories = [
   'logs',
   'data/quotations',
   'data/quotations/pdfs',
+  'data/quotations/AR-Uploads',
+  'data/quotations/EN-Uploads',
+  'data/proforma-invoices',
+  'data/proforma-invoices/pdfs',
+  'data/proforma-invoices/AR-Uploads',
+  'data/proforma-invoices/EN-Uploads',
 ];
 
 console.log('\n🚀 Initializing Laser Backend System...\n');
@@ -68,6 +73,7 @@ const dataFiles = [
   { path: 'data/employees.json', content: [] },
   { path: 'data/files/index.json', content: [] },
   { path: 'data/quotations/index.json', content: [] },
+  { path: 'data/proforma-invoices/index.json', content: [] },
   { path: 'data/receipts/index.json', content: [] },
   { path: 'data/rfqs/index.json', content: [] },
   { path: 'data/materials-requests/index.json', content: [] },

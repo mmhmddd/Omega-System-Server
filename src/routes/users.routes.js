@@ -304,29 +304,97 @@ router.patch('/:id/system-access', async (req, res, next) => {
  * @route   PATCH /api/users/:id/route-access
  * @desc    Update employee route access permissions
  * @access  Super Admin only
- * @body    { routeAccess: ['priceQuotes', 'purchases', 'rfqs'] }
+ * @body    { routeAccess: ['price-quotes', 'purchases', 'rfqs'] }
  */
 router.patch('/:id/route-access', async (req, res, next) => {
   try {
     const { routeAccess } = req.body;
 
-    // Validate that routeAccess is provided and is an array
-    if (!routeAccess || !Array.isArray(routeAccess)) {
+    console.log('==========================================');
+    console.log('🔍 ROUTE ACCESS UPDATE REQUEST RECEIVED');
+    console.log('🔍 Timestamp:', new Date().toISOString());
+    console.log('🔍 User ID:', req.params.id);
+    console.log('🔍 Request body:', JSON.stringify(req.body, null, 2));
+    console.log('🔍 Route access:', routeAccess);
+    console.log('🔍 Route access type:', typeof routeAccess);
+    console.log('🔍 Is array?', Array.isArray(routeAccess));
+    
+    if (Array.isArray(routeAccess)) {
+      console.log('🔍 Array length:', routeAccess.length);
+      console.log('🔍 Array items:');
+      routeAccess.forEach((item, index) => {
+        console.log(`   [${index}]: "${item}" (type: ${typeof item})`);
+      });
+    }
+    console.log('==========================================');
+
+    // Validate that routeAccess is provided
+    if (routeAccess === undefined || routeAccess === null) {
+      console.error('❌ routeAccess is missing from request body');
+      return res.status(400).json({
+        success: false,
+        message: 'Route access data is required'
+      });
+    }
+
+    // Validate that routeAccess is an array
+    if (!Array.isArray(routeAccess)) {
+      console.error('❌ routeAccess is not an array. Type:', typeof routeAccess);
+      console.error('❌ Value:', routeAccess);
       return res.status(400).json({
         success: false,
         message: 'Route access must be an array of route keys'
       });
     }
 
+    // Validate array items are strings
+    const nonStringItems = routeAccess.filter(item => typeof item !== 'string');
+    if (nonStringItems.length > 0) {
+      console.error('❌ Route access contains non-string items:', nonStringItems);
+      return res.status(400).json({
+        success: false,
+        message: 'All route access items must be strings'
+      });
+    }
+
+    console.log('✅ Request validation passed');
+    console.log('✅ Calling userService.updateRouteAccess...');
+
+    // Call the service method
     const user = await userService.updateRouteAccess(req.params.id, routeAccess);
+    
+    console.log('==========================================');
+    console.log('✅ SUCCESS - Route access updated');
+    console.log('✅ User ID:', user.id);
+    console.log('✅ User name:', user.name);
+    console.log('✅ Updated routeAccess:', user.routeAccess);
+    console.log('==========================================');
     
     res.status(200).json({
       success: true,
       message: 'Route access updated successfully',
       data: user
     });
+
   } catch (error) {
-    next(error);
+    console.log('==========================================');
+    console.error('❌ ERROR in route-access endpoint');
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error message:', error.message);
+    console.error('❌ Error stack:');
+    console.error(error.stack);
+    console.log('==========================================');
+    
+    // Send detailed error response
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      } : undefined
+    });
   }
 });
 
