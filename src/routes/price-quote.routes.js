@@ -1,4 +1,4 @@
-// src/routes/price-quote.routes.js
+// src/routes/price-quote.routes.js - UPDATED WITH includeStaticFile SUPPORT
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -30,6 +30,7 @@ router.use(checkRouteAccess('priceQuotes'));
  * @route   POST /api/price-quotes
  * @desc    Create a new price quote
  * @access  Private (Admin, Employee with permission, Super Admin)
+ * ✅ UPDATED: Now accepts includeStaticFile parameter
  */
 router.post('/', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -38,7 +39,7 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       clientPhone,
       clientAddress,
       clientCity,
-      projectName, // ✅ NEW FIELD
+      projectName,
       date,
       revNumber,
       validForDays,
@@ -46,7 +47,8 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       includeTax,
       taxRate,
       items,
-      customNotes
+      customNotes,
+      includeStaticFile // ✅ NEW FIELD
     } = req.body;
 
     // Validate required fields
@@ -107,7 +109,7 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       clientPhone,
       clientAddress,
       clientCity,
-      projectName, // ✅ NEW FIELD
+      projectName,
       date,
       revNumber,
       validForDays,
@@ -115,7 +117,8 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       includeTax: includeTaxBool,
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
-      customNotes
+      customNotes,
+      includeStaticFile: includeStaticFile === true || includeStaticFile === 'true' // ✅ NEW FIELD
     };
 
     const quote = await priceQuoteService.createQuote(
@@ -253,6 +256,7 @@ router.get('/:id', async (req, res, next) => {
  * @route   PUT /api/price-quotes/:id
  * @desc    Update price quote
  * @access  Private (Owner or Super Admin)
+ * ✅ UPDATED: Now accepts includeStaticFile parameter
  */
 router.put('/:id', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -270,7 +274,7 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       clientPhone,
       clientAddress,
       clientCity,
-      projectName, // ✅ NEW FIELD
+      projectName,
       date,
       revNumber,
       validForDays,
@@ -278,7 +282,8 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       includeTax,
       taxRate,
       items,
-      customNotes
+      customNotes,
+      includeStaticFile // ✅ NEW FIELD
     } = req.body;
 
     let parsedItems = items;
@@ -320,7 +325,7 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       clientPhone,
       clientAddress,
       clientCity,
-      projectName, // ✅ NEW FIELD
+      projectName,
       date,
       revNumber,
       validForDays,
@@ -328,7 +333,10 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       includeTax: includeTaxBool,
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
-      customNotes
+      customNotes,
+      includeStaticFile: includeStaticFile !== undefined 
+        ? (includeStaticFile === true || includeStaticFile === 'true')
+        : undefined // ✅ NEW FIELD
     };
 
     const updatedQuote = await priceQuoteService.updateQuote(req.params.id, updateData, req.file);

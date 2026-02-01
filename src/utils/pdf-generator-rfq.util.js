@@ -12,12 +12,16 @@ class RFQPDFGenerator {
     return arabicPattern.test(text);
   }
 
-  // ✅ FIXED: Improved language detection
+  // ✅ FIXED: Language detection based on requester field (مقدم الطلب)
   detectLanguage(rfqData) {
+    // Priority 1: Check requester field first (مقدم الطلب)
+    if (rfqData.requester && rfqData.requester.trim() !== '') {
+      return this.isArabic(rfqData.requester) ? 'ar' : 'en';
+    }
+
+    // Priority 2: If no requester, check other content fields
     const fieldsToCheck = [];
     
-    // Add content fields (NOT date/time)
-    if (rfqData.requester) fieldsToCheck.push(rfqData.requester);
     if (rfqData.production) fieldsToCheck.push(rfqData.production);
     if (rfqData.supplier) fieldsToCheck.push(rfqData.supplier);
     if (rfqData.supplierAddress) fieldsToCheck.push(rfqData.supplierAddress);
@@ -31,22 +35,21 @@ class RFQPDFGenerator {
       });
     }
 
-    // If no content fields, return default language
+    // If no content fields at all, default to Arabic
     if (fieldsToCheck.length === 0) {
-      return 'ar'; // Default to Arabic
+      return 'ar';
     }
 
+    // Count Arabic fields
     let arabicCount = 0;
-    let totalFields = fieldsToCheck.length;
-
     fieldsToCheck.forEach(field => {
       if (this.isArabic(field)) {
         arabicCount++;
       }
     });
 
-    // Return language based on majority of content
-    return arabicCount > (totalFields / 2) ? 'ar' : 'en';
+    // Return language based on majority
+    return arabicCount > (fieldsToCheck.length / 2) ? 'ar' : 'en';
   }
 
   // ✅ Department translation mapping

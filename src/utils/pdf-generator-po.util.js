@@ -11,14 +11,18 @@ class POPDFGenerator {
     return arabicPattern.test(text);
   }
 
-  // ✅ UPDATED: Detect language based on CONTENT ONLY (exclude date)
+  // ✅ UPDATED: Language detection based on receiver field (المستلم)
   detectLanguage(poData) {
+    // Priority 1: Check receiver field first (المستلم)
+    if (poData.receiver && poData.receiver.trim() !== '') {
+      return this.isArabic(poData.receiver) ? 'ar' : 'en';
+    }
+
+    // Priority 2: If no receiver, check other content fields
     const fieldsToCheck = [];
     
-    // Add content fields (NOT date)
     if (poData.supplier) fieldsToCheck.push(poData.supplier);
     if (poData.supplierAddress) fieldsToCheck.push(poData.supplierAddress);
-    if (poData.receiver) fieldsToCheck.push(poData.receiver);
     if (poData.receiverCity) fieldsToCheck.push(poData.receiverCity);
     if (poData.receiverAddress) fieldsToCheck.push(poData.receiverAddress);
     if (poData.tableHeaderText) fieldsToCheck.push(poData.tableHeaderText);
@@ -31,22 +35,40 @@ class POPDFGenerator {
       });
     }
 
-    // If no content fields, return default language
+    // If no content fields at all, default to Arabic
     if (fieldsToCheck.length === 0) {
-      return 'ar'; // Default to Arabic
+      return 'ar';
     }
 
     let arabicCount = 0;
-    let totalFields = fieldsToCheck.length;
-
     fieldsToCheck.forEach(field => {
       if (this.isArabic(field)) {
         arabicCount++;
       }
     });
 
-    // Return language based on majority of content
-    return arabicCount > (totalFields / 2) ? 'ar' : 'en';
+    // Return language based on majority
+    return arabicCount > (fieldsToCheck.length / 2) ? 'ar' : 'en';
+  }
+
+  // ✅ Supplier translation mapping
+  getSupplierTranslation(supplierName, targetLanguage) {
+    if (!supplierName) return '';
+
+    const supplierMap = {
+      // Add your supplier mappings here
+      // Example:
+      // 'شركة الأمل': { ar: 'شركة الأمل', en: 'Al Amal Company' },
+      // 'Al Amal Company': { ar: 'شركة الأمل', en: 'Al Amal Company' },
+    };
+
+    // If supplier is in the map, return translated version
+    if (supplierMap[supplierName]) {
+      return supplierMap[supplierName][targetLanguage];
+    }
+
+    // If not in map, return as-is
+    return supplierName;
   }
 
   getLabels(lang) {
@@ -223,12 +245,17 @@ class POPDFGenerator {
   }
 
   generateHTML(po) {
-    // ✅ UPDATED: Detect language based on content only
+    // ✅ UPDATED: Detect language based on receiver field
     const language = this.detectLanguage(po);
     const labels = this.getLabels(language);
     const isRTL = language === 'ar';
     const formattedDate = po.date || new Date().toISOString().split('T')[0];
     const totals = this.calculateTotals(po.items, po.taxRate || 0);
+
+    // Translate supplier based on detected language
+    const translatedSupplier = po.supplier
+      ? this.getSupplierTranslation(po.supplier, language)
+      : '';
 
     // ✅ Check what data exists
     const hasItems = this.hasItemsData(po.items);
@@ -266,16 +293,16 @@ class POPDFGenerator {
       `}).join('');
     }
 
-    // ✅ Build supplier info fields conditionally
+    // ✅ Build supplier info fields conditionally with translation
     let supplierInfoFields = '';
     if (hasSupplierInfo) {
       const fields = [];
       
-      if (this.hasData(po.supplier)) {
+      if (this.hasData(translatedSupplier)) {
         fields.push(`
           <div class="info-field">
             <span class="info-label">${labels.supplierName}:</span>
-            <span class="info-value">${po.supplier}</span>
+            <span class="info-value">${translatedSupplier}</span>
           </div>
         `);
       }
@@ -917,7 +944,6 @@ body {
   <!-- ✅ Notes section - only show if data exists -->
   ${hasNotes ? `
   <div class="notes-section">
-    <div class="notes-title">${labels.notes}</div>
     <div class="notes-content">${po.notes}</div>
   </div>
   ` : ''}

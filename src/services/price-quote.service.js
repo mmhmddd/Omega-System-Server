@@ -1,4 +1,4 @@
-// src/services/price-quote.service.js
+// src/services/price-quote.service.js - UPDATED WITH includeStaticFile SUPPORT
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -18,6 +18,9 @@ const AR_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/AR-Uploads');
 const EN_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/EN-Uploads');
 const LOGO_PATH = path.join(__dirname, '../../assets/images/OmegaLogo.png');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
+
+// ✅ NEW: Path to static terms and conditions PDF
+const STATIC_TERMS_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class PriceQuoteService {
   async loadUsers() {
@@ -289,7 +292,8 @@ class PriceQuoteService {
     `;
   }
 
-  async generatePDF(quoteData, attachmentPath = null) {
+  // ✅ UPDATED: Add includeStaticFile parameter
+  async generatePDF(quoteData, attachmentPath = null, includeStaticFile = false) {
     let browser;
     try {
       const isArabic = quoteData.language === 'arabic';
@@ -297,6 +301,10 @@ class PriceQuoteService {
 
       const mainContent = this.buildMainContent(quoteData, totals, isArabic);
 
+      console.log('🔵 Generating PDF for quote:', quoteData.quoteNumber);
+      console.log('🔵 Include static file:', includeStaticFile);
+
+      // ✅ Build attachment HTML (user-uploaded PDF)
       let attachmentHTML = '';
       if (attachmentPath && fsSync.existsSync(attachmentPath)) {
         const attachmentPages = await this.convertPdfPagesToImages(attachmentPath);
@@ -307,6 +315,29 @@ class PriceQuoteService {
             </div>
           `;
         });
+      }
+
+      // ✅ NEW: Add static terms PDF as images if includeStaticFile is true
+      let staticTermsHTML = '';
+      if (includeStaticFile === true) {
+        try {
+          if (fsSync.existsSync(STATIC_TERMS_PDF_PATH)) {
+            console.log('✅ Adding static terms and conditions PDF...');
+            const staticPages = await this.convertPdfPagesToImages(STATIC_TERMS_PDF_PATH);
+            staticPages.forEach((base64, index) => {
+              staticTermsHTML += `
+                <div style="page-break-before: always; height: 100vh; display: flex; align-items: center; justify-content: center; background: white; padding: 10px; box-sizing: border-box;">
+                  <img src="data:image/png;base64,${base64}" style="max-width:100%; max-height:100%; object-fit: contain;" alt="Terms page ${index + 1}" />
+                </div>
+              `;
+            });
+            console.log(`✅ Added ${staticPages.length} page(s) from static terms PDF`);
+          } else {
+            console.warn('⚠️ Static terms PDF file not found at:', STATIC_TERMS_PDF_PATH);
+          }
+        } catch (error) {
+          console.error('❌ Error reading static terms PDF:', error.message);
+        }
       }
 
       const fullHTML = `
@@ -360,6 +391,7 @@ class PriceQuoteService {
 <body>
   ${mainContent}
   ${attachmentHTML}
+  ${staticTermsHTML}
 </body>
 </html>
       `;
@@ -401,21 +433,19 @@ class PriceQuoteService {
       });
 
       await browser.close();
-      console.log('PDF generated successfully:', pdfPath);
+      console.log('✅ PDF generated successfully:', pdfPath);
       return pdfPath;
     } catch (error) {
-      console.error('PDF generation failed:', error);
+      console.error('❌ PDF generation failed:', error);
       if (browser) await browser.close().catch(() => {});
       throw error;
     }
   }
 
-  // ✅ FIXED: Proper projectName display with escaping and validation
   buildMainContent(data, totals, isArabic) {
     const title = isArabic ? 'عرض سعر' : 'Price Quote';
     const hasItems = data.items && data.items.length > 0;
 
-    // ✅ Escape HTML in project name to prevent XSS and display issues
     const escapeHtml = (text) => {
       if (!text) return '';
       return String(text)
@@ -426,7 +456,6 @@ class PriceQuoteService {
         .replace(/'/g, '&#039;');
     };
 
-    // ✅ Check if projectName exists and is not empty
     const hasProjectName = data.projectName && String(data.projectName).trim() !== '';
     const projectNameHtml = hasProjectName 
       ? `<h2 class="project-name">${escapeHtml(data.projectName)}</h2>` 
@@ -559,12 +588,13 @@ class PriceQuoteService {
     `;
   }
 
-  // ✅ UPDATED: Add projectName field
+  // ✅ UPDATED: Add includeStaticFile parameter
   async createQuote(quoteData, currentUser, attachmentFile = null) {
     console.log('\n=== CREATE QUOTE DEBUG ===');
     console.log('currentUser.id:', currentUser.id);
     console.log('currentUser.name:', currentUser.name);
     console.log('quoteData.projectName:', quoteData.projectName);
+    console.log('quoteData.includeStaticFile:', quoteData.includeStaticFile); // ✅ NEW LOG
     
     const quotes = await this.loadQuotes();
     const quoteNumber = await this.generateQuoteNumber();
@@ -580,7 +610,7 @@ class PriceQuoteService {
       clientPhone: quoteData.clientPhone,
       clientAddress: quoteData.clientAddress || null,
       clientCity: quoteData.clientCity || null,
-      projectName: quoteData.projectName || null, // ✅ NEW FIELD
+      projectName: quoteData.projectName || null,
       date: quoteData.date,
       revNumber: quoteData.revNumber || '00',
       validForDays: quoteData.validForDays || null,
@@ -589,6 +619,7 @@ class PriceQuoteService {
       taxRate: quoteData.includeTax ? (quoteData.taxRate || 0) : 0,
       items: quoteData.items || [],
       customNotes: quoteData.customNotes || null,
+      includeStaticFile: quoteData.includeStaticFile || false, // ✅ NEW FIELD
       createdBy: currentUser.id,
       createdByName: createdByName || currentUser.name || 'Unknown User', 
       createdAt: new Date().toISOString(),
@@ -606,7 +637,8 @@ class PriceQuoteService {
       newQuote.attachmentPath = attachmentPath;
     }
 
-    const pdfPath = await this.generatePDF(newQuote, attachmentPath);
+    // ✅ UPDATED: Pass includeStaticFile to PDF generator
+    const pdfPath = await this.generatePDF(newQuote, attachmentPath, newQuote.includeStaticFile);
     newQuote.pdfPath = pdfPath;
 
     quotes.push(newQuote);
@@ -614,6 +646,7 @@ class PriceQuoteService {
 
     console.log('Quote created with name:', newQuote.createdByName);
     console.log('Quote created with projectName:', newQuote.projectName);
+    console.log('Quote created with includeStaticFile:', newQuote.includeStaticFile); // ✅ NEW LOG
     return newQuote;
   }
 
@@ -690,6 +723,7 @@ class PriceQuoteService {
     };
   }
 
+  // ✅ UPDATED: Add includeStaticFile parameter
   async updateQuote(id, updateData, attachmentFile = null) {
     const quotes = await this.loadQuotes();
     const quoteIndex = quotes.findIndex(q => q.id === id);
@@ -704,7 +738,7 @@ class PriceQuoteService {
     if (updateData.clientPhone) quote.clientPhone = updateData.clientPhone;
     if (updateData.clientAddress !== undefined) quote.clientAddress = updateData.clientAddress;
     if (updateData.clientCity !== undefined) quote.clientCity = updateData.clientCity;
-    if (updateData.projectName !== undefined) quote.projectName = updateData.projectName; // ✅ NEW FIELD
+    if (updateData.projectName !== undefined) quote.projectName = updateData.projectName;
     if (updateData.date) quote.date = updateData.date;
     if (updateData.revNumber !== undefined) quote.revNumber = updateData.revNumber;
     if (updateData.validForDays !== undefined) quote.validForDays = updateData.validForDays;
@@ -712,8 +746,8 @@ class PriceQuoteService {
     if (updateData.includeTax !== undefined) quote.includeTax = !!updateData.includeTax;
     if (updateData.taxRate !== undefined) quote.taxRate = updateData.taxRate;
     if (updateData.items !== undefined) quote.items = updateData.items;
-
     if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
+    if (updateData.includeStaticFile !== undefined) quote.includeStaticFile = updateData.includeStaticFile; // ✅ NEW FIELD
 
     const totals = this.calculateTotals(quote.items, quote.includeTax, quote.taxRate);
     quote.subtotal = totals.subtotal;
@@ -732,7 +766,10 @@ class PriceQuoteService {
     }
 
     console.log('Updating quote with projectName:', quote.projectName);
-    const pdfPath = await this.generatePDF(quote, attachmentPath);
+    console.log('Updating quote with includeStaticFile:', quote.includeStaticFile); // ✅ NEW LOG
+    
+    // ✅ UPDATED: Pass includeStaticFile to PDF generator
+    const pdfPath = await this.generatePDF(quote, attachmentPath, quote.includeStaticFile);
     quote.pdfPath = pdfPath;
 
     quotes[quoteIndex] = quote;

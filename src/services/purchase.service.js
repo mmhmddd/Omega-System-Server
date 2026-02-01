@@ -1,4 +1,4 @@
-// src/services/purchase.service.js - WITH includeStaticFile SUPPORT
+// src/services/purchase.service.js - WITH TERMS AND CONDITIONS PDF SUPPORT
 
 const fs = require('fs').promises;
 const path = require('path');
@@ -9,7 +9,7 @@ const POS_FILE = path.join(__dirname, '../../data/purchases/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
-// ✅ NEW: Path to your static PDF file
+// ✅ Path to your static Terms and Conditions PDF file
 const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class PurchaseService {
@@ -253,13 +253,13 @@ class PurchaseService {
   }
 
   /**
-   * ✅ Create a new Purchase Order - WITH includeStaticFile SUPPORT
+   * ✅ Create a new Purchase Order - WITH includeStaticFile (Terms & Conditions) SUPPORT
    */
   async createPO(poData, userId, userRole) {
     console.log('\n=== CREATE PO ===');
     console.log('User ID:', userId);
     console.log('User Role:', userRole);
-    console.log('includeStaticFile:', poData.includeStaticFile); // ✅ NEW LOG
+    console.log('Include Terms & Conditions PDF:', poData.includeStaticFile); // ✅ LOG
     
     const pos = await this.loadPOs();
     
@@ -309,7 +309,7 @@ class PurchaseService {
       taxRate: poData.taxRate || 0,
       items: poData.items || [],
       notes: poData.notes || '',
-      includeStaticFile: poData.includeStaticFile || false, // ✅ NEW FIELD
+      includeStaticFile: poData.includeStaticFile || false, // ✅ STORE THE FLAG
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
@@ -324,7 +324,7 @@ class PurchaseService {
 
     console.log('✓ PO created successfully');
     console.log('Creator name:', newPO.createdByName);
-    console.log('includeStaticFile:', newPO.includeStaticFile); // ✅ NEW LOG
+    console.log('Include Terms & Conditions:', newPO.includeStaticFile); // ✅ LOG
     console.log('=================\n');
     
     return newPO;
@@ -422,7 +422,7 @@ class PurchaseService {
   }
 
   /**
-   * ✅ Update PO - WITH includeStaticFile SUPPORT
+   * ✅ Update PO - WITH includeStaticFile (Terms & Conditions) SUPPORT
    */
   async updatePO(id, updateData, userId, userRole) {
     const pos = await this.loadPOs();
@@ -453,7 +453,7 @@ class PurchaseService {
     if (updateData.items) po.items = updateData.items;
     if (updateData.notes !== undefined) po.notes = updateData.notes;
     if (updateData.status) po.status = updateData.status;
-    if (updateData.includeStaticFile !== undefined) po.includeStaticFile = updateData.includeStaticFile; // ✅ NEW FIELD
+    if (updateData.includeStaticFile !== undefined) po.includeStaticFile = updateData.includeStaticFile; // ✅ UPDATE THE FLAG
 
     const detectedLanguage = updateData.forceLanguage || this.detectPOLanguage(po);
     po.language = detectedLanguage;
@@ -525,45 +525,54 @@ class PurchaseService {
   }
 
   /**
-   * ✅ Generate PO PDF with optional attachment and static PDF merge
+   * ✅ Generate PO PDF with optional user attachment AND Terms & Conditions PDF
+   * 
+   * Merge order:
+   * 1. Generated PO PDF (always first)
+   * 2. User-uploaded attachment PDF (if provided)
+   * 3. Terms & Conditions static PDF (if includeStaticFile is true)
    */
   async generatePOPDF(id, userId, userRole, attachmentPdf = null) {
     const po = await this.getPOById(id, userId, userRole);
     
-    console.log('🔵 Generating PDF for PO:', po.poNumber);
-    console.log('🔵 Include static file:', po.includeStaticFile);
+    console.log('╔══════════════════════════════════════════════════════════╗');
+    console.log('║          GENERATING PURCHASE ORDER PDF                   ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    console.log('📄 PO Number:', po.poNumber);
+    console.log('📎 Include Terms & Conditions:', po.includeStaticFile);
+    console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
+    console.log('════════════════════════════════════════════════════════════');
     
+    // Generate the main PO PDF
     const pdfResult = await poPdfGenerator.generatePOPDF(po);
     
-    // ✅ NEW: Prepare list of PDFs to merge
+    // ✅ Prepare list of PDFs to merge (in order)
     const pdfsToMerge = [];
     
-    // Add user-uploaded attachment if provided
+    // 1. Add user-uploaded attachment if provided
     if (attachmentPdf) {
       const isValid = await poPdfGenerator.isValidPDF(attachmentPdf);
       if (isValid) {
         pdfsToMerge.push(attachmentPdf);
         console.log('✅ Added user attachment PDF to merge list');
       } else {
-        console.warn('⚠️ Invalid user attachment PDF, skipping');
+        console.warn('⚠️  Invalid user attachment PDF, skipping');
       }
     }
     
-    // ✅ NEW: Add static PDF if includeStaticFile is true
-    let staticPdfPath = null;
+    // 2. ✅ Add Terms & Conditions static PDF if includeStaticFile is true
     if (po.includeStaticFile === true) {
       try {
         const fsSync = require('fs');
         if (fsSync.existsSync(STATIC_PDF_PATH)) {
           const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
           pdfsToMerge.push(staticPdfBytes);
-          staticPdfPath = STATIC_PDF_PATH;
-          console.log('✅ Added static PDF to merge list');
+          console.log('✅ Added Terms & Conditions PDF to merge list');
         } else {
-          console.warn('⚠️ Static PDF file not found at:', STATIC_PDF_PATH);
+          console.warn('⚠️  Terms & Conditions PDF not found at:', STATIC_PDF_PATH);
         }
       } catch (error) {
-        console.error('❌ Error reading static PDF:', error.message);
+        console.error('❌ Error reading Terms & Conditions PDF:', error.message);
       }
     }
     
@@ -571,11 +580,13 @@ class PurchaseService {
     let finalPdfResult = pdfResult;
     try {
       if (pdfsToMerge.length > 0) {
-        console.log(`🔄 Merging ${pdfsToMerge.length} PDF(s) with PO...`);
+        console.log(`🔄 Merging ${pdfsToMerge.length} additional PDF(s) with PO...`);
         
         let currentPath = pdfResult.filepath;
         
+        // Merge each PDF sequentially
         for (let i = 0; i < pdfsToMerge.length; i++) {
+          console.log(`   Merging PDF ${i + 1} of ${pdfsToMerge.length}...`);
           const mergeResult = await poPdfGenerator.mergePDFs(
             currentPath,
             pdfsToMerge[i],
@@ -584,6 +595,7 @@ class PurchaseService {
           );
           currentPath = mergeResult.filepath;
           
+          // Update final result on last merge
           if (i === pdfsToMerge.length - 1) {
             finalPdfResult = {
               ...pdfResult,
@@ -596,8 +608,10 @@ class PurchaseService {
         }
         
         console.log('✅ PDF merge completed successfully');
+        console.log('   Total pages:', finalPdfResult.pageCount.total);
       } else {
         // No PDFs to merge, just add headers/footers
+        console.log('ℹ️  No additional PDFs to merge, adding headers/footers only...');
         const headerResult = await poPdfGenerator.mergePDFs(
           pdfResult.filepath,
           null,
@@ -618,6 +632,7 @@ class PurchaseService {
       finalPdfResult.mergeError = mergeError.message;
     }
     
+    // Update PO record with PDF metadata
     const pos = await this.loadPOs();
     const poIndex = pos.findIndex(p => p.id === id);
     
@@ -631,6 +646,10 @@ class PurchaseService {
       }
       await this.savePOs(pos);
     }
+    
+    console.log('════════════════════════════════════════════════════════════');
+    console.log('✅ PDF generation complete!');
+    console.log('════════════════════════════════════════════════════════════\n');
     
     return {
       po,

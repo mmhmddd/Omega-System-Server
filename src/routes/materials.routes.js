@@ -1,5 +1,5 @@
 // ============================================================
-// MATERIAL ROUTES - FIXED JSON PARSING
+// MATERIAL ROUTES - WITH TERMS AND CONDITIONS PDF SUPPORT
 // src/routes/materials.routes.js
 // ============================================================
 const express = require('express');
@@ -29,7 +29,7 @@ router.use(protect);
 router.use(checkRouteAccess('materialManagement'));
 
 /**
- * CREATE MATERIAL REQUEST (NO AUTO PDF GENERATION)
+ * ✅ CREATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
  * POST /api/materials
  */
 router.post('/', async (req, res, next) => {
@@ -60,7 +60,8 @@ router.post('/', async (req, res, next) => {
       requestPriority: req.body.requestPriority,
       requestReason: req.body.requestReason,
       items: items,
-      additionalNotes: req.body.additionalNotes
+      additionalNotes: req.body.additionalNotes,
+      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true' // ✅ NEW FIELD
     };
 
     const material = await materialService.createMaterialRequest(
@@ -177,7 +178,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * UPDATE MATERIAL REQUEST (NO AUTO PDF GENERATION) - ✅ FIXED
+ * ✅ UPDATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
  */
 router.put('/:id', async (req, res, next) => {
   try {
@@ -212,7 +213,10 @@ router.put('/:id', async (req, res, next) => {
       requestReason: req.body.requestReason,
       items: items,
       additionalNotes: req.body.additionalNotes,
-      status: req.body.status
+      status: req.body.status,
+      includeStaticFile: req.body.includeStaticFile !== undefined 
+        ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
+        : undefined // ✅ NEW FIELD
     };
 
     const material = await materialService.updateMaterialRequest(
@@ -248,8 +252,10 @@ router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
 });
 
 /**
- * GENERATE MATERIAL REQUEST PDF (WITH OPTIONAL ATTACHMENT)
+ * ✅ GENERATE MATERIAL REQUEST PDF (WITH OPTIONAL ATTACHMENT AND TERMS & CONDITIONS)
  * POST /api/materials/:id/generate-pdf
+ * 
+ * The includeStaticFile logic is handled in the service layer
  */
 router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {

@@ -1,5 +1,5 @@
 // ============================================================
-// MATERIAL SERVICE - UPDATED WITH USER NAME LOOKUP
+// MATERIAL SERVICE - WITH TERMS AND CONDITIONS PDF SUPPORT
 // src/services/material.service.js
 // ============================================================
 const fs = require('fs').promises;
@@ -11,6 +11,9 @@ const materialPdfGenerator = require('../utils/pdf-generator-material.util');
 const MATERIALS_FILE = path.join(__dirname, '../../data/materials-requests/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
+
+// ✅ Path to your static Terms and Conditions PDF file
+const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class MaterialService {
   /**
@@ -185,13 +188,14 @@ class MaterialService {
   }
 
   /**
-   * CREATE MATERIAL REQUEST (NO PDF GENERATION)
+   * ✅ CREATE MATERIAL REQUEST - WITH includeStaticFile (Terms & Conditions) SUPPORT
    */
   async createMaterialRequest(materialData, userId, userRole) {
     console.log('\n=== CREATE MATERIAL REQUEST DEBUG ===');
     console.log('userId:', userId);
     console.log('userId type:', typeof userId);
     console.log('userRole:', userRole);
+    console.log('Include Terms & Conditions PDF:', materialData.includeStaticFile); // ✅ LOG
     
     const materials = await this.loadMaterialRequests();
     
@@ -225,6 +229,7 @@ class MaterialService {
       requestReason: materialData.requestReason || '',
       items: materialData.items || [],
       additionalNotes: materialData.additionalNotes || '',
+      includeStaticFile: materialData.includeStaticFile || false, // ✅ STORE THE FLAG
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
@@ -238,11 +243,12 @@ class MaterialService {
     await this.saveMaterialRequests(materials);
 
     console.log('Material Request created with name:', newMaterialRequest.createdByName);
+    console.log('Include Terms & Conditions:', newMaterialRequest.includeStaticFile); // ✅ LOG
     return newMaterialRequest;
   }
 
   /**
-   * UPDATE MATERIAL REQUEST (NO PDF GENERATION)
+   * ✅ UPDATE MATERIAL REQUEST - WITH includeStaticFile (Terms & Conditions) SUPPORT
    */
   async updateMaterialRequest(id, updateData, userId, userRole) {
     const materials = await this.loadMaterialRequests();
@@ -269,6 +275,7 @@ class MaterialService {
     if (updateData.items) material.items = updateData.items;
     if (updateData.additionalNotes !== undefined) material.additionalNotes = updateData.additionalNotes;
     if (updateData.status) material.status = updateData.status;
+    if (updateData.includeStaticFile !== undefined) material.includeStaticFile = updateData.includeStaticFile; // ✅ UPDATE THE FLAG
 
     const detectedLanguage = updateData.forceLanguage || this.detectMaterialLanguage(material);
     material.language = detectedLanguage;
@@ -287,12 +294,24 @@ class MaterialService {
   }
 
   /**
-   * GENERATE MATERIAL REQUEST PDF (WITH OPTIONAL ATTACHMENT)
-   * This is now called manually via the generate-pdf endpoint
+   * ✅ GENERATE MATERIAL REQUEST PDF WITH TERMS & CONDITIONS SUPPORT
+   * 
+   * Merge order:
+   * 1. Generated Material Request PDF (always first)
+   * 2. User-uploaded attachment PDF (if provided)
+   * 3. Terms & Conditions static PDF (if includeStaticFile is true)
    */
   async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
     // Get material data
     const material = await this.getMaterialRequestById(id, userId, userRole);
+
+    console.log('╔══════════════════════════════════════════════════════════╗');
+    console.log('║       GENERATING MATERIAL REQUEST PDF                    ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    console.log('📄 MR Number:', material.mrNumber);
+    console.log('📎 Include Terms & Conditions:', material.includeStaticFile);
+    console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
+    console.log('════════════════════════════════════════════════════════════');
 
     // Delete old PDF if exists
     if (material.pdfFilename) {
@@ -310,34 +329,88 @@ class MaterialService {
     // Generate the material PDF
     const pdfResult = await materialPdfGenerator.generateMaterialPDF(material);
 
-    // Merge with attachment (or add headers/footers to single PDF)
+    // ✅ Prepare list of PDFs to merge (in order)
+    const pdfsToMerge = [];
+    
+    // 1. Add user-uploaded attachment if provided
+    if (attachmentPdf) {
+      const isValid = await materialPdfGenerator.isValidPDF(attachmentPdf);
+      if (isValid) {
+        pdfsToMerge.push(attachmentPdf);
+        console.log('✅ Added user attachment PDF to merge list');
+      } else {
+        console.warn('⚠️  Invalid user attachment PDF, skipping');
+      }
+    }
+    
+    // 2. ✅ Add Terms & Conditions static PDF if includeStaticFile is true
+    if (material.includeStaticFile === true) {
+      try {
+        if (fsSync.existsSync(STATIC_PDF_PATH)) {
+          const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
+          pdfsToMerge.push(staticPdfBytes);
+          console.log('✅ Added Terms & Conditions PDF to merge list');
+        } else {
+          console.warn('⚠️  Terms & Conditions PDF not found at:', STATIC_PDF_PATH);
+        }
+      } catch (error) {
+        console.error('❌ Error reading Terms & Conditions PDF:', error.message);
+      }
+    }
+
+    // Merge all PDFs
     let finalPdfResult = pdfResult;
     try {
-      if (attachmentPdf) {
-        // Validate attachment
-        const isValid = await materialPdfGenerator.isValidPDF(attachmentPdf);
-        if (!isValid) {
-          throw new Error('Invalid PDF attachment');
+      if (pdfsToMerge.length > 0) {
+        console.log(`🔄 Merging ${pdfsToMerge.length} additional PDF(s) with Material Request...`);
+        
+        let currentPath = pdfResult.filepath;
+        
+        // Merge each PDF sequentially
+        for (let i = 0; i < pdfsToMerge.length; i++) {
+          console.log(`   Merging PDF ${i + 1} of ${pdfsToMerge.length}...`);
+          const mergeResult = await materialPdfGenerator.mergePDFs(
+            currentPath,
+            pdfsToMerge[i],
+            null,
+            pdfResult.language
+          );
+          currentPath = mergeResult.filepath;
+          
+          // Update final result on last merge
+          if (i === pdfsToMerge.length - 1) {
+            finalPdfResult = {
+              ...pdfResult,
+              filename: mergeResult.filename,
+              filepath: mergeResult.filepath,
+              merged: true,
+              pageCount: mergeResult.pageCount
+            };
+          }
         }
+        
+        console.log('✅ PDF merge completed successfully');
+        console.log('   Total pages:', finalPdfResult.pageCount.total);
+      } else {
+        // No PDFs to merge, just add headers/footers
+        console.log('ℹ️  No additional PDFs to merge, adding headers/footers only...');
+        const headerResult = await materialPdfGenerator.mergePDFs(
+          pdfResult.filepath,
+          null,
+          null,
+          pdfResult.language
+        );
+        
+        finalPdfResult = {
+          ...pdfResult,
+          filename: headerResult.filename,
+          filepath: headerResult.filepath,
+          merged: false,
+          pageCount: headerResult.pageCount
+        };
       }
-
-      // Merge PDFs (pass language from pdfResult)
-      const mergeResult = await materialPdfGenerator.mergePDFs(
-        pdfResult.filepath,
-        attachmentPdf,
-        null,
-        pdfResult.language
-      );
-
-      finalPdfResult = {
-        ...pdfResult,
-        filename: mergeResult.filename,
-        filepath: mergeResult.filepath,
-        merged: mergeResult.merged,
-        pageCount: mergeResult.pageCount
-      };
     } catch (mergeError) {
-      console.error('PDF merge/header failed:', mergeError.message);
+      console.error('❌ PDF merge/header failed:', mergeError.message);
       finalPdfResult.mergeError = mergeError.message;
     }
 
@@ -355,6 +428,10 @@ class MaterialService {
       }
       await this.saveMaterialRequests(materials);
     }
+
+    console.log('════════════════════════════════════════════════════════════');
+    console.log('✅ PDF generation complete!');
+    console.log('════════════════════════════════════════════════════════════\n');
 
     return {
       material,
