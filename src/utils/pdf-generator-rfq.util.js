@@ -684,7 +684,6 @@ body {
   <!-- ✅ Notes section - only show if data exists -->
   ${hasNotes ? `
   <div class="notes-section">
-    <div class="notes-title">${labels.notes}</div>
     <div class="notes-content">${rfq.notes}</div>
   </div>
   ` : ''}
