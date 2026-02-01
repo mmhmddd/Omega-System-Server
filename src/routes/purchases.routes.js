@@ -1,14 +1,16 @@
-// src/routes/purchases.routes.js - COMPLETE PURCHASE ORDER ROUTES
+// src/routes/purchases.routes.js - WITH includeStaticFile SUPPORT
+
 const express = require('express');
 const router = express.Router();
 const path = require('path');
 const multer = require('multer');
 const purchaseService = require('../services/purchase.service');
-const { protect  ,checkRouteAccess } = require('../middleware/auth.middleware');
+const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 router.use(protect);
 router.use(checkRouteAccess('purchaseManagement'));
+
 // Configure multer for PDF uploads (memory storage)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -25,8 +27,7 @@ const upload = multer({
 });
 
 /**
- * 1. RESET PO COUNTER - Super admin only
- * POST /api/purchases/reset-counter
+ * RESET PO COUNTER - Super admin only
  */
 router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) => {
   try {
@@ -43,8 +44,7 @@ router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) 
 });
 
 /**
- * 2. GET PO STATISTICS
- * GET /api/purchases/stats
+ * GET PO STATISTICS
  */
 router.get('/stats', async (req, res, next) => {
   try {
@@ -60,14 +60,7 @@ router.get('/stats', async (req, res, next) => {
 });
 
 /**
- * 3. CREATE PURCHASE ORDER (Auto-detect language from data)
- * POST /api/purchases
- * Body: {
- *   date, supplier, supplierAddress, supplierPhone,
- *   receiver, receiverCity, receiverAddress, receiverPhone,
- *   tableHeaderText, taxRate, items: [{ description, unit, quantity, unitPrice }],
- *   notes
- * }
+ * ✅ CREATE PURCHASE ORDER - Now accepts includeStaticFile
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -83,7 +76,8 @@ router.post('/', async (req, res, next) => {
       tableHeaderText: req.body.tableHeaderText,
       taxRate: req.body.taxRate,
       items: req.body.items || [],
-      notes: req.body.notes
+      notes: req.body.notes,
+      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true' // ✅ NEW FIELD
     };
 
     const po = await purchaseService.createPO(
@@ -103,9 +97,7 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * 4. GET ALL PURCHASE ORDERS
- * GET /api/purchases
- * Query params: poNumber, startDate, endDate, supplier, status, search, page, limit
+ * GET ALL PURCHASE ORDERS
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -147,8 +139,7 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
- * 5. GET SPECIFIC PURCHASE ORDER (By ID)
- * GET /api/purchases/:id
+ * GET SPECIFIC PURCHASE ORDER (By ID)
  */
 router.get('/:id', async (req, res, next) => {
   try {
@@ -168,8 +159,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * 6. UPDATE PURCHASE ORDER (Auto-detect language from data)
- * PUT /api/purchases/:id
+ * ✅ UPDATE PURCHASE ORDER - Now accepts includeStaticFile
  */
 router.put('/:id', async (req, res, next) => {
   try {
@@ -186,7 +176,10 @@ router.put('/:id', async (req, res, next) => {
       taxRate: req.body.taxRate,
       items: req.body.items,
       notes: req.body.notes,
-      status: req.body.status
+      status: req.body.status,
+      includeStaticFile: req.body.includeStaticFile !== undefined 
+        ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
+        : undefined // ✅ NEW FIELD
     };
 
     const po = await purchaseService.updatePO(
@@ -207,8 +200,7 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * 7. DELETE PURCHASE ORDER (Super Admin Only)
- * DELETE /api/purchases/:id
+ * DELETE PURCHASE ORDER (Super Admin Only)
  */
 router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
   try {
@@ -224,9 +216,8 @@ router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
 });
 
 /**
- * 8. GENERATE PO PDF (with optional attachment support)
- * POST /api/purchases/:id/generate-pdf
- * Supports multipart/form-data with optional 'attachment' field
+ * GENERATE PO PDF (with optional attachment support)
+ * ✅ The includeStaticFile logic is now handled in the service layer
  */
 router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -272,8 +263,7 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 });
 
 /**
- * 9. DOWNLOAD PO PDF
- * GET /api/purchases/:id/download-pdf
+ * DOWNLOAD PO PDF
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {

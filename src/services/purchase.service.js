@@ -1,4 +1,4 @@
-// src/services/purchase.service.js - WITH CREATOR NAME SUPPORT
+// src/services/purchase.service.js - WITH includeStaticFile SUPPORT
 
 const fs = require('fs').promises;
 const path = require('path');
@@ -8,6 +8,9 @@ const poPdfGenerator = require('../utils/pdf-generator-po.util');
 const POS_FILE = path.join(__dirname, '../../data/purchases/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
+
+// ✅ NEW: Path to your static PDF file
+const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class PurchaseService {
   /**
@@ -33,70 +36,64 @@ class PurchaseService {
   /**
    * Get user name by ID
    */
-async getUserNameById(userId) {
-  try {
-    const users = await this.loadUsers();
-    
-    if (!userId) {
-      console.log('⚠️ No userId provided');
+  async getUserNameById(userId) {
+    try {
+      const users = await this.loadUsers();
+      
+      if (!userId) {
+        console.log('⚠️ No userId provided');
+        return null;
+      }
+      
+      console.log('\n=== USER LOOKUP ===');
+      console.log('Looking for userId:', userId);
+      console.log('Type:', typeof userId);
+      
+      const searchId = String(userId).trim().toLowerCase();
+      
+      let foundUser = null;
+      
+      foundUser = users.find(u => u.id === userId);
+      if (foundUser) {
+        console.log('✓ Found (direct match):', foundUser.name);
+        return foundUser.name;
+      }
+      
+      foundUser = users.find(u => {
+        const dbId = String(u.id).trim().toLowerCase();
+        return dbId === searchId;
+      });
+      
+      if (foundUser) {
+        console.log('✓ Found (string match):', foundUser.name);
+        return foundUser.name;
+      }
+      
+      foundUser = users.find(u => {
+        const username = String(u.username || '').trim().toLowerCase();
+        return username === searchId;
+      });
+      
+      if (foundUser) {
+        console.log('✓ Found (username match):', foundUser.name);
+        return foundUser.name;
+      }
+      
+      console.log('✗ User not found');
+      console.log('Searched for:', searchId);
+      console.log('Available users:');
+      users.forEach(u => {
+        console.log(`  - ID: "${u.id}" | Username: "${u.username}" | Name: "${u.name}"`);
+      });
+      console.log('==================\n');
+      
+      return null;
+      
+    } catch (error) {
+      console.error('❌ Error getting user name:', error);
       return null;
     }
-    
-    console.log('\n=== USER LOOKUP ===');
-    console.log('Looking for userId:', userId);
-    console.log('Type:', typeof userId);
-    
-    // Convert to string and trim for comparison
-    const searchId = String(userId).trim().toLowerCase();
-    
-    // Search with multiple strategies
-    let foundUser = null;
-    
-    // Strategy 1: Direct match
-    foundUser = users.find(u => u.id === userId);
-    if (foundUser) {
-      console.log('✓ Found (direct match):', foundUser.name);
-      return foundUser.name;
-    }
-    
-    // Strategy 2: String comparison (case-insensitive)
-    foundUser = users.find(u => {
-      const dbId = String(u.id).trim().toLowerCase();
-      return dbId === searchId;
-    });
-    
-    if (foundUser) {
-      console.log('✓ Found (string match):', foundUser.name);
-      return foundUser.name;
-    }
-    
-    // Strategy 3: Check by username if userId looks like username
-    foundUser = users.find(u => {
-      const username = String(u.username || '').trim().toLowerCase();
-      return username === searchId;
-    });
-    
-    if (foundUser) {
-      console.log('✓ Found (username match):', foundUser.name);
-      return foundUser.name;
-    }
-    
-    // Not found - log for debugging
-    console.log('✗ User not found');
-    console.log('Searched for:', searchId);
-    console.log('Available users:');
-    users.forEach(u => {
-      console.log(`  - ID: "${u.id}" | Username: "${u.username}" | Name: "${u.name}"`);
-    });
-    console.log('==================\n');
-    
-    return null;
-    
-  } catch (error) {
-    console.error('❌ Error getting user name:', error);
-    return null;
   }
-}
 
   /**
    * Load POs from JSON file
@@ -239,17 +236,14 @@ async getUserNameById(userId) {
     const users = await this.loadUsers();
     
     return Promise.all(pos.map(async po => {
-      // Always look up the current user name from users database
       const user = users.find(u => u.id === po.createdBy);
       
       if (user && user.name) {
-        // User found - use their current name
         return {
           ...po,
           createdByName: user.name
         };
       } else {
-        // User not found - use Unknown User
         return {
           ...po,
           createdByName: 'Unknown User'
@@ -259,81 +253,82 @@ async getUserNameById(userId) {
   }
 
   /**
-   * Create a new Purchase Order
+   * ✅ Create a new Purchase Order - WITH includeStaticFile SUPPORT
    */
-async createPO(poData, userId, userRole) {
-  console.log('\n=== CREATE PO ===');
-  console.log('User ID:', userId);
-  console.log('User Role:', userRole);
-  
-  const pos = await this.loadPOs();
-  
-  const counter = await this.loadCounter();
-  const newCounter = counter + 1;
-  
-  const paddedCounter = String(newCounter).padStart(5, '0');
-  const id = `PO-${paddedCounter}`;
-  const poNumber = this.generatePONumber(newCounter);
-  
-  await this.saveCounter(newCounter);
-
-  const today = new Date().toISOString().split('T')[0];
-  const detectedLanguage = poData.forceLanguage || this.detectPOLanguage(poData);
-
-  // Get user name
-  let createdByName = await this.getUserNameById(userId);
-  
-  // Fallback: If name not found, try to get from users by role
-  if (!createdByName) {
-    console.log('⚠️ getUserNameById returned null, trying alternative lookup...');
-    const users = await this.loadUsers();
-    const user = users.find(u => 
-      u.id === userId || 
-      String(u.id).trim() === String(userId).trim()
-    );
+  async createPO(poData, userId, userRole) {
+    console.log('\n=== CREATE PO ===');
+    console.log('User ID:', userId);
+    console.log('User Role:', userRole);
+    console.log('includeStaticFile:', poData.includeStaticFile); // ✅ NEW LOG
     
-    if (user) {
-      createdByName = user.name;
-      console.log('✓ Found via alternative lookup:', createdByName);
-    } else {
-      createdByName = 'Unknown User';
-      console.log('✗ User not found in alternative lookup');
+    const pos = await this.loadPOs();
+    
+    const counter = await this.loadCounter();
+    const newCounter = counter + 1;
+    
+    const paddedCounter = String(newCounter).padStart(5, '0');
+    const id = `PO-${paddedCounter}`;
+    const poNumber = this.generatePONumber(newCounter);
+    
+    await this.saveCounter(newCounter);
+
+    const today = new Date().toISOString().split('T')[0];
+    const detectedLanguage = poData.forceLanguage || this.detectPOLanguage(poData);
+
+    let createdByName = await this.getUserNameById(userId);
+    
+    if (!createdByName) {
+      console.log('⚠️ getUserNameById returned null, trying alternative lookup...');
+      const users = await this.loadUsers();
+      const user = users.find(u => 
+        u.id === userId || 
+        String(u.id).trim() === String(userId).trim()
+      );
+      
+      if (user) {
+        createdByName = user.name;
+        console.log('✓ Found via alternative lookup:', createdByName);
+      } else {
+        createdByName = 'Unknown User';
+        console.log('✗ User not found in alternative lookup');
+      }
     }
+
+    const newPO = {
+      id,
+      poNumber,
+      date: poData.date || today,
+      supplier: poData.supplier || '',
+      supplierAddress: poData.supplierAddress || '',
+      supplierPhone: poData.supplierPhone || '',
+      receiver: poData.receiver || '',
+      receiverCity: poData.receiverCity || '',
+      receiverAddress: poData.receiverAddress || '',
+      receiverPhone: poData.receiverPhone || '',
+      tableHeaderText: poData.tableHeaderText || '',
+      taxRate: poData.taxRate || 0,
+      items: poData.items || [],
+      notes: poData.notes || '',
+      includeStaticFile: poData.includeStaticFile || false, // ✅ NEW FIELD
+      language: detectedLanguage,
+      status: 'pending',
+      createdBy: userId,
+      createdByName: createdByName,
+      createdByRole: userRole,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    pos.push(newPO);
+    await this.savePOs(pos);
+
+    console.log('✓ PO created successfully');
+    console.log('Creator name:', newPO.createdByName);
+    console.log('includeStaticFile:', newPO.includeStaticFile); // ✅ NEW LOG
+    console.log('=================\n');
+    
+    return newPO;
   }
-
-  const newPO = {
-    id,
-    poNumber,
-    date: poData.date || today,
-    supplier: poData.supplier || '',
-    supplierAddress: poData.supplierAddress || '',
-    supplierPhone: poData.supplierPhone || '',
-    receiver: poData.receiver || '',
-    receiverCity: poData.receiverCity || '',
-    receiverAddress: poData.receiverAddress || '',
-    receiverPhone: poData.receiverPhone || '',
-    tableHeaderText: poData.tableHeaderText || '',
-    taxRate: poData.taxRate || 0,
-    items: poData.items || [],
-    notes: poData.notes || '',
-    language: detectedLanguage,
-    status: 'pending',
-    createdBy: userId,
-    createdByName: createdByName,
-    createdByRole: userRole,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  pos.push(newPO);
-  await this.savePOs(pos);
-
-  console.log('✓ PO created successfully');
-  console.log('Creator name:', newPO.createdByName);
-  console.log('=================\n');
-  
-  return newPO;
-}
 
   /**
    * Get all POs with filtering and pagination
@@ -341,7 +336,6 @@ async createPO(poData, userId, userRole) {
   async getAllPOs(filters = {}, userId, userRole) {
     let pos = await this.loadPOs();
 
-    // Add creator names to all POs
     pos = await this.enrichPOsWithCreatorNames(pos);
 
     if (userRole === 'employee' || userRole === 'admin') {
@@ -419,7 +413,6 @@ async createPO(poData, userId, userRole) {
       }
     }
 
-    // Add creator name
     const createdByName = await this.getUserNameById(po.createdBy);
 
     return {
@@ -429,7 +422,7 @@ async createPO(poData, userId, userRole) {
   }
 
   /**
-   * Update PO
+   * ✅ Update PO - WITH includeStaticFile SUPPORT
    */
   async updatePO(id, updateData, userId, userRole) {
     const pos = await this.loadPOs();
@@ -460,6 +453,7 @@ async createPO(poData, userId, userRole) {
     if (updateData.items) po.items = updateData.items;
     if (updateData.notes !== undefined) po.notes = updateData.notes;
     if (updateData.status) po.status = updateData.status;
+    if (updateData.includeStaticFile !== undefined) po.includeStaticFile = updateData.includeStaticFile; // ✅ NEW FIELD
 
     const detectedLanguage = updateData.forceLanguage || this.detectPOLanguage(po);
     po.language = detectedLanguage;
@@ -469,7 +463,6 @@ async createPO(poData, userId, userRole) {
     pos[poIndex] = po;
     await this.savePOs(pos);
 
-    // Add creator name
     const createdByName = await this.getUserNameById(po.createdBy);
 
     return {
@@ -532,38 +525,96 @@ async createPO(poData, userId, userRole) {
   }
 
   /**
-   * Generate PO PDF with optional attachment merge
+   * ✅ Generate PO PDF with optional attachment and static PDF merge
    */
   async generatePOPDF(id, userId, userRole, attachmentPdf = null) {
     const po = await this.getPOById(id, userId, userRole);
     
+    console.log('🔵 Generating PDF for PO:', po.poNumber);
+    console.log('🔵 Include static file:', po.includeStaticFile);
+    
     const pdfResult = await poPdfGenerator.generatePOPDF(po);
     
+    // ✅ NEW: Prepare list of PDFs to merge
+    const pdfsToMerge = [];
+    
+    // Add user-uploaded attachment if provided
+    if (attachmentPdf) {
+      const isValid = await poPdfGenerator.isValidPDF(attachmentPdf);
+      if (isValid) {
+        pdfsToMerge.push(attachmentPdf);
+        console.log('✅ Added user attachment PDF to merge list');
+      } else {
+        console.warn('⚠️ Invalid user attachment PDF, skipping');
+      }
+    }
+    
+    // ✅ NEW: Add static PDF if includeStaticFile is true
+    let staticPdfPath = null;
+    if (po.includeStaticFile === true) {
+      try {
+        const fsSync = require('fs');
+        if (fsSync.existsSync(STATIC_PDF_PATH)) {
+          const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
+          pdfsToMerge.push(staticPdfBytes);
+          staticPdfPath = STATIC_PDF_PATH;
+          console.log('✅ Added static PDF to merge list');
+        } else {
+          console.warn('⚠️ Static PDF file not found at:', STATIC_PDF_PATH);
+        }
+      } catch (error) {
+        console.error('❌ Error reading static PDF:', error.message);
+      }
+    }
+    
+    // Merge all PDFs
     let finalPdfResult = pdfResult;
     try {
-      if (attachmentPdf) {
-        const isValid = await poPdfGenerator.isValidPDF(attachmentPdf);
-        if (!isValid) {
-          throw new Error('Invalid PDF attachment');
+      if (pdfsToMerge.length > 0) {
+        console.log(`🔄 Merging ${pdfsToMerge.length} PDF(s) with PO...`);
+        
+        let currentPath = pdfResult.filepath;
+        
+        for (let i = 0; i < pdfsToMerge.length; i++) {
+          const mergeResult = await poPdfGenerator.mergePDFs(
+            currentPath,
+            pdfsToMerge[i],
+            null,
+            pdfResult.language
+          );
+          currentPath = mergeResult.filepath;
+          
+          if (i === pdfsToMerge.length - 1) {
+            finalPdfResult = {
+              ...pdfResult,
+              filename: mergeResult.filename,
+              filepath: mergeResult.filepath,
+              merged: true,
+              pageCount: mergeResult.pageCount
+            };
+          }
         }
+        
+        console.log('✅ PDF merge completed successfully');
+      } else {
+        // No PDFs to merge, just add headers/footers
+        const headerResult = await poPdfGenerator.mergePDFs(
+          pdfResult.filepath,
+          null,
+          null,
+          pdfResult.language
+        );
+        
+        finalPdfResult = {
+          ...pdfResult,
+          filename: headerResult.filename,
+          filepath: headerResult.filepath,
+          merged: false,
+          pageCount: headerResult.pageCount
+        };
       }
-
-      const mergeResult = await poPdfGenerator.mergePDFs(
-        pdfResult.filepath,
-        attachmentPdf,
-        null,
-        pdfResult.language
-      );
-
-      finalPdfResult = {
-        ...pdfResult,
-        filename: mergeResult.filename,
-        filepath: mergeResult.filepath,
-        merged: mergeResult.merged,
-        pageCount: mergeResult.pageCount
-      };
     } catch (mergeError) {
-      console.error('PDF merge/header failed:', mergeError.message);
+      console.error('❌ PDF merge/header failed:', mergeError.message);
       finalPdfResult.mergeError = mergeError.message;
     }
     
