@@ -1,14 +1,16 @@
-// src/routes/rfqs.routes.js - COMPLETE RFQ ROUTES WITH PDF AND ATTACHMENT
+// src/routes/rfqs.routes.js - FIXED WITH includeStaticFile SUPPORT
+
 const express = require('express');
 const router = express.Router();
 const path = require('path');
 const multer = require('multer');
 const rfqService = require('../services/rfq.service');
-const { protect,checkRouteAccess } = require('../middleware/auth.middleware');
+const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 router.use(protect);
 router.use(checkRouteAccess('purchaseManagement'));
+
 // Configure multer for PDF uploads (memory storage)
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -25,8 +27,7 @@ const upload = multer({
 });
 
 /**
- * 1. RESET COUNTER - Super admin only
- * POST /api/rfqs/reset-counter
+ * RESET COUNTER - Super admin only
  */
 router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) => {
   try {
@@ -43,8 +44,7 @@ router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) 
 });
 
 /**
- * 2. GET RFQ STATISTICS
- * GET /api/rfqs/stats
+ * GET RFQ STATISTICS
  */
 router.get('/stats', async (req, res, next) => {
   try {
@@ -60,13 +60,7 @@ router.get('/stats', async (req, res, next) => {
 });
 
 /**
- * 3. CREATE RFQ (Auto-detect language from data)
- * POST /api/rfqs
- * Body: {
- *   date, time, requester, production, supplier, urgent, 
- *   items: [{ description, unit, quantity, unitPriceExternal, unitPriceInternal }],
- *   notes
- * }
+ * ✅ CREATE RFQ - Now accepts includeStaticFile
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -77,9 +71,10 @@ router.post('/', async (req, res, next) => {
       production: req.body.production,
       supplier: req.body.supplier,
       supplierAddress: req.body.supplierAddress,
-      urgent: req.body.urgent,
+      urgent: req.body.urgent === true || req.body.urgent === 'true',
       items: req.body.items || [],
-      notes: req.body.notes
+      notes: req.body.notes,
+      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true' // ✅ NEW FIELD
     };
 
     const rfq = await rfqService.createRFQ(
@@ -99,9 +94,7 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * 4. GET ALL RFQs
- * GET /api/rfqs
- * Query params: rfqNumber, startDate, endDate, supplier, production, status, urgent, search, page, limit
+ * GET ALL RFQs
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -147,8 +140,7 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
- * 5. GET SPECIFIC RFQ (By ID)
- * GET /api/rfqs/:id
+ * GET SPECIFIC RFQ (By ID)
  */
 router.get('/:id', async (req, res, next) => {
   try {
@@ -168,8 +160,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * 6. UPDATE RFQ (Auto-detect language from data)
- * PUT /api/rfqs/:id
+ * ✅ UPDATE RFQ - Now accepts includeStaticFile
  */
 router.put('/:id', async (req, res, next) => {
   try {
@@ -179,10 +170,14 @@ router.put('/:id', async (req, res, next) => {
       requester: req.body.requester,
       production: req.body.production,
       supplier: req.body.supplier,
-      urgent: req.body.urgent,
+      supplierAddress: req.body.supplierAddress,
+      urgent: req.body.urgent !== undefined ? (req.body.urgent === true || req.body.urgent === 'true') : undefined,
       items: req.body.items,
       notes: req.body.notes,
-      status: req.body.status
+      status: req.body.status,
+      includeStaticFile: req.body.includeStaticFile !== undefined 
+        ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
+        : undefined // ✅ NEW FIELD
     };
 
     const rfq = await rfqService.updateRFQ(
@@ -203,8 +198,7 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * 7. DELETE RFQ (Super Admin Only)
- * DELETE /api/rfqs/:id
+ * DELETE RFQ (Super Admin Only)
  */
 router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
   try {
@@ -220,13 +214,11 @@ router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
 });
 
 /**
- * 8. GENERATE RFQ PDF (with optional attachment support)
- * POST /api/rfqs/:id/generate-pdf
- * Supports multipart/form-data with optional 'attachment' field
+ * GENERATE RFQ PDF (with optional attachment support)
+ * ✅ The includeStaticFile logic is now handled in the service layer
  */
 router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {
-    // Extract attachment buffer if provided
     const attachmentPdf = req.file ? req.file.buffer : null;
 
     const result = await rfqService.generateRFQPDF(
@@ -245,12 +237,10 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
       merged: result.pdf.merged || false
     };
 
-    // Include page count if merge was successful
     if (result.pdf.pageCount) {
       responseData.pageCount = result.pdf.pageCount;
     }
 
-    // Include merge error if it occurred
     if (result.pdf.mergeError) {
       responseData.mergeError = result.pdf.mergeError;
       responseData.warning = 'PDF generated but attachment merge failed. Using original PDF.';
@@ -271,8 +261,7 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 });
 
 /**
- * 9. DOWNLOAD RFQ PDF
- * GET /api/rfqs/:id/download-pdf
+ * DOWNLOAD RFQ PDF
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {

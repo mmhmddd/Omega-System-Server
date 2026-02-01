@@ -1,4 +1,4 @@
-// src/routes/receipts.routes.js - UPDATED WITH OPTIONAL ITEMS
+// src/routes/receipts.routes.js - UPDATED WITH includeStaticFile SUPPORT
 const express = require('express');
 const router = express.Router();
 const path = require('path');
@@ -26,7 +26,7 @@ const upload = multer({
 });
 
 /**
- * ✅ UPDATED: CREATE receipt - Items are now OPTIONAL
+ * ✅ UPDATED: CREATE receipt - Now accepts includeStaticFile
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -46,8 +46,9 @@ router.post('/', async (req, res, next) => {
       workLocation: req.body.workLocation,
       companyNumber: req.body.companyNumber,
       additionalText: req.body.additionalText,
-      items: parsedItems, // ✅ Can be empty array
-      notes: req.body.notes
+      items: parsedItems,
+      notes: req.body.notes,
+      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true' // ✅ NEW FIELD
     };
 
     const receipt = await receiptService.createReceipt(
@@ -176,7 +177,7 @@ router.get('/number/:receiptNumber', async (req, res, next) => {
 });
 
 /**
- * ✅ UPDATED: UPDATE receipt - Items are now OPTIONAL
+ * ✅ UPDATED: UPDATE receipt - Now accepts includeStaticFile
  */
 router.put('/:id', async (req, res, next) => {
   try {
@@ -184,7 +185,7 @@ router.put('/:id', async (req, res, next) => {
     let parsedItems = undefined;
     if (req.body.items !== undefined) {
       if (Array.isArray(req.body.items)) {
-        parsedItems = req.body.items; // Can be empty array
+        parsedItems = req.body.items;
       }
     }
     
@@ -198,8 +199,11 @@ router.put('/:id', async (req, res, next) => {
       workLocation: req.body.workLocation,
       companyNumber: req.body.companyNumber,
       additionalText: req.body.additionalText,
-      items: parsedItems, // ✅ Can be empty array or undefined
-      notes: req.body.notes
+      items: parsedItems,
+      notes: req.body.notes,
+      includeStaticFile: req.body.includeStaticFile !== undefined 
+        ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
+        : undefined // ✅ NEW FIELD
     };
 
     const receipt = await receiptService.updateReceipt(
@@ -237,6 +241,7 @@ router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
 
 /**
  * GENERATE PDF (with optional attachment support)
+ * ✅ The includeStaticFile logic is now handled in the service layer
  */
 router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {

@@ -1,4 +1,4 @@
-// src/services/rfq.service.js - UPDATED WITH SUPPLIER ADDRESS AND USER NAME
+// src/services/rfq.service.js - FIXED WITH includeStaticFile SUPPORT
 
 const fs = require('fs').promises;
 const path = require('path');
@@ -8,6 +8,9 @@ const rfqPdfGenerator = require('../utils/pdf-generator-rfq.util');
 const RFQS_FILE = path.join(__dirname, '../../data/rfqs/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
+
+// ✅ NEW: Path to your static PDF file
+const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class RFQService {
   async loadRFQs() {
@@ -136,9 +139,12 @@ class RFQService {
   }
 
   /**
-   * Create a new RFQ - UPDATED WITH SUPPLIER ADDRESS AND USER NAME
+   * Create a new RFQ - WITH includeStaticFile SUPPORT
    */
   async createRFQ(rfqData, userId, userRole) {
+    console.log('\n=== CREATE RFQ DEBUG ===');
+    console.log('includeStaticFile:', rfqData.includeStaticFile); // ✅ NEW LOG
+    
     const rfqs = await this.loadRFQs();
     
     const counter = await this.loadCounter();
@@ -155,10 +161,8 @@ class RFQService {
 
     const detectedLanguage = rfqData.forceLanguage || this.detectRFQLanguage(rfqData);
 
-    // Get user name for createdByName field
     const userName = await this.getUserName(userId);
 
-    // Auto-populate requester with user's name if not provided
     let requesterName = rfqData.requester;
     if (!requesterName || requesterName.trim() === '') {
       requesterName = userName;
@@ -172,14 +176,15 @@ class RFQService {
       requester: requesterName,
       production: rfqData.production || '',
       supplier: rfqData.supplier || '',
-      supplierAddress: rfqData.supplierAddress || '', // ✅ NEW FIELD
+      supplierAddress: rfqData.supplierAddress || '',
       urgent: rfqData.urgent || false,
       items: rfqData.items || [],
       notes: rfqData.notes || '',
+      includeStaticFile: rfqData.includeStaticFile || false, // ✅ NEW FIELD
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
-      createdByName: userName, // ✅ NEW FIELD - user's actual name
+      createdByName: userName,
       createdByRole: userRole,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -188,11 +193,12 @@ class RFQService {
     rfqs.push(newRFQ);
     await this.saveRFQs(rfqs);
 
+    console.log('RFQ created with includeStaticFile:', newRFQ.includeStaticFile); // ✅ NEW LOG
     return newRFQ;
   }
 
   /**
-   * Get all RFQs - ENSURES createdByName IS POPULATED
+   * Get all RFQs
    */
   async getAllRFQs(filters = {}, userId, userRole) {
     let rfqs = await this.loadRFQs();
@@ -255,7 +261,6 @@ class RFQService {
 
     const paginatedRFQs = rfqs.slice(startIndex, endIndex);
 
-    // ✅ Ensure createdByName is populated for each RFQ
     for (let rfq of paginatedRFQs) {
       if (!rfq.createdByName) {
         rfq.createdByName = await this.getUserName(rfq.createdBy);
@@ -274,7 +279,7 @@ class RFQService {
   }
 
   /**
-   * Get RFQ by ID - ENSURES createdByName IS POPULATED
+   * Get RFQ by ID
    */
   async getRFQById(id, userId, userRole) {
     const rfqs = await this.loadRFQs();
@@ -290,7 +295,6 @@ class RFQService {
       }
     }
 
-    // ✅ Ensure createdByName is populated
     if (!rfq.createdByName) {
       rfq.createdByName = await this.getUserName(rfq.createdBy);
     }
@@ -299,7 +303,7 @@ class RFQService {
   }
 
   /**
-   * Update RFQ - UPDATED WITH SUPPLIER ADDRESS
+   * Update RFQ - WITH includeStaticFile SUPPORT
    */
   async updateRFQ(id, updateData, userId, userRole) {
     const rfqs = await this.loadRFQs();
@@ -322,18 +326,18 @@ class RFQService {
     if (updateData.requester !== undefined) rfq.requester = updateData.requester;
     if (updateData.production !== undefined) rfq.production = updateData.production;
     if (updateData.supplier !== undefined) rfq.supplier = updateData.supplier;
-    if (updateData.supplierAddress !== undefined) rfq.supplierAddress = updateData.supplierAddress; // ✅ NEW FIELD
+    if (updateData.supplierAddress !== undefined) rfq.supplierAddress = updateData.supplierAddress;
     if (updateData.urgent !== undefined) rfq.urgent = updateData.urgent;
     if (updateData.items) rfq.items = updateData.items;
     if (updateData.notes !== undefined) rfq.notes = updateData.notes;
     if (updateData.status) rfq.status = updateData.status;
+    if (updateData.includeStaticFile !== undefined) rfq.includeStaticFile = updateData.includeStaticFile; // ✅ NEW FIELD
 
     const detectedLanguage = updateData.forceLanguage || this.detectRFQLanguage(rfq);
     rfq.language = detectedLanguage;
 
     rfq.updatedAt = new Date().toISOString();
 
-    // ✅ Ensure createdByName is populated
     if (!rfq.createdByName) {
       rfq.createdByName = await this.getUserName(rfq.createdBy);
     }
@@ -392,6 +396,10 @@ class RFQService {
     return stats;
   }
 
+  /**
+   * Generate RFQ PDF with optional attachment and static PDF merge
+   * ✅ UPDATED: Now handles includeStaticFile option
+   */
   async generateRFQPDF(id, userId, userRole, attachmentPdf = null) {
     const rfq = await this.getRFQById(id, userId, userRole);
     
@@ -399,33 +407,91 @@ class RFQService {
       rfq.requester = await this.getUserName(userId);
     }
     
+    console.log('🔵 Generating PDF for RFQ:', rfq.rfqNumber);
+    console.log('🔵 Include static file:', rfq.includeStaticFile);
+    
     const pdfResult = await rfqPdfGenerator.generateRFQPDF(rfq);
     
+    // ✅ NEW: Prepare list of PDFs to merge
+    const pdfsToMerge = [];
+    
+    // Add user-uploaded attachment if provided
+    if (attachmentPdf) {
+      const isValid = await rfqPdfGenerator.isValidPDF(attachmentPdf);
+      if (isValid) {
+        pdfsToMerge.push(attachmentPdf);
+        console.log('✅ Added user attachment PDF to merge list');
+      } else {
+        console.warn('⚠️ Invalid user attachment PDF, skipping');
+      }
+    }
+    
+    // ✅ NEW: Add static PDF if includeStaticFile is true
+    let staticPdfPath = null;
+    if (rfq.includeStaticFile === true) {
+      try {
+        const fsSync = require('fs');
+        if (fsSync.existsSync(STATIC_PDF_PATH)) {
+          const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
+          pdfsToMerge.push(staticPdfBytes);
+          staticPdfPath = STATIC_PDF_PATH;
+          console.log('✅ Added static PDF to merge list');
+        } else {
+          console.warn('⚠️ Static PDF file not found at:', STATIC_PDF_PATH);
+        }
+      } catch (error) {
+        console.error('❌ Error reading static PDF:', error.message);
+      }
+    }
+    
+    // Merge all PDFs
     let finalPdfResult = pdfResult;
     try {
-      if (attachmentPdf) {
-        const isValid = await rfqPdfGenerator.isValidPDF(attachmentPdf);
-        if (!isValid) {
-          throw new Error('Invalid PDF attachment');
+      if (pdfsToMerge.length > 0) {
+        console.log(`🔄 Merging ${pdfsToMerge.length} PDF(s) with RFQ...`);
+        
+        let currentPath = pdfResult.filepath;
+        
+        for (let i = 0; i < pdfsToMerge.length; i++) {
+          const mergeResult = await rfqPdfGenerator.mergePDFs(
+            currentPath,
+            pdfsToMerge[i],
+            null,
+            pdfResult.language
+          );
+          currentPath = mergeResult.filepath;
+          
+          if (i === pdfsToMerge.length - 1) {
+            finalPdfResult = {
+              ...pdfResult,
+              filename: mergeResult.filename,
+              filepath: mergeResult.filepath,
+              merged: true,
+              pageCount: mergeResult.pageCount
+            };
+          }
         }
+        
+        console.log('✅ PDF merge completed successfully');
+      } else {
+        // No PDFs to merge, just add headers/footers
+        const headerResult = await rfqPdfGenerator.mergePDFs(
+          pdfResult.filepath,
+          null,
+          null,
+          pdfResult.language
+        );
+        
+        finalPdfResult = {
+          ...pdfResult,
+          filename: headerResult.filename,
+          filepath: headerResult.filepath,
+          merged: false,
+          pageCount: headerResult.pageCount
+        };
       }
-
-      const mergeResult = await rfqPdfGenerator.mergePDFs(
-        pdfResult.filepath,
-        attachmentPdf,
-        null,
-        pdfResult.language
-      );
-
-      finalPdfResult = {
-        ...pdfResult,
-        filename: mergeResult.filename,
-        filepath: mergeResult.filepath,
-        merged: mergeResult.merged,
-        pageCount: mergeResult.pageCount
-      };
     } catch (mergeError) {
-      console.error('PDF merge/header failed:', mergeError.message);
+      console.error('❌ PDF merge/header failed:', mergeError.message);
       finalPdfResult.mergeError = mergeError.message;
     }
     

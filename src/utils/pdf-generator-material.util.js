@@ -598,9 +598,6 @@ body {
     </div>
   </div>
 
-  <!-- ✅ NEW: Green separator line -->
-  <div class="separator-line"></div>
-
   <!-- ✅ Title after green line -->
   <h1 class="title">${labels.title}</h1>
 
@@ -654,7 +651,6 @@ body {
   <!-- ✅ Notes section - only show if data exists -->
   ${hasNotes ? `
   <div class="notes-section">
-    <div class="notes-title">${labels.additionalNotes}</div>
     <div class="notes-content">${material.additionalNotes}</div>
   </div>
   ` : ''}

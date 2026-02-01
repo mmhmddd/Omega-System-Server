@@ -748,8 +748,7 @@ body {
     </div>
   </div>
 
-  <!-- ✅ NEW: Blue separator line -->
-  <div class="separator-line"></div>
+
 
   <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>

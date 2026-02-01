@@ -1,4 +1,4 @@
-// src/services/receipt.service.js - COMPLETE FIXED VERSION
+// src/services/receipt.service.js - UPDATED WITH includeStaticFile SUPPORT
 const fs = require('fs').promises;
 const path = require('path');
 const atomicWrite = require('../utils/atomic-write.util');
@@ -8,6 +8,9 @@ const pdfGenerator = require('../utils/pdf-generatorRecipts.util');
 const RECEIPTS_FILE = path.join(__dirname, '../../data/receipts/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
+
+// ✅ NEW: Path to your static PDF file
+const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class ReceiptService {
   /**
@@ -170,12 +173,14 @@ class ReceiptService {
 
   /**
    * Create a new receipt
+   * ✅ UPDATED: Now accepts includeStaticFile parameter
    */
   async createReceipt(receiptData, userId, userRole) {
     console.log('\n=== CREATE RECEIPT DEBUG ===');
     console.log('userId:', userId);
     console.log('userId type:', typeof userId);
     console.log('userRole:', userRole);
+    console.log('includeStaticFile:', receiptData.includeStaticFile); // ✅ NEW LOG
     
     const receipts = await this.loadReceipts();
     
@@ -212,6 +217,7 @@ class ReceiptService {
       additionalText: receiptData.additionalText || '',
       items: receiptData.items || [],
       notes: receiptData.notes || '',
+      includeStaticFile: receiptData.includeStaticFile || false, // ✅ NEW FIELD
       createdBy: userId,
       createdByName: createdByName || 'Unknown User',
       createdByRole: userRole,
@@ -223,6 +229,7 @@ class ReceiptService {
     await this.saveReceipts(receipts);
 
     console.log('Receipt created with name:', newReceipt.createdByName);
+    console.log('Include static file:', newReceipt.includeStaticFile); // ✅ NEW LOG
     return newReceipt;
   }
 
@@ -369,6 +376,7 @@ class ReceiptService {
 
   /**
    * Update receipt
+   * ✅ UPDATED: Now accepts includeStaticFile parameter
    */
   async updateReceipt(id, updateData, userId, userRole) {
     const receipts = await this.loadReceipts();
@@ -397,6 +405,7 @@ class ReceiptService {
     if (updateData.additionalText !== undefined) receipt.additionalText = updateData.additionalText;
     if (updateData.items !== undefined) receipt.items = updateData.items;
     if (updateData.notes !== undefined) receipt.notes = updateData.notes;
+    if (updateData.includeStaticFile !== undefined) receipt.includeStaticFile = updateData.includeStaticFile; // ✅ NEW FIELD
 
     receipt.updatedAt = new Date().toISOString();
 
@@ -464,44 +473,98 @@ class ReceiptService {
 
   /**
    * Generate receipt PDF with optional attachment merge
+   * ✅ UPDATED: Now handles includeStaticFile option
    */
   async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
-
-    
     // Get receipt data
     const receipt = await this.getReceiptById(id, userId, userRole);
+    
+    console.log('🔵 Generating PDF for receipt:', receipt.receiptNumber);
+    console.log('🔵 Include static file:', receipt.includeStaticFile);
     
     // Generate the receipt PDF
     const pdfResult = await pdfGenerator.generateReceiptPDF(receipt);
     
-    // Merge with attachment
+    // ✅ NEW: Prepare list of PDFs to merge
+    const pdfsToMerge = [];
+    
+    // Add user-uploaded attachment if provided
+    if (attachmentPdf) {
+      const isValid = await pdfGenerator.isValidPDF(attachmentPdf);
+      if (isValid) {
+        pdfsToMerge.push(attachmentPdf);
+        console.log('✅ Added user attachment PDF to merge list');
+      } else {
+        console.warn('⚠️ Invalid user attachment PDF, skipping');
+      }
+    }
+    
+    // ✅ NEW: Add static PDF if includeStaticFile is true
+    if (receipt.includeStaticFile === true) {
+      try {
+        const fsSync = require('fs');
+        if (fsSync.existsSync(STATIC_PDF_PATH)) {
+          const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
+          pdfsToMerge.push(staticPdfBytes);
+          console.log('✅ Added static PDF to merge list');
+        } else {
+          console.warn('⚠️ Static PDF file not found at:', STATIC_PDF_PATH);
+        }
+      } catch (error) {
+        console.error('❌ Error reading static PDF:', error.message);
+      }
+    }
+    
+    // Merge all PDFs
     let finalPdfResult = pdfResult;
     try {
-      if (attachmentPdf) {
-        // Validate attachment
-        const isValid = await pdfGenerator.isValidPDF(attachmentPdf);
-        if (!isValid) {
-          throw new Error('Invalid PDF attachment');
+      if (pdfsToMerge.length > 0) {
+        console.log(`🔄 Merging ${pdfsToMerge.length} PDF(s) with receipt...`);
+        
+        // Merge first attachment
+        let currentPath = pdfResult.filepath;
+        
+        for (let i = 0; i < pdfsToMerge.length; i++) {
+          const mergeResult = await pdfGenerator.mergePDFs(
+            currentPath,
+            pdfsToMerge[i],
+            null,
+            pdfResult.language
+          );
+          currentPath = mergeResult.filepath;
+          
+          if (i === pdfsToMerge.length - 1) {
+            // Last merge, update final result
+            finalPdfResult = {
+              ...pdfResult,
+              filename: mergeResult.filename,
+              filepath: mergeResult.filepath,
+              merged: true,
+              pageCount: mergeResult.pageCount
+            };
+          }
         }
+        
+        console.log('✅ PDF merge completed successfully');
+      } else {
+        // No PDFs to merge, just add headers/footers
+        const headerResult = await pdfGenerator.mergePDFs(
+          pdfResult.filepath,
+          null,
+          null,
+          pdfResult.language
+        );
+        
+        finalPdfResult = {
+          ...pdfResult,
+          filename: headerResult.filename,
+          filepath: headerResult.filepath,
+          merged: false,
+          pageCount: headerResult.pageCount
+        };
       }
-
-      // Merge PDFs
-      const mergeResult = await pdfGenerator.mergePDFs(
-        pdfResult.filepath,
-        attachmentPdf,
-        null,
-        pdfResult.language
-      );
-
-      finalPdfResult = {
-        ...pdfResult,
-        filename: mergeResult.filename,
-        filepath: mergeResult.filepath,
-        merged: mergeResult.merged,
-        pageCount: mergeResult.pageCount
-      };
     } catch (mergeError) {
-      console.error('PDF merge/header failed:', mergeError.message);
+      console.error('❌ PDF merge/header failed:', mergeError.message);
       finalPdfResult.mergeError = mergeError.message;
     }
     

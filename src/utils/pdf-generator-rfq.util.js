@@ -1,4 +1,4 @@
-// src/utils/pdf-generator-rfq.util.js - UPDATED WITH IMPROVED LANGUAGE DETECTION & DEPARTMENT TRANSLATION
+// src/utils/pdf-generator-rfq.util.js - FIXED VERSION
 
 const fs = require('fs');
 const path = require('path');
@@ -12,11 +12,11 @@ class RFQPDFGenerator {
     return arabicPattern.test(text);
   }
 
-  // ✅ UPDATED: Detect language based on CONTENT ONLY (exclude date and time)
+  // ✅ FIXED: Improved language detection
   detectLanguage(rfqData) {
     const fieldsToCheck = [];
     
-    // ✅ Add content fields (NOT date/time)
+    // Add content fields (NOT date/time)
     if (rfqData.requester) fieldsToCheck.push(rfqData.requester);
     if (rfqData.production) fieldsToCheck.push(rfqData.production);
     if (rfqData.supplier) fieldsToCheck.push(rfqData.supplier);
@@ -49,7 +49,7 @@ class RFQPDFGenerator {
     return arabicCount > (totalFields / 2) ? 'ar' : 'en';
   }
 
-  // ✅ NEW: Department translation mapping
+  // ✅ Department translation mapping
   getDepartmentTranslation(departmentLabel, targetLanguage) {
     const departmentMap = {
       // Arabic labels
@@ -192,13 +192,14 @@ class RFQPDFGenerator {
            rfq.urgent === true;
   }
 
-  // حساب السعر الإجمالي (الكمية × السعر التقديري للوحدة)
+  // Calculate item total price
   calculateItemTotal(quantity, unitPrice) {
     const qty = parseFloat(quantity) || 0;
     const price = parseFloat(unitPrice) || 0;
     return (qty * price).toFixed(2);
   }
 
+  // Calculate grand total
   calculateGrandTotal(items) {
     if (!items || items.length === 0) return '0.00';
     
@@ -213,18 +214,17 @@ class RFQPDFGenerator {
   }
 
   generateHTML(rfq) {
-    // ✅ UPDATED: Detect language based on content only
     const language = this.detectLanguage(rfq);
     const labels = this.getLabels(language);
     const isRTL = language === 'ar';
     const formattedDate = rfq.date || new Date().toISOString().split('T')[0];
     
-    // ✅ NEW: Translate department based on detected language
+    // Translate department based on detected language
     const translatedDepartment = rfq.production 
       ? this.getDepartmentTranslation(rfq.production, language)
       : '';
     
-    // ✅ Check what data exists
+    // Check what data exists
     const hasItems = this.hasItemsData(rfq.items);
     const hasRequestInfo = this.hasRequestInfoData(rfq);
     const hasNotes = this.hasData(rfq.notes);
@@ -265,7 +265,7 @@ class RFQPDFGenerator {
       }).join('');
     }
 
-    // ✅ Build request info fields conditionally
+    // Build request info fields conditionally
     let requestInfoFields = '';
     if (hasRequestInfo) {
       const fields = [];
@@ -279,7 +279,7 @@ class RFQPDFGenerator {
         `);
       }
       
-      // ✅ UPDATED: Use translated department
+      // Use translated department
       if (this.hasData(translatedDepartment)) {
         fields.push(`
           <div class="info-field">
@@ -349,11 +349,10 @@ body {
   background: #fff;
 }
 
-/* ✅ NEW: Company info section without gray background */
+/* ✅ Company info section without gray background */
 .company-info {
-  padding: 10px 0;
+  padding: 5px 0 10px 0;
   margin-bottom: 10px;
-  direction: ltr;
   break-inside: avoid;
   page-break-inside: avoid;
 }
@@ -362,44 +361,41 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  direction: ltr;
+  gap: 30px;
 }
 
-.company-left, .company-right {
+.company-col {
   width: 48%;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
-.company-left {
-  text-align: left;
-  direction: ltr;
-}
-
-.company-right {
+.company-col-right {
   text-align: right;
   direction: rtl;
 }
 
-.company-left p, .company-right p {
-  margin: 3px 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #333;
+.company-col-left {
+  text-align: left;
+  direction: ltr;
 }
 
-/* ✅ NEW: Blue line separator */
-.separator-line {
+.company-col p {
+  margin: 4px 0;
+}
+
+/* ✅ Single blue separator line */
+.blue-separator {
   width: 100%;
-  height: 2px;
+  height: 3px;
   background-color: #2B4C8C;
-  margin: 15px 0;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  margin: 10px 0 20px 0;
 }
 
 .title {
   text-align: center;
-  margin: 15px 0;
-  font-size: 22px;
+  margin: 0 0 25px 0;
+  font-size: 24px;
   color: #2B4C8C;
   font-weight: bold;
   break-inside: avoid;
@@ -469,6 +465,7 @@ body {
   border-collapse: collapse;
   margin: 15px 0;
   font-size: 10px;
+  border: 1px solid #ddd;
 }
 
 .items-table thead {
@@ -520,30 +517,26 @@ body {
   background-color: #FFFBEA;
   padding: 15px;
   margin: 15px 0;
-  border-radius: 4px;
+  border: 2px solid #FDD835;
+  border-radius: 8px;
   min-height: 80px;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
-.notes-title {
-  font-weight: bold;
-  color: #2B4C8C;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
 .notes-content {
-  font-size: 12px;
+  font-size: 13px;
   color: #555;
   line-height: 1.6;
+  text-align: ${isRTL ? 'right' : 'left'};
+  white-space: pre-wrap;
 }
 
 .signature-section {
   display: flex;
   justify-content: space-between;
   margin-top: 40px;
-  gap: 20px;
+  gap: 25px;
   break-inside: avoid;
   page-break-inside: avoid;
 }
@@ -551,11 +544,11 @@ body {
 .signature-box {
   text-align: center;
   width: 32%;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .signature-label {
-  margin-bottom: 30px;
+  margin-bottom: 35px;
   font-weight: normal;
   color: #333;
 }
@@ -600,28 +593,43 @@ body {
 
 <div class="page-content">
 
-  <!-- ✅ NEW LAYOUT: Company info without gray background -->
+  <!-- ✅ Company info directly under logo (same as delivery receipt) -->
   <div class="company-info">
     <div class="company-row">
-      <div class="company-left">
-        <p><strong>${labels.companyNameEn}</strong></p>
-        <p>${labels.taglineEn}</p>
-        <p>${labels.country}</p>
-        <p>${labels.tel}</p>
-        <p>${labels.website}</p>
+      ${isRTL ? `
+      <div class="company-col company-col-right">
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>الأردن</p>
+        <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+        <p>https://www.omega-jordan.com</p>
       </div>
-      <div class="company-right">
-        <p><strong>${labels.companyNameAr}</strong></p>
-        <p>${labels.tagline}</p>
-        <p>${labels.country}</p>
-        <p>${labels.tel}</p>
-        <p>${labels.website}</p>
+      <div class="company-col company-col-left">
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>Design – Manufacture – Installation</p>
+        <p>Jordan</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
+        <p>https://www.omega-jordan.com</p>
       </div>
+      ` : `
+      <div class="company-col company-col-left">
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>Design – Manufacture – Installation</p>
+        <p>Jordan</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
+        <p>https://www.omega-jordan.com</p>
+      </div>
+      <div class="company-col company-col-right">
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>الأردن</p>
+        <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+        <p>https://www.omega-jordan.com</p>
+      </div>
+      `}
     </div>
   </div>
 
-  <!-- ✅ NEW: Blue separator line -->
-  <div class="separator-line"></div>
 
   <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>
@@ -688,6 +696,7 @@ body {
   </div>
   ` : ''}
 
+  <!-- Signature section -->
   <div class="signature-section">
     <div class="signature-box">
       <div class="signature-label">${labels.requesterSig}</div>
@@ -707,7 +716,7 @@ body {
 
 </body>
 </html>
-  `;
+    `;
   }
 
   async generateRFQPDF(rfq) {
@@ -818,7 +827,7 @@ body {
     const isRTL = language === 'ar';
     const a4 = this.getA4Dimensions();
     
-    const primaryBlue = rgb(0.169, 0.298, 0.549);
+    const primaryBlue = rgb(0.169, 0.298, 0.549); // #2B4C8C
     const textGray = rgb(0.333, 0.333, 0.333);
     const lightGray = rgb(0.8, 0.8, 0.8);
     const white = rgb(1, 1, 1);
@@ -848,6 +857,7 @@ body {
       const docCode = 'OMEGA-PUR-04';
       const pageNumber = `Page ${i + 1} of ${totalPages}`;
 
+      // Clear header area on subsequent pages
       if (i > 0) {
         page.drawRectangle({
           x: 0,
@@ -858,6 +868,7 @@ body {
         });
       }
 
+      // Draw logo
       if (logoImage) {
         const logoWidth = 80;
         const logoHeight = 50;
@@ -879,6 +890,7 @@ body {
         }
       }
 
+      // Draw blue line under header
       page.drawLine({
         start: { x: 50, y: height - 90 },
         end: { x: width - 50, y: height - 90 },
@@ -886,26 +898,26 @@ body {
         color: primaryBlue
       });
 
+      // Draw date of issue (no REV No)
       if (isRTL) {
-
         page.drawText(dateOfIssue, {
           x: width - 200,
-          y: height - 63,
+          y: height - 55,
           size: 9,
           font: font,
           color: textGray
         });
       } else {
-
         page.drawText(dateOfIssue, {
           x: 60,
-          y: height - 63,
+          y: height - 55,
           size: 9,
           font: font,
           color: textGray
         });
       }
 
+      // Draw footer line
       page.drawLine({
         start: { x: 50, y: 50 },
         end: { x: width - 50, y: 50 },
@@ -913,6 +925,7 @@ body {
         color: lightGray
       });
 
+      // Draw footer text
       if (isRTL) {
         page.drawText(docCode, {
           x: width - 150,
@@ -949,9 +962,10 @@ body {
     return pdfDoc;
   }
 
-  async mergePDFs(generatedPdfPath, attachmentPdf = null, outputFilename = null, language = 'ar') {
+  async mergePDFs(generatedPdfPath, attachmentPdf = null, staticPdfPath = null, language = 'ar') {
     try {
-      if (!attachmentPdf) {
+      // ✅ If no attachment and no static PDF, just add headers/footers
+      if (!attachmentPdf && !staticPdfPath) {
         const pdfBytes = fs.readFileSync(generatedPdfPath);
         const pdfDoc = await PDFDocument.load(pdfBytes);
         
@@ -970,55 +984,90 @@ body {
         };
       }
 
+      // ✅ Load generated PDF
       const generatedPdfBytes = fs.readFileSync(generatedPdfPath);
       const generatedPdf = await PDFDocument.load(generatedPdfBytes);
-
-      let attachmentPdfBytes;
-      if (Buffer.isBuffer(attachmentPdf)) {
-        attachmentPdfBytes = attachmentPdf;
-      } else if (typeof attachmentPdf === 'string') {
-        attachmentPdfBytes = fs.readFileSync(attachmentPdf);
-      } else {
-        throw new Error('Invalid attachment format');
-      }
-
-      const attachmentPdfDoc = await PDFDocument.load(attachmentPdfBytes);
       const mergedPdf = await PDFDocument.create();
       const a4 = this.getA4Dimensions();
 
+      // ✅ Add generated PDF pages first
       const generatedPages = await mergedPdf.copyPages(
         generatedPdf,
         generatedPdf.getPageIndices()
       );
       generatedPages.forEach(page => mergedPdf.addPage(page));
 
-      const attachmentIndices = attachmentPdfDoc.getPageIndices();
-      for (const index of attachmentIndices) {
-        const [copiedPage] = await mergedPdf.copyPages(attachmentPdfDoc, [index]);
-        const { width, height } = copiedPage.getSize();
-        
-        const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
-        
-        if (!isA4) {
-          console.log(`Normalizing attachment page ${index + 1} from ${width.toFixed(2)}x${height.toFixed(2)} to A4`);
-          await this.resizePageToA4(copiedPage);
+      // ✅ Track page counts
+      let attachmentPageCount = 0;
+      let staticPageCount = 0;
+
+      // ✅ Add attachment PDF if provided
+      if (attachmentPdf) {
+        let attachmentPdfBytes;
+        if (Buffer.isBuffer(attachmentPdf)) {
+          attachmentPdfBytes = attachmentPdf;
+        } else if (typeof attachmentPdf === 'string') {
+          attachmentPdfBytes = fs.readFileSync(attachmentPdf);
+        } else {
+          throw new Error('Invalid attachment format');
         }
+
+        const attachmentPdfDoc = await PDFDocument.load(attachmentPdfBytes);
+        attachmentPageCount = attachmentPdfDoc.getPageCount();
+        const attachmentIndices = attachmentPdfDoc.getPageIndices();
         
-        mergedPdf.addPage(copiedPage);
+        for (const index of attachmentIndices) {
+          const [copiedPage] = await mergedPdf.copyPages(attachmentPdfDoc, [index]);
+          const { width, height } = copiedPage.getSize();
+          
+          const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
+          
+          if (!isA4) {
+            console.log(`Normalizing attachment page ${index + 1} from ${width.toFixed(2)}x${height.toFixed(2)} to A4`);
+            await this.resizePageToA4(copiedPage);
+          }
+          
+          mergedPdf.addPage(copiedPage);
+        }
       }
 
+      // ✅ Add static PDF if provided and exists
+      if (staticPdfPath && fs.existsSync(staticPdfPath)) {
+        const staticPdfBytes = fs.readFileSync(staticPdfPath);
+        const staticPdfDoc = await PDFDocument.load(staticPdfBytes);
+        staticPageCount = staticPdfDoc.getPageCount();
+        const staticIndices = staticPdfDoc.getPageIndices();
+        
+        for (const index of staticIndices) {
+          const [copiedPage] = await mergedPdf.copyPages(staticPdfDoc, [index]);
+          const { width, height } = copiedPage.getSize();
+          
+          const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
+          
+          if (!isA4) {
+            console.log(`Normalizing static PDF page ${index + 1} from ${width.toFixed(2)}x${height.toFixed(2)} to A4`);
+            await this.resizePageToA4(copiedPage);
+          }
+          
+          mergedPdf.addPage(copiedPage);
+        }
+      }
+
+      // ✅ Add headers and footers to all pages
       await this.addHeadersFootersToAllPages(mergedPdf, language);
 
+      // ✅ Generate output filename
       const timestamp = Date.now();
-      const finalFilename = outputFilename || 
-        path.basename(generatedPdfPath).replace('.pdf', `_merged_${timestamp}.pdf`);
+      const finalFilename = path.basename(generatedPdfPath).replace('.pdf', `_merged_${timestamp}.pdf`);
       
       const outputDir = path.dirname(generatedPdfPath);
       const outputPath = path.join(outputDir, finalFilename);
 
+      // ✅ Save merged PDF
       const mergedPdfBytes = await mergedPdf.save();
       fs.writeFileSync(outputPath, mergedPdfBytes);
 
+      // ✅ Delete original generated PDF
       try {
         fs.unlinkSync(generatedPdfPath);
         console.log('✓ Original PDF deleted');
@@ -1026,13 +1075,15 @@ body {
         console.log('Could not delete original:', err.message);
       }
 
+      // ✅ Return result with detailed page counts
       return {
         filepath: outputPath,
         filename: finalFilename,
         merged: true,
         pageCount: {
           generated: generatedPdf.getPageCount(),
-          attachment: attachmentPdfDoc.getPageCount(),
+          attachment: attachmentPageCount,
+          static: staticPageCount,
           total: mergedPdf.getPageCount()
         }
       };
