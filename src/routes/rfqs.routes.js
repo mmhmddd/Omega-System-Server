@@ -1,4 +1,4 @@
-// src/routes/rfqs.routes.js - FIXED WITH includeStaticFile SUPPORT
+// src/routes/rfqs.routes.js - FIXED WITH CORRECT ROUTE KEY
 
 const express = require('express');
 const router = express.Router();
@@ -9,7 +9,7 @@ const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 router.use(protect);
-router.use(checkRouteAccess('purchaseManagement'));
+router.use(checkRouteAccess('rfqs')); // ✅ FIXED: Changed from 'purchaseManagement' to 'rfqs'
 
 // Configure multer for PDF uploads (memory storage)
 const upload = multer({
@@ -60,7 +60,7 @@ router.get('/stats', async (req, res, next) => {
 });
 
 /**
- * ✅ CREATE RFQ - Now accepts includeStaticFile
+ * CREATE RFQ - Now accepts includeStaticFile
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -74,7 +74,7 @@ router.post('/', async (req, res, next) => {
       urgent: req.body.urgent === true || req.body.urgent === 'true',
       items: req.body.items || [],
       notes: req.body.notes,
-      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true' // ✅ NEW FIELD
+      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true'
     };
 
     const rfq = await rfqService.createRFQ(
@@ -160,7 +160,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ UPDATE RFQ - Now accepts includeStaticFile
+ * UPDATE RFQ - Now accepts includeStaticFile
  */
 router.put('/:id', async (req, res, next) => {
   try {
@@ -177,7 +177,7 @@ router.put('/:id', async (req, res, next) => {
       status: req.body.status,
       includeStaticFile: req.body.includeStaticFile !== undefined 
         ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
-        : undefined // ✅ NEW FIELD
+        : undefined
     };
 
     const rfq = await rfqService.updateRFQ(
@@ -198,20 +198,16 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ DELETE RFQ - UPDATED
- * Super Admin: Can delete any RFQ
- * Admin/Employee: Can delete only their own RFQs
+ * DELETE RFQ
  */
 router.delete('/:id', async (req, res, next) => {
   try {
-    // First, get the RFQ to check ownership
     const rfq = await rfqService.getRFQById(
       req.params.id,
       req.user.id,
       req.user.role
     );
 
-    // Super admin can delete any RFQ
     if (req.user.role === 'super_admin') {
       await rfqService.deleteRFQ(req.params.id);
       return res.status(200).json({
@@ -220,7 +216,6 @@ router.delete('/:id', async (req, res, next) => {
       });
     }
 
-    // Admin and employee can only delete their own RFQs
     if (req.user.role === 'admin' || req.user.role === 'employee') {
       if (rfq.createdBy !== req.user.id) {
         return res.status(403).json({
@@ -235,7 +230,6 @@ router.delete('/:id', async (req, res, next) => {
       });
     }
 
-    // Other roles cannot delete
     return res.status(403).json({
       success: false,
       message: 'You do not have permission to delete RFQs'
@@ -247,7 +241,6 @@ router.delete('/:id', async (req, res, next) => {
 
 /**
  * GENERATE RFQ PDF (with optional attachment support)
- * ✅ The includeStaticFile logic is now handled in the service layer
  */
 router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {

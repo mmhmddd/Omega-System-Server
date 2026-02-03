@@ -1,6 +1,4 @@
-// ============================================
-// src/routes/suppliers.routes.js
-// ============================================
+// src/routes/suppliers.routes.js - FIXED WITH CORRECT ROUTE KEY
 
 const express = require('express');
 const router = express.Router();
@@ -8,324 +6,285 @@ const supplierService = require('../services/supplier.service');
 const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
-// ============================================
-// ✅ الترتيب الصحيح: protect أولاً، ثم checkRouteAccess
-// ============================================
-
-// Apply protect middleware first to all routes
+// All routes require authentication
 router.use(protect);
+router.use(checkRouteAccess('suppliers')); // ✅ FIXED: Changed from 'supplierManagement' to 'suppliers'
 
-// Then apply route access check
-router.use(checkRouteAccess('supplierManagement'));
+/**
+ * @route   POST /api/suppliers
+ * @desc    Create new supplier
+ * @access  Private (Admin & Super Admin only)
+ */
+router.post('/', restrictTo('admin', 'super_admin'), async (req, res) => {
+  try {
+    const supplier = await supplierService.createSupplier(req.body, req.user.id);
 
-// ============================================
-// PUBLIC ROUTES (Authenticated users with supplierManagement access)
-// ============================================
+    res.status(201).json({
+      success: true,
+      message: 'تم إنشاء المورد بنجاح',
+      data: supplier
+    });
+  } catch (error) {
+    console.error('Error creating supplier:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'فشل إنشاء المورد'
+    });
+  }
+});
 
 /**
  * @route   GET /api/suppliers
  * @desc    Get all suppliers with optional filters
- * @access  Authenticated + supplierManagement access
- * @query   status, materialType, country, city, minRating
+ * @access  Private (All authenticated users)
  */
-router.get('/', async (req, res, next) => {
+router.get('/', async (req, res) => {
   try {
-    const filters = {
-      status: req.query.status,
-      materialType: req.query.materialType,
-      country: req.query.country,
-      city: req.query.city,
-      minRating: req.query.minRating
-    };
-    
+    const {
+      status,
+      materialType,
+      country,
+      city,
+      minRating
+    } = req.query;
+
+    const filters = {};
+    if (status) filters.status = status;
+    if (materialType) filters.materialType = materialType;
+    if (country) filters.country = country;
+    if (city) filters.city = city;
+    if (minRating) filters.minRating = parseFloat(minRating);
+
     const suppliers = await supplierService.getAllSuppliers(filters);
-    
+
     res.status(200).json({
       success: true,
       count: suppliers.length,
       data: suppliers
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error('Error fetching suppliers:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'فشل جلب الموردين'
+    });
   }
 });
 
 /**
  * @route   GET /api/suppliers/search
  * @desc    Search suppliers by query
- * @access  Authenticated + supplierManagement access
- * @query   q (search query)
+ * @access  Private (All authenticated users)
  */
-router.get('/search', async (req, res, next) => {
+router.get('/search', async (req, res) => {
   try {
-    const query = req.query.q || '';
-    
-    const suppliers = await supplierService.searchSuppliers(query);
-    
+    const { q } = req.query;
+
+    if (!q || q.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Query parameter is required'
+      });
+    }
+
+    const suppliers = await supplierService.searchSuppliers(q);
+
     res.status(200).json({
       success: true,
       count: suppliers.length,
       data: suppliers
     });
-  } catch (err) {
-    next(err);
-  }
-});
-
-/**
- * @route   GET /api/suppliers/statistics
- * @desc    Get supplier statistics
- * @access  Authenticated + supplierManagement access
- */
-router.get('/statistics', async (req, res, next) => {
-  try {
-    const stats = await supplierService.getStatistics();
-    
-    res.status(200).json({
-      success: true,
-      data: stats
+  } catch (error) {
+    console.error('Error searching suppliers:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'فشل البحث عن الموردين'
     });
-  } catch (err) {
-    next(err);
   }
 });
 
 /**
  * @route   GET /api/suppliers/material/:materialType
  * @desc    Get suppliers by material type
- * @access  Authenticated + supplierManagement access
+ * @access  Private (All authenticated users)
  */
-router.get('/material/:materialType', async (req, res, next) => {
+router.get('/material/:materialType', async (req, res) => {
   try {
     const suppliers = await supplierService.getSuppliersByMaterial(req.params.materialType);
-    
+
     res.status(200).json({
       success: true,
       count: suppliers.length,
       data: suppliers
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error('Error fetching suppliers by material:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'فشل جلب الموردين'
+    });
+  }
+});
+
+/**
+ * @route   GET /api/suppliers/statistics
+ * @desc    Get supplier statistics
+ * @access  Private (Admin & Super Admin only)
+ */
+router.get('/statistics', restrictTo('admin', 'super_admin'), async (req, res) => {
+  try {
+    const statistics = await supplierService.getStatistics();
+
+    res.status(200).json({
+      success: true,
+      data: statistics
+    });
+  } catch (error) {
+    console.error('Error fetching statistics:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'فشل جلب الإحصائيات'
+    });
   }
 });
 
 /**
  * @route   GET /api/suppliers/:id
- * @desc    Get single supplier by ID
- * @access  Authenticated + supplierManagement access
+ * @desc    Get supplier by ID
+ * @access  Private (All authenticated users)
  */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', async (req, res) => {
   try {
     const supplier = await supplierService.getSupplierById(req.params.id);
-    
+
     res.status(200).json({
       success: true,
       data: supplier
     });
-  } catch (err) {
-    if (err.message === 'Supplier not found') {
-      return res.status(404).json({
-        success: false,
-        error: err.message
-      });
-    }
-    next(err);
-  }
-});
-
-// ============================================
-// SUPER ADMIN ONLY ROUTES
-// ============================================
-
-/**
- * @route   POST /api/suppliers
- * @desc    Add new supplier
- * @access  Super Admin only
- */
-router.post('/', restrictTo('super_admin'), async (req, res, next) => {
-  try {
-    const { name, email, phone } = req.body;
-    
-    // Validation
-    if (!name || !email || !phone) {
-      return res.status(400).json({
-        success: false,
-        error: 'Name, email, and phone are required fields'
-      });
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid email format'
-      });
-    }
-    
-    // Add createdBy from authenticated user
-    const supplierData = {
-      ...req.body,
-      createdBy: req.user?.id || req.user?.username || null
-    };
-
-    const supplier = await supplierService.addSupplier(supplierData);
-    
-    res.status(201).json({
-      success: true,
-      message: 'Supplier created successfully',
-      data: supplier
+  } catch (error) {
+    console.error('Error fetching supplier:', error);
+    res.status(404).json({
+      success: false,
+      message: error.message || 'المورد غير موجود'
     });
-  } catch (err) {
-    if (err.message.includes('already exists')) {
-      return res.status(409).json({
-        success: false,
-        error: err.message
-      });
-    }
-    next(err);
   }
 });
 
 /**
  * @route   PUT /api/suppliers/:id
  * @desc    Update supplier
- * @access  Super Admin only
+ * @access  Private (Admin & Super Admin only)
  */
-router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
+router.put('/:id', restrictTo('admin', 'super_admin'), async (req, res) => {
   try {
-    // Email validation if email is being updated
-    if (req.body.email) {
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(req.body.email)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid email format'
-        });
-      }
-    }
+    const supplier = await supplierService.updateSupplier(
+      req.params.id,
+      req.body,
+      req.user.id
+    );
 
-    // Add updatedBy from authenticated user
-    const updateData = {
-      ...req.body,
-      updatedBy: req.user?.id || req.user?.username || null
-    };
-
-    const supplier = await supplierService.updateSupplier(req.params.id, updateData);
-    
     res.status(200).json({
       success: true,
-      message: 'Supplier updated successfully',
+      message: 'تم تحديث المورد بنجاح',
       data: supplier
     });
-  } catch (err) {
-    if (err.message === 'Supplier not found') {
-      return res.status(404).json({
-        success: false,
-        error: err.message
-      });
-    }
-    if (err.message.includes('already exists')) {
-      return res.status(409).json({
-        success: false,
-        error: err.message
-      });
-    }
-    next(err);
+  } catch (error) {
+    console.error('Error updating supplier:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'فشل تحديث المورد'
+    });
   }
 });
 
 /**
  * @route   PATCH /api/suppliers/:id/status
  * @desc    Update supplier status
- * @access  Super Admin only
+ * @access  Private (Admin & Super Admin only)
  */
-router.patch('/:id/status', restrictTo('super_admin'), async (req, res, next) => {
+router.patch('/:id/status', restrictTo('admin', 'super_admin'), async (req, res) => {
   try {
     const { status } = req.body;
-    
-    if (!status) {
+
+    if (!status || !['active', 'inactive', 'pending', 'suspended'].includes(status)) {
       return res.status(400).json({
         success: false,
-        error: 'Status is required'
+        message: 'Invalid status. Must be: active, inactive, pending, or suspended'
       });
     }
 
-    const supplier = await supplierService.updateSupplierStatus(req.params.id, status);
-    
+    const supplier = await supplierService.updateSupplierStatus(
+      req.params.id,
+      status,
+      req.user.id
+    );
+
     res.status(200).json({
       success: true,
-      message: 'Supplier status updated successfully',
+      message: 'تم تحديث حالة المورد بنجاح',
       data: supplier
     });
-  } catch (err) {
-    if (err.message === 'Supplier not found') {
-      return res.status(404).json({
-        success: false,
-        error: err.message
-      });
-    }
-    if (err.message.includes('Invalid status')) {
-      return res.status(400).json({
-        success: false,
-        error: err.message
-      });
-    }
-    next(err);
+  } catch (error) {
+    console.error('Error updating supplier status:', error);
+    res.status(400).json({
+      success: false,
+      message: error.message || 'فشل تحديث حالة المورد'
+    });
   }
 });
 
 /**
  * @route   DELETE /api/suppliers/:id
  * @desc    Delete supplier
- * @access  Super Admin only
+ * @access  Private (Admin & Super Admin only)
  */
-router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
+router.delete('/:id', restrictTo('admin', 'super_admin'), async (req, res) => {
   try {
-    const supplier = await supplierService.deleteSupplier(req.params.id);
-    
+    const result = await supplierService.deleteSupplier(req.params.id);
+
     res.status(200).json({
       success: true,
-      message: 'Supplier deleted successfully',
-      data: supplier
+      message: result.message,
+      data: result.supplier
     });
-  } catch (err) {
-    if (err.message === 'Supplier not found') {
-      return res.status(404).json({
-        success: false,
-        error: err.message
-      });
-    }
-    next(err);
+  } catch (error) {
+    console.error('Error deleting supplier:', error);
+    res.status(404).json({
+      success: false,
+      message: error.message || 'فشل حذف المورد'
+    });
   }
 });
 
 /**
  * @route   POST /api/suppliers/bulk-import
  * @desc    Bulk import suppliers
- * @access  Super Admin only
+ * @access  Private (Super Admin only)
  */
-router.post('/bulk-import', restrictTo('super_admin'), async (req, res, next) => {
+router.post('/bulk-import', restrictTo('super_admin'), async (req, res) => {
   try {
     const { suppliers } = req.body;
-    
-    if (!Array.isArray(suppliers) || suppliers.length === 0) {
+
+    if (!suppliers || !Array.isArray(suppliers) || suppliers.length === 0) {
       return res.status(400).json({
         success: false,
-        error: 'Suppliers array is required and must not be empty'
+        message: 'Suppliers array is required and must not be empty'
       });
     }
 
-    const createdBy = req.user?.id || req.user?.username || null;
-    const results = await supplierService.bulkImportSuppliers(suppliers, createdBy);
-    
+    const result = await supplierService.bulkImportSuppliers(suppliers, req.user.id);
+
     res.status(200).json({
       success: true,
-      message: `Bulk import completed: ${results.success.length} succeeded, ${results.failed.length} failed`,
-      data: results
+      message: 'Bulk import completed',
+      data: result
     });
-  } catch (err) {
-    next(err);
+  } catch (error) {
+    console.error('Error in bulk import:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'فشل الاستيراد الجماعي'
+    });
   }
 });
 

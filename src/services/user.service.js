@@ -1,4 +1,4 @@
-// src/services/user.service.js (FIXED with correct route keys)
+// src/services/user.service.js (FIXED with matching route keys)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -8,9 +8,9 @@ const emailService = require('../utils/email.util');
 
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
-// ✅ FIXED: Available routes matching app.routes.ts exactly
+// ✅ FIXED: Route keys now match app.routes.ts exactly (camelCase, not kebab-case)
 const AVAILABLE_ROUTES = [
-  // إدارة النظام
+  // إدارة النظام (Management)
   { 
     key: 'dashboard', 
     label: 'لوحة التحكم', 
@@ -24,19 +24,19 @@ const AVAILABLE_ROUTES = [
     category: 'management'
   },
   { 
-    key: 'items-control', 
+    key: 'itemsControl', // ✅ Changed from 'items-control'
     label: 'إدارة الأصناف', 
     path: '/items-control',
     category: 'management'
   },
   { 
-    key: 'files-control', 
+    key: 'filesControl', // ✅ Changed from 'files-control'
     label: 'إدارة الملفات', 
     path: '/files-control',
     category: 'management'
   },
 
-  // المشتريات والموردين
+  // المشتريات والموردين (Procurement)
   { 
     key: 'suppliers', 
     label: 'إدارة الموردين', 
@@ -50,7 +50,7 @@ const AVAILABLE_ROUTES = [
     category: 'procurement'
   },
   { 
-    key: 'price-quotes', 
+    key: 'priceQuotes', // ✅ Changed from 'price-quotes'
     label: 'عروض الأسعار', 
     path: '/price-quotes',
     category: 'procurement'
@@ -62,9 +62,9 @@ const AVAILABLE_ROUTES = [
     category: 'procurement'
   },
 
-  // المخزون والمواد
+  // المخزون والمواد (Inventory)
   { 
-    key: 'material-requests', 
+    key: 'materialRequests', // ✅ Changed from 'material-requests'
     label: 'طلبات المواد', 
     path: '/material-requests',
     category: 'inventory'
@@ -75,12 +75,24 @@ const AVAILABLE_ROUTES = [
     path: '/receipts',
     category: 'inventory'
   },
-
-  // العمليات التشغيلية
   { 
-    key: 'Proforma-invoice', 
+    key: 'emptyReceipt', // ✅ Added missing route
+    label: 'إشعار استلام فارغ', 
+    path: '/empty-receipt',
+    category: 'inventory'
+  },
+
+  // العمليات التشغيلية (Operations)
+  { 
+    key: 'proformaInvoice', // ✅ Changed from 'Proforma-invoice'
     label: 'فاتورة مُقدمة', 
     path: '/Proforma-invoice',
+    category: 'operations'
+  },
+  { 
+    key: 'costingSheet', // ✅ Added missing route
+    label: 'كشف التكاليف', 
+    path: '/costing-sheet',
     category: 'operations'
   },
   { 
@@ -90,7 +102,7 @@ const AVAILABLE_ROUTES = [
     category: 'operations'
   },
   { 
-    key: 'secretariat-user', 
+    key: 'secretariatUserManagement', // ✅ Changed from 'secretariat-user'
     label: 'نماذج الموظف', 
     path: '/secretariat-user',
     category: 'operations'
@@ -102,7 +114,7 @@ const AVAILABLE_ROUTES = [
     category: 'operations'
   },
 
-  // التقارير والتحليلات
+  // التقارير والتحليلات (Reports)
   { 
     key: 'analysis', 
     label: 'التحليلات والإحصائيات', 
@@ -263,10 +275,12 @@ class UserService {
     if (userData.role === 'employee') {
       routeAccess = userData.routeAccess || [];
       
-      // Validate routeAccess
+      // ✅ Validate routeAccess with correct keys
       const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
       const invalidRoutes = routeAccess.filter(r => !validRouteKeys.includes(r));
       if (invalidRoutes.length > 0) {
+        console.error('❌ Invalid route keys:', invalidRoutes);
+        console.log('✅ Valid route keys:', validRouteKeys);
         throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
       }
     }
@@ -287,6 +301,8 @@ class UserService {
 
     users.push(newUser);
     await this.saveUsers(users);
+
+    console.log('✅ User created with routeAccess:', newUser.routeAccess);
 
     const { password, ...userWithoutPassword } = newUser;
     return userWithoutPassword;
@@ -378,10 +394,12 @@ class UserService {
     // Handle routeAccess updates for employees
     if (updateData.routeAccess !== undefined) {
       if (user.role === 'employee') {
-        // Validate routeAccess
+        // ✅ Validate routeAccess with correct keys
         const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
         const invalidRoutes = updateData.routeAccess.filter(r => !validRouteKeys.includes(r));
         if (invalidRoutes.length > 0) {
+          console.error('❌ Invalid route keys:', invalidRoutes);
+          console.log('✅ Valid route keys:', validRouteKeys);
           throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
         }
         user.routeAccess = updateData.routeAccess;
@@ -572,11 +590,13 @@ class UserService {
       throw new Error('Route access must be an array');
     }
 
-    // ✅ Validate routeAccess keys
+    // ✅ Validate routeAccess keys with correct camelCase keys
     const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
     const invalidRoutes = routeAccessArray.filter(r => !validRouteKeys.includes(r));
     
     if (invalidRoutes.length > 0) {
+      console.error('❌ Invalid route keys:', invalidRoutes);
+      console.log('✅ Valid route keys:', validRouteKeys);
       throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
     }
 
@@ -586,6 +606,8 @@ class UserService {
 
     users[userIndex] = user;
     await this.saveUsers(users);
+
+    console.log('✅ Updated routeAccess for user:', user.username, '→', user.routeAccess);
 
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
