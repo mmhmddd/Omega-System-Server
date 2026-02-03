@@ -1,4 +1,4 @@
-// src/utils/email.util.js (محدث)
+// src/utils/email.util.js (Production-Ready Version)
 const nodemailer = require('nodemailer');
 const logger = require('./logger.util');
 
@@ -6,6 +6,21 @@ class EmailService {
   constructor() {
     this.transporter = null;
     this.initializeTransporter();
+    
+    // Professional Color Scheme
+    this.colors = {
+      primary: '#0b4fa2',      // Deep Blue
+      primaryDark: '#083a7a',  // Darker Blue for hover
+      primaryLight: '#e3f2fd', // Light Blue for backgrounds
+      success: '#10b981',      // Green
+      warning: '#f59e0b',      // Amber
+      danger: '#ef4444',       // Red
+      text: '#1f2937',         // Dark Gray
+      textLight: '#6b7280',    // Medium Gray
+      background: '#f9fafb',   // Light Gray
+      white: '#ffffff',
+      border: '#e5e7eb'
+    };
   }
 
   initializeTransporter() {
@@ -30,6 +45,187 @@ class EmailService {
     }
   }
 
+  /**
+   * Get common email styles
+   */
+  getEmailStyles() {
+    return `
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        line-height: 1.6;
+        color: ${this.colors.text};
+        background-color: ${this.colors.background};
+        padding: 20px;
+      }
+      .email-wrapper {
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: ${this.colors.white};
+      }
+      .email-header {
+        background: linear-gradient(135deg, ${this.colors.primary} 0%, ${this.colors.primaryDark} 100%);
+        padding: 40px 30px;
+        text-align: center;
+        border-radius: 8px 8px 0 0;
+      }
+      .email-header h1 {
+        color: ${this.colors.white};
+        font-size: 28px;
+        font-weight: 700;
+        margin: 0;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .email-header .icon {
+        font-size: 48px;
+        margin-bottom: 10px;
+      }
+      .email-body {
+        padding: 40px 30px;
+        background-color: ${this.colors.white};
+      }
+      .email-body p {
+        margin: 0 0 16px 0;
+        color: ${this.colors.text};
+        font-size: 15px;
+      }
+      .info-card {
+        background-color: ${this.colors.primaryLight};
+        border-left: 4px solid ${this.colors.primary};
+        padding: 20px;
+        border-radius: 6px;
+        margin: 24px 0;
+      }
+      .info-card p {
+        margin: 8px 0;
+        font-size: 14px;
+      }
+      .info-card strong {
+        color: ${this.colors.primary};
+        font-weight: 600;
+      }
+      .credentials-box {
+        background-color: ${this.colors.background};
+        border: 2px solid ${this.colors.border};
+        padding: 20px;
+        border-radius: 8px;
+        margin: 24px 0;
+        text-align: center;
+      }
+      .credentials-box p {
+        margin: 12px 0;
+        font-size: 15px;
+      }
+      .credentials-box .credential-value {
+        font-family: 'Courier New', monospace;
+        background-color: ${this.colors.white};
+        padding: 8px 16px;
+        border-radius: 4px;
+        display: inline-block;
+        margin-top: 4px;
+        border: 1px solid ${this.colors.border};
+        font-size: 16px;
+        font-weight: 600;
+        color: ${this.colors.primary};
+      }
+      .button-container {
+        text-align: center;
+        margin: 32px 0;
+      }
+      .button {
+        display: inline-block;
+        padding: 14px 32px;
+        background: linear-gradient(135deg, ${this.colors.primary} 0%, ${this.colors.primaryDark} 100%);
+        color: ${this.colors.white};
+        text-decoration: none;
+        border-radius: 6px;
+        font-weight: 600;
+        font-size: 15px;
+        box-shadow: 0 4px 6px rgba(11, 79, 162, 0.2);
+        transition: transform 0.2s, box-shadow 0.2s;
+      }
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(11, 79, 162, 0.3);
+      }
+      .alert {
+        padding: 16px 20px;
+        border-radius: 6px;
+        margin: 24px 0;
+        border-left: 4px solid;
+      }
+      .alert-warning {
+        background-color: #fef3c7;
+        border-left-color: ${this.colors.warning};
+        color: #92400e;
+      }
+      .alert-danger {
+        background-color: #fee2e2;
+        border-left-color: ${this.colors.danger};
+        color: #991b1b;
+      }
+      .alert-success {
+        background-color: #d1fae5;
+        border-left-color: ${this.colors.success};
+        color: #065f46;
+      }
+      .alert h4 {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+        font-weight: 600;
+      }
+      .alert p, .alert ul {
+        margin: 8px 0;
+        font-size: 14px;
+      }
+      .alert ul {
+        padding-left: 20px;
+      }
+      .alert li {
+        margin: 4px 0;
+      }
+      .token-display {
+        background-color: ${this.colors.background};
+        border: 2px dashed ${this.colors.border};
+        padding: 16px;
+        border-radius: 6px;
+        margin: 16px 0;
+        word-break: break-all;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        color: ${this.colors.text};
+        text-align: center;
+      }
+      .email-footer {
+        background-color: ${this.colors.background};
+        padding: 30px;
+        text-align: center;
+        border-radius: 0 0 8px 8px;
+        border-top: 1px solid ${this.colors.border};
+      }
+      .email-footer p {
+        color: ${this.colors.textLight};
+        font-size: 13px;
+        margin: 8px 0;
+      }
+      .divider {
+        height: 1px;
+        background-color: ${this.colors.border};
+        margin: 24px 0;
+      }
+      .logo {
+        font-size: 32px;
+        font-weight: 700;
+        color: ${this.colors.white};
+        margin-bottom: 8px;
+      }
+    `;
+  }
+
   async sendPasswordResetEmail(to, resetToken, userName) {
     try {
       if (!this.transporter) {
@@ -44,109 +240,52 @@ class EmailService {
         subject: 'Password Reset Request - Omega System',
         html: `
           <!DOCTYPE html>
-          <html>
+          <html lang="en">
           <head>
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 20px;
-              }
-              .container {
-                background-color: #f9f9f9;
-                border-radius: 10px;
-                padding: 30px;
-                border: 1px solid #ddd;
-              }
-              .header {
-                text-align: center;
-                color: #2563eb;
-                margin-bottom: 30px;
-              }
-              .content {
-                background-color: white;
-                padding: 20px;
-                border-radius: 5px;
-                margin-bottom: 20px;
-              }
-              .button {
-                display: inline-block;
-                padding: 12px 30px;
-                background-color: #2563eb;
-                color: white;
-                text-decoration: none;
-                border-radius: 5px;
-                margin: 20px 0;
-                font-weight: bold;
-              }
-              .button:hover {
-                background-color: #1d4ed8;
-              }
-              .token-box {
-                background-color: #f3f4f6;
-                padding: 15px;
-                border-radius: 5px;
-                font-family: monospace;
-                word-break: break-all;
-                margin: 15px 0;
-                border-left: 4px solid #2563eb;
-              }
-              .warning {
-                background-color: #fef3c7;
-                border-left: 4px solid #f59e0b;
-                padding: 15px;
-                margin: 20px 0;
-                border-radius: 5px;
-              }
-              .footer {
-                text-align: center;
-                color: #6b7280;
-                font-size: 12px;
-                margin-top: 30px;
-                padding-top: 20px;
-                border-top: 1px solid #ddd;
-              }
-            </style>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Password Reset Request</title>
+            <style>${this.getEmailStyles()}</style>
           </head>
           <body>
-            <div class="container">
-              <div class="header">
-                <h1>🔐 Password Reset Request</h1>
+            <div class="email-wrapper">
+              <div class="email-header">
+                <div class="icon">🔐</div>
+                <h1>Password Reset Request</h1>
               </div>
               
-              <div class="content">
+              <div class="email-body">
                 <p>Hello <strong>${userName}</strong>,</p>
                 
                 <p>We received a request to reset your password for your Omega System account.</p>
                 
-                <p>Click the button below to reset your password:</p>
+                <p>Click the button below to create a new password:</p>
                 
-                <div style="text-align: center;">
-                  <a href="${resetUrl}" class="button">Reset Password</a>
+                <div class="button-container">
+                  <a href="${resetUrl}" class="button">Reset My Password</a>
                 </div>
                 
-                <p>Or copy and paste this link into your browser:</p>
-                <div class="token-box">${resetUrl}</div>
-                
-                <div class="warning">
-                  <strong>⚠️ Security Notice:</strong>
+                <div class="alert alert-warning">
+                  <h4>⚠️ Security Notice</h4>
                   <ul>
-                    <li>This link will expire in <strong>1 hour</strong></li>
-                    <li>If you didn't request this, please ignore this email</li>
+                    <li>This reset link will expire in <strong>1 hour</strong></li>
+                    <li>If you didn't request this reset, please ignore this email</li>
                     <li>Never share this link with anyone</li>
+                    <li>For security, we recommend using a strong, unique password</li>
                   </ul>
                 </div>
                 
-                <p>If you're having trouble clicking the button, you can use this token manually:</p>
-                <div class="token-box">${resetToken}</div>
+                <div class="divider"></div>
+                
+                <p style="font-size: 14px; color: ${this.colors.textLight};">
+                  <strong>Can't click the button?</strong> Copy and paste this link into your browser:
+                </p>
+                <div class="token-display">${resetUrl}</div>
               </div>
               
-              <div class="footer">
-                <p>This is an automated email from Omega System</p>
-                <p>Please do not reply to this email</p>
+              <div class="email-footer">
+                <p><strong>Omega System</strong></p>
+                <p>This is an automated email. Please do not reply to this message.</p>
                 <p>&copy; ${new Date().getFullYear()} Omega System. All rights reserved.</p>
               </div>
             </div>
@@ -154,20 +293,20 @@ class EmailService {
           </html>
         `,
         text: `
+Password Reset Request - Omega System
+
 Hello ${userName},
 
 We received a request to reset your password for your Omega System account.
 
-Reset your password by clicking this link:
+Reset your password by visiting this link:
 ${resetUrl}
-
-Or use this token manually:
-${resetToken}
 
 SECURITY NOTICE:
 - This link will expire in 1 hour
 - If you didn't request this, please ignore this email
 - Never share this link with anyone
+- For security, we recommend using a strong, unique password
 
 This is an automated email from Omega System. Please do not reply.
 
@@ -199,101 +338,72 @@ This is an automated email from Omega System. Please do not reply.
       const mailOptions = {
         from: `"Omega System" <${process.env.EMAIL_USER}>`,
         to: to,
-        subject: 'Welcome to Omega System',
+        subject: 'Welcome to Omega System - Your Account is Ready',
         html: `
           <!DOCTYPE html>
-          <html>
+          <html lang="en">
           <head>
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 20px;
-              }
-              .container {
-                background-color: #f9f9f9;
-                border-radius: 10px;
-                padding: 30px;
-                border: 1px solid #ddd;
-              }
-              .header {
-                text-align: center;
-                color: #2563eb;
-                margin-bottom: 30px;
-              }
-              .content {
-                background-color: white;
-                padding: 20px;
-                border-radius: 5px;
-                margin-bottom: 20px;
-              }
-              .credentials {
-                background-color: #f3f4f6;
-                padding: 20px;
-                border-radius: 5px;
-                margin: 20px 0;
-                border-left: 4px solid #2563eb;
-              }
-              .button {
-                display: inline-block;
-                padding: 12px 30px;
-                background-color: #2563eb;
-                color: white;
-                text-decoration: none;
-                border-radius: 5px;
-                margin: 20px 0;
-                font-weight: bold;
-              }
-              .warning {
-                background-color: #fee2e2;
-                border-left: 4px solid #ef4444;
-                padding: 15px;
-                margin: 20px 0;
-                border-radius: 5px;
-              }
-              .footer {
-                text-align: center;
-                color: #6b7280;
-                font-size: 12px;
-                margin-top: 30px;
-                padding-top: 20px;
-                border-top: 1px solid #ddd;
-              }
-            </style>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Welcome to Omega System</title>
+            <style>${this.getEmailStyles()}</style>
           </head>
           <body>
-            <div class="container">
-              <div class="header">
-                <h1>🎉 Welcome to Omega System!</h1>
+            <div class="email-wrapper">
+              <div class="email-header">
+                <div class="icon">🎉</div>
+                <h1>Welcome to Omega System</h1>
               </div>
               
-              <div class="content">
+              <div class="email-body">
                 <p>Hello <strong>${userName}</strong>,</p>
                 
-                <p>Your account has been created successfully. Here are your login credentials:</p>
+                <p>Your account has been successfully created! We're excited to have you on board.</p>
                 
-                <div class="credentials">
-                  <p><strong>Username:</strong> ${username}</p>
-                  <p><strong>Password:</strong> ${temporaryPassword}</p>
+                <div class="credentials-box">
+                  <p><strong>Your Login Credentials</strong></p>
+                  <div style="margin-top: 20px;">
+                    <p style="margin-bottom: 4px; color: ${this.colors.textLight};">Username</p>
+                    <span class="credential-value">${username}</span>
+                  </div>
+                  <div style="margin-top: 16px;">
+                    <p style="margin-bottom: 4px; color: ${this.colors.textLight};">Temporary Password</p>
+                    <span class="credential-value">${temporaryPassword}</span>
+                  </div>
                 </div>
                 
-                <div style="text-align: center;">
-                  <a href="${loginUrl}" class="button">Login Now</a>
+                <div class="button-container">
+                  <a href="${loginUrl}" class="button">Access Your Account</a>
                 </div>
                 
-                <div class="warning">
-                  <strong>⚠️ Important:</strong>
-                  <p>Please change your password immediately after your first login for security purposes.</p>
+                <div class="alert alert-danger">
+                  <h4>🔒 Important Security Steps</h4>
+                  <ul>
+                    <li><strong>Change your password immediately</strong> after your first login</li>
+                    <li>Choose a strong password with at least 8 characters</li>
+                    <li>Never share your credentials with anyone</li>
+                    <li>Keep this email in a secure location</li>
+                  </ul>
                 </div>
                 
-                <p>If you have any questions, please contact your system administrator.</p>
+                <div class="divider"></div>
+                
+                <div class="alert alert-success">
+                  <h4>✅ Getting Started</h4>
+                  <p>After logging in, you'll be able to:</p>
+                  <ul>
+                    <li>Access your dashboard and tools</li>
+                    <li>Update your profile settings</li>
+                    <li>Start using Omega System features</li>
+                  </ul>
+                </div>
+                
+                <p style="margin-top: 24px;">If you have any questions or need assistance, please contact your system administrator.</p>
               </div>
               
-              <div class="footer">
-                <p>This is an automated email from Omega System</p>
+              <div class="email-footer">
+                <p><strong>Omega System</strong></p>
+                <p>This is an automated email. Please do not reply to this message.</p>
                 <p>&copy; ${new Date().getFullYear()} Omega System. All rights reserved.</p>
               </div>
             </div>
@@ -305,16 +415,21 @@ Welcome to Omega System!
 
 Hello ${userName},
 
-Your account has been created successfully. Here are your login credentials:
+Your account has been successfully created! We're excited to have you on board.
 
+YOUR LOGIN CREDENTIALS:
 Username: ${username}
-Password: ${temporaryPassword}
+Temporary Password: ${temporaryPassword}
 
 Login URL: ${loginUrl}
 
-IMPORTANT: Please change your password immediately after your first login for security purposes.
+IMPORTANT SECURITY STEPS:
+- Change your password immediately after your first login
+- Choose a strong password with at least 8 characters
+- Never share your credentials with anyone
+- Keep this email in a secure location
 
-If you have any questions, please contact your system administrator.
+If you have any questions or need assistance, please contact your system administrator.
 
 © ${new Date().getFullYear()} Omega System. All rights reserved.
         `
@@ -364,93 +479,58 @@ If you have any questions, please contact your system administrator.
           <html lang="ar" dir="rtl">
           <head>
             <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>نموذج جديد</title>
             <style>
+              ${this.getEmailStyles()}
               body {
-                font-family: 'Arial', sans-serif;
-                line-height: 1.6;
-                color: #333;
-                max-width: 600px;
-                margin: 0 auto;
-                padding: 20px;
+                font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+                direction: rtl;
+                text-align: right;
               }
-              .container {
-                background-color: #f9f9f9;
-                border-radius: 10px;
-                padding: 30px;
-                border: 1px solid #ddd;
-              }
-              .header {
-                text-align: center;
-                color: #0b4fa2;
-                margin-bottom: 30px;
-              }
-              .content {
-                background-color: white;
-                padding: 20px;
-                border-radius: 5px;
-                margin-bottom: 20px;
-              }
-              .info-box {
-                background-color: #e3f2fd;
-                padding: 20px;
-                border-radius: 5px;
-                margin: 20px 0;
-                border-right: 4px solid #0b4fa2;
-              }
-              .info-box p {
-                margin: 10px 0;
-              }
-              .info-box strong {
-                color: #0b4fa2;
-              }
-              .button {
-                display: inline-block;
-                padding: 12px 30px;
-                background-color: #0b4fa2;
-                color: white;
-                text-decoration: none;
-                border-radius: 5px;
-                margin: 20px 0;
-                font-weight: bold;
-              }
-              .footer {
-                text-align: center;
-                color: #6b7280;
-                font-size: 12px;
-                margin-top: 30px;
-                padding-top: 20px;
-                border-top: 1px solid #ddd;
+              .info-card p {
+                text-align: right;
               }
             </style>
           </head>
           <body>
-            <div class="container">
-              <div class="header">
-                <h1>📋 نموذج جديد يحتاج إلى معالجة</h1>
+            <div class="email-wrapper">
+              <div class="email-header">
+                <div class="icon">📋</div>
+                <h1>نموذج جديد يحتاج إلى مراجعة</h1>
               </div>
               
-              <div class="content">
+              <div class="email-body">
                 <p>مرحباً <strong>${secretariatName}</strong>،</p>
                 
-                <p>تم إنشاء نموذج جديد من قبل أحد الموظفين ويحتاج إلى مراجعتك:</p>
+                <p>تم إنشاء نموذج جديد من قبل أحد الموظفين ويتطلب مراجعتك والموافقة عليه.</p>
                 
-                <div class="info-box">
+                <div class="info-card">
                   <p><strong>نوع النموذج:</strong> ${formType}</p>
                   <p><strong>رقم النموذج:</strong> ${formNumber}</p>
                   <p><strong>اسم الموظف:</strong> ${employeeName}</p>
                   <p><strong>تاريخ الإنشاء:</strong> ${date}</p>
                 </div>
                 
-                <p>يرجى تسجيل الدخول إلى النظام لمراجعة النموذج.</p>
-                
-                <div style="text-align: center;">
-                  <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">تسجيل الدخول</a>
+                <div class="button-container">
+                  <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/login" class="button">مراجعة النموذج</a>
                 </div>
+                
+                <div class="alert alert-warning">
+                  <h4>⏱️ تنبيه</h4>
+                  <p>يرجى مراجعة النموذج في أقرب وقت ممكن لضمان سير العمل بسلاسة.</p>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <p style="font-size: 14px; color: ${this.colors.textLight};">
+                  يمكنك تسجيل الدخول إلى النظام لعرض تفاصيل النموذج الكاملة واتخاذ الإجراء المناسب.
+                </p>
               </div>
               
-              <div class="footer">
-                <p>هذا بريد إلكتروني تلقائي من نظام Omega</p>
-                <p>يرجى عدم الرد على هذا البريد</p>
+              <div class="email-footer">
+                <p><strong>نظام Omega</strong></p>
+                <p>هذا بريد إلكتروني تلقائي. يرجى عدم الرد على هذه الرسالة.</p>
                 <p>&copy; ${new Date().getFullYear()} Omega System. جميع الحقوق محفوظة.</p>
               </div>
             </div>
@@ -458,16 +538,22 @@ If you have any questions, please contact your system administrator.
           </html>
         `,
         text: `
+نموذج جديد يحتاج إلى مراجعة - نظام Omega
+
 مرحباً ${secretariatName},
 
-تم إنشاء نموذج جديد من قبل أحد الموظفين ويحتاج إلى مراجعتك:
+تم إنشاء نموذج جديد من قبل أحد الموظفين ويتطلب مراجعتك والموافقة عليه.
 
-نوع النموذج: ${formType}
-رقم النموذج: ${formNumber}
-اسم الموظف: ${employeeName}
-تاريخ الإنشاء: ${date}
+تفاصيل النموذج:
+- نوع النموذج: ${formType}
+- رقم النموذج: ${formNumber}
+- اسم الموظف: ${employeeName}
+- تاريخ الإنشاء: ${date}
 
-يرجى تسجيل الدخول إلى النظام لمراجعة النموذج.
+يرجى تسجيل الدخول إلى النظام لمراجعة النموذج:
+${process.env.FRONTEND_URL || 'http://localhost:3000'}/login
+
+تنبيه: يرجى مراجعة النموذج في أقرب وقت ممكن لضمان سير العمل بسلاسة.
 
 هذا بريد إلكتروني تلقائي من نظام Omega. يرجى عدم الرد.
 
@@ -498,9 +584,65 @@ If you have any questions, please contact your system administrator.
       const mailOptions = {
         from: `"Omega System" <${process.env.EMAIL_USER}>`,
         to: to,
-        subject: 'Test Email - Omega System',
-        html: '<h1>Email Configuration Test</h1><p>If you receive this email, your email configuration is working correctly!</p>',
-        text: 'Email Configuration Test - If you receive this email, your email configuration is working correctly!'
+        subject: 'Email Configuration Test - Omega System',
+        html: `
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Email Test</title>
+            <style>${this.getEmailStyles()}</style>
+          </head>
+          <body>
+            <div class="email-wrapper">
+              <div class="email-header">
+                <div class="icon">✅</div>
+                <h1>Email Configuration Test</h1>
+              </div>
+              
+              <div class="email-body">
+                <div class="alert alert-success">
+                  <h4>Success!</h4>
+                  <p>Your email configuration is working correctly. This is a test message from Omega System.</p>
+                </div>
+                
+                <p>If you received this email, it means:</p>
+                <ul style="padding-left: 20px; margin: 16px 0;">
+                  <li>SMTP settings are configured properly</li>
+                  <li>Email authentication is working</li>
+                  <li>Email delivery is operational</li>
+                </ul>
+                
+                <div class="info-card">
+                  <p><strong>Test Date:</strong> ${new Date().toLocaleString()}</p>
+                  <p><strong>Recipient:</strong> ${to}</p>
+                </div>
+              </div>
+              
+              <div class="email-footer">
+                <p><strong>Omega System</strong></p>
+                <p>&copy; ${new Date().getFullYear()} Omega System. All rights reserved.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        text: `
+Email Configuration Test - Omega System
+
+Success! Your email configuration is working correctly.
+
+If you received this email, it means:
+- SMTP settings are configured properly
+- Email authentication is working
+- Email delivery is operational
+
+Test Date: ${new Date().toLocaleString()}
+Recipient: ${to}
+
+© ${new Date().getFullYear()} Omega System. All rights reserved.
+        `
       };
 
       const info = await this.transporter.sendMail(mailOptions);
