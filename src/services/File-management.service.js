@@ -1,4 +1,4 @@
-// src/services/file-management.service.js
+// src/services/file-management.service.js - ENHANCED WITH DELETE BY FILENAME METHOD
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -17,7 +17,10 @@ class FileManagementService {
       rfqs: path.join(__dirname, '../../data/rfqs/pdfs'),
       purchases: path.join(__dirname, '../../data/purchases/pdfs'),
       materials: path.join(__dirname, '../../data/materials-requests/pdfs'),
-      filesPhysical: path.join(__dirname, '../../data/files/physical')
+      filesPhysical: path.join(__dirname, '../../data/files/physical'),
+      emptyReceipts: path.join(__dirname, '../../data/empty-receipts/pdfs'),
+      proformaInvoices: path.join(__dirname, '../../data/proforma-invoices/pdfs'),
+      costingSheets: path.join(__dirname, '../../data/costing-sheets/pdfs')
     };
 
     // Metadata files
@@ -33,11 +36,47 @@ class FileManagementService {
       items: path.join(__dirname, '../../data/items/index.json'),
       suppliers: path.join(__dirname, '../../data/suppliers/index.json'),
       users: path.join(__dirname, '../../data/users/users.json'),
-      files: path.join(__dirname, '../../data/files/index.json')
+      files: path.join(__dirname, '../../data/files/index.json'),
+      emptyReceipts: path.join(__dirname, '../../data/empty-receipts/index.json'),
+      proformaInvoices: path.join(__dirname, '../../data/proforma-invoices/index.json'),
+      costingSheets: path.join(__dirname, '../../data/costing-sheets/index.json')
     };
 
     // Cache for users data
     this.usersCache = null;
+  }
+
+  /**
+   * ✅ NEW METHOD: Delete file by filename from file management system
+   * This method is called by individual module services when they delete documents
+   */
+  async deleteFileByFilename(filename) {
+    try {
+      console.log(`🔍 File Management: Searching for file "${filename}" to delete...`);
+      
+      // Get all files
+      const { files } = await this.getAllFiles({ limit: 999999 });
+      
+      // Find the file by name
+      const fileIndex = files.findIndex(f => f.name === filename);
+      
+      if (fileIndex === -1) {
+        console.log(`⚠️  File Management: File "${filename}" not found in file management system`);
+        return { success: false, message: 'File not found in file management' };
+      }
+      
+      const file = files[fileIndex];
+      
+      // Update the corresponding metadata file
+      await this.updateMetadataAfterDelete(file);
+      
+      console.log(`✅ File Management: File "${filename}" deleted successfully`);
+      return { success: true, message: 'File deleted from file management' };
+      
+    } catch (error) {
+      console.error(`❌ File Management: Error deleting file "${filename}":`, error.message);
+      return { success: false, message: error.message };
+    }
   }
 
   /**
@@ -146,18 +185,19 @@ class FileManagementService {
   }
 
   /**
-   * Get file metadata from record
+   * Get file metadata from record with database ID
    */
   async getFileMetadataFromRecord(record, type) {
     const username = record.createdBy || record.uploadedBy || 'Unknown';
     const userRealName = await this.getUserNameFromUsername(username);
 
     const metadata = {
-      createdBy: username, // Username (USER-0001)
-      createdByName: userRealName, // Real name from users.json
+      createdBy: username,
+      createdByName: userRealName,
       createdByRole: record.createdByRole || 'Unknown',
       createdAt: record.createdAt,
-      updatedAt: record.updatedAt
+      updatedAt: record.updatedAt,
+      databaseId: record._id || record.id || null
     };
 
     // Add type-specific information
@@ -203,13 +243,28 @@ class FileManagementService {
         metadata.documentNumber = record.fileId || record.id;
         metadata.description = record.description;
         break;
+      case 'emptyReceipts':
+        metadata.documentNumber = record.receiptNumber || 'N/A';
+        metadata.recipientName = record.to || 'N/A';
+        metadata.notes = record.notes;
+        break;
+      case 'proformaInvoices':
+        metadata.documentNumber = record.invoiceNumber;
+        metadata.projectName = record.projectName;
+        metadata.clientName = record.clientName;
+        break;
+      case 'costingSheets':
+        metadata.documentNumber = record.csNumber;
+        metadata.projectName = record.project;
+        metadata.clientName = record.client;
+        break;
     }
 
     return metadata;
   }
 
   /**
-   * Scan a specific directory and get all files with metadata
+   * Scan directory with database IDs
    */
   async scanDirectory(dirPath, type, metadata) {
     const files = [];
@@ -233,7 +288,6 @@ class FileManagementService {
               const stats = await fs.stat(filePath);
 
               if (stats.isFile()) {
-                // Find metadata from cutting jobs records
                 const record = metadata.find(m => m.fileName === filename);
                 const fileMetadata = await this.getFileMetadataFromRecord(record || {}, type);
 
@@ -284,6 +338,12 @@ class FileManagementService {
                 return m.pdfFilename === filename;
               } else if (type === 'filesPhysical') {
                 return m.filePath && m.filePath.includes(filename);
+              } else if (type === 'emptyReceipts') {
+                return m.pdfFilename === filename;
+              } else if (type === 'proformaInvoices') {
+                return m.pdfFilename === filename;
+              } else if (type === 'costingSheets') {
+                return m.pdfFilename === filename;
               }
               return false;
             });
@@ -488,7 +548,7 @@ class FileManagementService {
   }
 
   /**
-   * Delete file and update metadata
+   * Delete file with proper database ID handling
    */
   async deleteFile(fileId) {
     const file = await this.getFileById(fileId);
@@ -503,7 +563,7 @@ class FileManagementService {
   }
 
   /**
-   * Update metadata after file deletion
+   * Update metadata after file deletion using database ID
    */
   async updateMetadataAfterDelete(file) {
     try {
@@ -514,25 +574,42 @@ class FileManagementService {
 
       const metadata = await this.loadMetadata(metadataPath);
       
-      // Filter out the deleted file's metadata
-      let updatedMetadata = metadata.filter(record => {
-        if (file.type === 'quotations') {
-          return !(record.pdfPath && record.pdfPath.includes(file.name));
-        } else if (file.type === 'receipts') {
-          return record.pdfFilename !== file.name;
-        } else if (file.type === 'secretariatForms' || file.type === 'secretariatUserForms') {
-          return !(record.pdfPath && record.pdfPath.includes(file.name));
-        } else if (file.type === 'rfqs') {
-          return record.pdfFilename !== file.name;
-        } else if (file.type === 'purchases') {
-          return record.pdfFilename !== file.name;
-        } else if (file.type === 'materials') {
-          return record.pdfFilename !== file.name;
-        } else if (file.type === 'cuttingJobs') {
-          return record.fileName !== file.name;
-        }
-        return true;
-      });
+      // Filter using database ID if available, otherwise use filename
+      let updatedMetadata;
+      
+      if (file.databaseId) {
+        // Use database ID for deletion (most reliable)
+        updatedMetadata = metadata.filter(record => {
+          const recordId = record._id || record.id;
+          return recordId !== file.databaseId;
+        });
+      } else {
+        // Fallback to filename matching
+        updatedMetadata = metadata.filter(record => {
+          if (file.type === 'quotations') {
+            return !(record.pdfPath && record.pdfPath.includes(file.name));
+          } else if (file.type === 'receipts') {
+            return record.pdfFilename !== file.name;
+          } else if (file.type === 'secretariatForms' || file.type === 'secretariatUserForms') {
+            return !(record.pdfPath && record.pdfPath.includes(file.name));
+          } else if (file.type === 'rfqs') {
+            return record.pdfFilename !== file.name;
+          } else if (file.type === 'purchases') {
+            return record.pdfFilename !== file.name;
+          } else if (file.type === 'materials') {
+            return record.pdfFilename !== file.name;
+          } else if (file.type === 'cuttingJobs') {
+            return record.fileName !== file.name;
+          } else if (file.type === 'emptyReceipts') {
+            return record.pdfFilename !== file.name;
+          } else if (file.type === 'proformaInvoices') {
+            return record.pdfFilename !== file.name;
+          } else if (file.type === 'costingSheets') {
+            return record.pdfFilename !== file.name;
+          }
+          return true;
+        });
+      }
 
       // Write updated metadata back
       await fs.writeFile(metadataPath, JSON.stringify(updatedMetadata, null, 2), 'utf8');

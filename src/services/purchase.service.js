@@ -1,6 +1,7 @@
 // src/services/purchase.service.js - WITH TERMS AND CONDITIONS PDF SUPPORT
 
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const atomicWrite = require('../utils/atomic-write.util');
 const poPdfGenerator = require('../utils/pdf-generator-po.util');
@@ -474,19 +475,43 @@ class PurchaseService {
   /**
    * Delete PO (super admin only)
    */
-  async deletePO(id) {
-    const pos = await this.loadPOs();
-    const poIndex = pos.findIndex(p => p.id === id);
+/**
+ * ✅ Delete PO - WITH FILE MANAGEMENT INTEGRATION (like price-quote)
+ */
+async deletePO(id) {
+  const pos = await this.loadPOs();
+  const poIndex = pos.findIndex(p => p.id === id);
 
-    if (poIndex === -1) {
-      throw new Error('Purchase Order not found');
-    }
-
-    pos.splice(poIndex, 1);
-    await this.savePOs(pos);
-
-    return { message: 'Purchase Order deleted successfully' };
+  if (poIndex === -1) {
+    throw new Error('Purchase Order not found');
   }
+
+  const po = pos[poIndex];
+  
+  // ✅ DELETE FROM FILE MANAGEMENT (like price-quote)
+  if (po.pdfFilename) {
+    const fileManagementService = require('./File-management.service');
+    try {
+      await fileManagementService.deleteFileByFilename(po.pdfFilename);
+      console.log('✅ Purchase Order: File removed from File Management');
+    } catch (error) {
+      console.log('⚠️ Purchase Order: File Management deletion warning:', error.message);
+    }
+  }
+
+  // Delete physical PDF if exists
+  if (po.pdfFilename) {
+    const pdfPath = path.join(__dirname, '../../data/purchases/pdfs', po.pdfFilename);
+    if (fsSync.existsSync(pdfPath)) {
+      await fs.unlink(pdfPath).catch(() => {});
+    }
+  }
+
+  pos.splice(poIndex, 1);
+  await this.savePOs(pos);
+
+  return { message: 'Purchase Order deleted successfully' };
+}
 
   /**
    * Get PO statistics

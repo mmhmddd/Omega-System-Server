@@ -1,7 +1,4 @@
-// ============================================================
-// MATERIAL SERVICE - WITH TERMS AND CONDITIONS PDF SUPPORT
-// src/services/material.service.js
-// ============================================================
+// src/services/material.service.js - WITH FILE MANAGEMENT INTEGRATION (like price-quote)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -11,14 +8,9 @@ const materialPdfGenerator = require('../utils/pdf-generator-material.util');
 const MATERIALS_FILE = path.join(__dirname, '../../data/materials-requests/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
-
-// ✅ Path to your static Terms and Conditions PDF file
 const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class MaterialService {
-  /**
-   * Load users from JSON file
-   */
   async loadUsers() {
     try {
       console.log('Loading users from:', USERS_FILE);
@@ -36,9 +28,6 @@ class MaterialService {
     }
   }
 
-  /**
-   * Get user name by ID
-   */
   async getUserNameById(userId) {
     try {
       const users = await this.loadUsers();
@@ -50,17 +39,14 @@ class MaterialService {
         console.log(`  - ID: "${u.id}" (type: ${typeof u.id}) | Name: "${u.name}"`);
       });
       
-      // Try exact match first
       let user = users.find(u => u.id === userId);
       
-      // If not found, try string comparison
       if (!user && typeof userId !== 'string') {
         const userIdStr = String(userId);
         console.log('Trying string conversion:', userIdStr);
         user = users.find(u => u.id === userIdStr);
       }
       
-      // If still not found, try trimming whitespace
       if (!user && typeof userId === 'string') {
         const userIdTrimmed = userId.trim();
         console.log('Trying trimmed version:', userIdTrimmed);
@@ -161,24 +147,18 @@ class MaterialService {
     return arabicCount > (totalFields / 2) ? 'ar' : 'en';
   }
 
-  /**
-   * Add creator names to materials
-   */
   async enrichMaterialsWithCreatorNames(materials) {
     const users = await this.loadUsers();
     
     return Promise.all(materials.map(async material => {
-      // Always look up the current user name from users database
       const user = users.find(u => u.id === material.createdBy);
       
       if (user && user.name) {
-        // User found - use their current name
         return {
           ...material,
           createdByName: user.name
         };
       } else {
-        // User not found - use Unknown User
         return {
           ...material,
           createdByName: 'Unknown User'
@@ -187,15 +167,12 @@ class MaterialService {
     }));
   }
 
-  /**
-   * ✅ CREATE MATERIAL REQUEST - WITH includeStaticFile (Terms & Conditions) SUPPORT
-   */
   async createMaterialRequest(materialData, userId, userRole) {
     console.log('\n=== CREATE MATERIAL REQUEST DEBUG ===');
     console.log('userId:', userId);
     console.log('userId type:', typeof userId);
     console.log('userRole:', userRole);
-    console.log('Include Terms & Conditions PDF:', materialData.includeStaticFile); // ✅ LOG
+    console.log('Include Terms & Conditions PDF:', materialData.includeStaticFile);
     
     const materials = await this.loadMaterialRequests();
     
@@ -211,7 +188,6 @@ class MaterialService {
     const today = new Date().toISOString().split('T')[0];
     const detectedLanguage = materialData.forceLanguage || this.detectMaterialLanguage(materialData);
 
-    // Get creator name with detailed logging
     console.log('Calling getUserNameById with:', userId);
     const createdByName = await this.getUserNameById(userId);
     console.log('getUserNameById returned:', createdByName);
@@ -229,7 +205,7 @@ class MaterialService {
       requestReason: materialData.requestReason || '',
       items: materialData.items || [],
       additionalNotes: materialData.additionalNotes || '',
-      includeStaticFile: materialData.includeStaticFile || false, // ✅ STORE THE FLAG
+      includeStaticFile: materialData.includeStaticFile || false,
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
@@ -243,13 +219,10 @@ class MaterialService {
     await this.saveMaterialRequests(materials);
 
     console.log('Material Request created with name:', newMaterialRequest.createdByName);
-    console.log('Include Terms & Conditions:', newMaterialRequest.includeStaticFile); // ✅ LOG
+    console.log('Include Terms & Conditions:', newMaterialRequest.includeStaticFile);
     return newMaterialRequest;
   }
 
-  /**
-   * ✅ UPDATE MATERIAL REQUEST - WITH includeStaticFile (Terms & Conditions) SUPPORT
-   */
   async updateMaterialRequest(id, updateData, userId, userRole) {
     const materials = await this.loadMaterialRequests();
     const materialIndex = materials.findIndex(m => m.id === id);
@@ -266,7 +239,6 @@ class MaterialService {
       }
     }
 
-    // Update fields
     if (updateData.date) material.date = updateData.date;
     if (updateData.section !== undefined) material.section = updateData.section;
     if (updateData.project !== undefined) material.project = updateData.project;
@@ -275,7 +247,7 @@ class MaterialService {
     if (updateData.items) material.items = updateData.items;
     if (updateData.additionalNotes !== undefined) material.additionalNotes = updateData.additionalNotes;
     if (updateData.status) material.status = updateData.status;
-    if (updateData.includeStaticFile !== undefined) material.includeStaticFile = updateData.includeStaticFile; // ✅ UPDATE THE FLAG
+    if (updateData.includeStaticFile !== undefined) material.includeStaticFile = updateData.includeStaticFile;
 
     const detectedLanguage = updateData.forceLanguage || this.detectMaterialLanguage(material);
     material.language = detectedLanguage;
@@ -284,7 +256,6 @@ class MaterialService {
     materials[materialIndex] = material;
     await this.saveMaterialRequests(materials);
 
-    // Add creator name
     const createdByName = await this.getUserNameById(material.createdBy);
 
     return {
@@ -293,16 +264,7 @@ class MaterialService {
     };
   }
 
-  /**
-   * ✅ GENERATE MATERIAL REQUEST PDF WITH TERMS & CONDITIONS SUPPORT
-   * 
-   * Merge order:
-   * 1. Generated Material Request PDF (always first)
-   * 2. User-uploaded attachment PDF (if provided)
-   * 3. Terms & Conditions static PDF (if includeStaticFile is true)
-   */
   async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
-    // Get material data
     const material = await this.getMaterialRequestById(id, userId, userRole);
 
     console.log('╔══════════════════════════════════════════════════════════╗');
@@ -313,7 +275,6 @@ class MaterialService {
     console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
     console.log('════════════════════════════════════════════════════════════');
 
-    // Delete old PDF if exists
     if (material.pdfFilename) {
       const oldPdfPath = path.join(__dirname, '../../data/materials-requests/pdfs', material.pdfFilename);
       if (fsSync.existsSync(oldPdfPath)) {
@@ -326,24 +287,20 @@ class MaterialService {
       }
     }
 
-    // Generate the material PDF
     const pdfResult = await materialPdfGenerator.generateMaterialPDF(material);
 
-    // ✅ Prepare list of PDFs to merge (in order)
     const pdfsToMerge = [];
     
-    // 1. Add user-uploaded attachment if provided
     if (attachmentPdf) {
       const isValid = await materialPdfGenerator.isValidPDF(attachmentPdf);
       if (isValid) {
         pdfsToMerge.push(attachmentPdf);
         console.log('✅ Added user attachment PDF to merge list');
       } else {
-        console.warn('⚠️  Invalid user attachment PDF, skipping');
+        console.warn('⚠️ Invalid user attachment PDF, skipping');
       }
     }
     
-    // 2. ✅ Add Terms & Conditions static PDF if includeStaticFile is true
     if (material.includeStaticFile === true) {
       try {
         if (fsSync.existsSync(STATIC_PDF_PATH)) {
@@ -351,14 +308,13 @@ class MaterialService {
           pdfsToMerge.push(staticPdfBytes);
           console.log('✅ Added Terms & Conditions PDF to merge list');
         } else {
-          console.warn('⚠️  Terms & Conditions PDF not found at:', STATIC_PDF_PATH);
+          console.warn('⚠️ Terms & Conditions PDF not found at:', STATIC_PDF_PATH);
         }
       } catch (error) {
         console.error('❌ Error reading Terms & Conditions PDF:', error.message);
       }
     }
 
-    // Merge all PDFs
     let finalPdfResult = pdfResult;
     try {
       if (pdfsToMerge.length > 0) {
@@ -366,7 +322,6 @@ class MaterialService {
         
         let currentPath = pdfResult.filepath;
         
-        // Merge each PDF sequentially
         for (let i = 0; i < pdfsToMerge.length; i++) {
           console.log(`   Merging PDF ${i + 1} of ${pdfsToMerge.length}...`);
           const mergeResult = await materialPdfGenerator.mergePDFs(
@@ -377,7 +332,6 @@ class MaterialService {
           );
           currentPath = mergeResult.filepath;
           
-          // Update final result on last merge
           if (i === pdfsToMerge.length - 1) {
             finalPdfResult = {
               ...pdfResult,
@@ -392,7 +346,6 @@ class MaterialService {
         console.log('✅ PDF merge completed successfully');
         console.log('   Total pages:', finalPdfResult.pageCount.total);
       } else {
-        // No PDFs to merge, just add headers/footers
         console.log('ℹ️  No additional PDFs to merge, adding headers/footers only...');
         const headerResult = await materialPdfGenerator.mergePDFs(
           pdfResult.filepath,
@@ -414,7 +367,6 @@ class MaterialService {
       finalPdfResult.mergeError = mergeError.message;
     }
 
-    // Update material record with PDF info
     const materials = await this.loadMaterialRequests();
     const materialIndex = materials.findIndex(m => m.id === id);
 
@@ -439,13 +391,9 @@ class MaterialService {
     };
   }
 
-  /**
-   * GET ALL MATERIAL REQUESTS
-   */
   async getAllMaterialRequests(filters = {}, userId, userRole) {
     let materials = await this.loadMaterialRequests();
 
-    // Add creator names to all materials
     materials = await this.enrichMaterialsWithCreatorNames(materials);
 
     if (userRole === 'employee' || userRole === 'admin') {
@@ -496,9 +444,6 @@ class MaterialService {
     };
   }
 
-  /**
-   * GET MATERIAL REQUEST BY ID
-   */
   async getMaterialRequestById(id, userId, userRole) {
     const materials = await this.loadMaterialRequests();
     const material = materials.find(m => m.id === id);
@@ -511,7 +456,6 @@ class MaterialService {
       }
     }
 
-    // Add creator name
     const createdByName = await this.getUserNameById(material.createdBy);
 
     return {
@@ -521,7 +465,7 @@ class MaterialService {
   }
 
   /**
-   * DELETE MATERIAL REQUEST
+   * ✅ DELETE MATERIAL REQUEST - WITH FILE MANAGEMENT INTEGRATION (like price-quote)
    */
   async deleteMaterialRequest(id) {
     const materials = await this.loadMaterialRequests();
@@ -531,8 +475,17 @@ class MaterialService {
 
     const material = materials[materialIndex];
     
-    // Delete PDF if exists
+    // ✅ DELETE FROM FILE MANAGEMENT (like price-quote)
     if (material.pdfFilename) {
+      const fileManagementService = require('./File-management.service');
+      try {
+        await fileManagementService.deleteFileByFilename(material.pdfFilename);
+        console.log('✅ Material: File removed from File Management');
+      } catch (error) {
+        console.log('⚠️ Material: File Management deletion warning:', error.message);
+      }
+      
+      // Delete physical PDF file
       const pdfPath = path.join(__dirname, '../../data/materials-requests/pdfs', material.pdfFilename);
       if (fsSync.existsSync(pdfPath)) {
         try {
@@ -549,9 +502,6 @@ class MaterialService {
     return { message: 'Material Request deleted successfully' };
   }
 
-  /**
-   * GET MATERIAL STATS
-   */
   async getMaterialStats(userId, userRole) {
     let materials = await this.loadMaterialRequests();
 
@@ -584,15 +534,11 @@ class MaterialService {
     return stats;
   }
 
-  /**
-   * RESET MATERIAL COUNTER
-   */
   async resetMaterialCounter() {
     const oldCounter = await this.loadCounter();
     const materials = await this.loadMaterialRequests();
     const deletedCount = materials.length;
     
-    // Delete all PDF files
     const pdfDir = path.join(__dirname, '../../data/materials-requests/pdfs');
     if (fsSync.existsSync(pdfDir)) {
       const files = fsSync.readdirSync(pdfDir);

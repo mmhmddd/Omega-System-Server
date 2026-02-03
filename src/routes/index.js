@@ -8,6 +8,7 @@ const usersRoutes = require('./users.routes');
 const priceQuoteRoutes = require('./price-quote.routes');
 const proformaInvoiceRoutes = require('./proforma-invoice.routes');
 const receiptsRoutes = require('./receipts.routes');
+const emptyReceiptsRoutes = require('./empty-receipts.routes');
 const cuttingRoutes = require('./cutting.routes');
 const secretariatRoutes = require('./secretariat.routes');
 const secretariatUserRoutes = require('./secretariat-user.routes');
@@ -17,7 +18,7 @@ const materialsRoutes = require('./materials.routes');
 const supplierRoutes = require('./suppliers.routes');
 const itemsRoutes = require('./Items.routes');
 const fileManagementRoutes = require('./file-management.routes');
-
+const costingSheetsRoutes = require('./costing-sheet.routes');
 // Check if system routes exist
 let systemRoutes;
 try {
@@ -32,6 +33,7 @@ router.use('/users', usersRoutes);
 router.use('/price-quotes', priceQuoteRoutes);
 router.use('/proforma-invoices', proformaInvoiceRoutes);
 router.use('/receipts', receiptsRoutes);
+router.use('/empty-receipts', emptyReceiptsRoutes);
 router.use('/cutting', cuttingRoutes);
 router.use('/secretariat', secretariatRoutes);
 router.use('/user-forms', secretariatUserRoutes);
@@ -41,6 +43,7 @@ router.use('/materials', materialsRoutes);
 router.use('/suppliers', supplierRoutes);
 router.use('/items', itemsRoutes);
 router.use('/file-management', fileManagementRoutes);
+router.use('/costing-sheets', costingSheetsRoutes);
 
 if (systemRoutes) {
   router.use('/system', systemRoutes);

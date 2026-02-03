@@ -1,4 +1,4 @@
-// src/routes/file-management.routes.js
+// src/routes/file-management.routes.js - UPDATED WITH NEW FILE TYPES INCLUDING EMPTY RECEIPTS METADATA
 const express = require('express');
 const router = express.Router();
 const fileManagementService = require('../services/File-management.service');
@@ -150,6 +150,7 @@ router.get('/duplicates', async (req, res, next) => {
 });
 
 /**
+ * ✅ UPDATED: Get available file types and categories WITH NEW TYPES INCLUDING EMPTY RECEIPTS
  * @route   GET /api/file-management/types
  * @desc    Get available file types and categories
  * @access  Super Admin ONLY
@@ -163,13 +164,17 @@ router.get('/types', (req, res) => {
         { value: 'quotations', label: 'عروض الأسعار', icon: '💰' },
         { value: 'quotationsAttachmentsAR', label: 'مرفقات العروض (عربي)', icon: '📎' },
         { value: 'quotationsAttachmentsEN', label: 'مرفقات العروض (English)', icon: '📎' },
-        { value: 'receipts', label: 'إيصالات الاستلام', icon: '📋' },
+        { value: 'receipts', label: 'إشعارات الاستلام', icon: '📋' },
         { value: 'secretariatForms', label: 'نماذج السكرتارية', icon: '📝' },
         { value: 'secretariatUserForms', label: 'نماذج المستخدمين', icon: '👤' },
         { value: 'rfqs', label: 'طلبات عروض الأسعار', icon: '📊' },
         { value: 'purchases', label: 'طلبات الشراء', icon: '🛒' },
         { value: 'materials', label: 'طلبات المواد', icon: '📦' },
-        { value: 'filesPhysical', label: 'الملفات الفعلية', icon: '📁' }
+        { value: 'filesPhysical', label: 'الملفات الفعلية', icon: '📁' },
+        // ✅ NEW: Added 3 new file types with emptyReceipts now having metadata support
+        { value: 'emptyReceipts', label: 'إشعارات فارغة', icon: '🧾' },
+        { value: 'proformaInvoices', label: 'فواتير أولية', icon: '📋' },
+        { value: 'costingSheets', label: 'كشوف تكاليف', icon: '📊' }
       ],
       categories: [
         { value: 'pdf', label: 'PDF', icon: '📄' },

@@ -285,17 +285,43 @@ router.put('/:id', upload.single('file'), async (req, res, next) => {
 });
 
 /**
- * @route   DELETE /api/cutting/:id
- * @desc    Delete cutting job
- * @access  Private
+ * ✅ DELETE CUTTING JOB - UPDATED
+ * Super Admin: Can delete any cutting job
+ * Admin/Employee: Can delete only their own cutting jobs
  */
 router.delete('/:id', async (req, res, next) => {
   try {
-    await cuttingService.deleteCuttingJob(req.params.id);
+    // First, get the cutting job to check ownership
+    const job = await cuttingService.getCuttingJobById(req.params.id);
 
-    res.status(200).json({
-      success: true,
-      message: 'Cutting job deleted successfully'
+    // Super admin can delete any cutting job
+    if (req.user.role === 'super_admin') {
+      await cuttingService.deleteCuttingJob(req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: 'Cutting job deleted successfully'
+      });
+    }
+
+    // Admin and employee can only delete their own cutting jobs
+    if (req.user.role === 'admin' || req.user.role === 'employee') {
+      if (job.uploadedBy !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to delete this cutting job'
+        });
+      }
+      await cuttingService.deleteCuttingJob(req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: 'Cutting job deleted successfully'
+      });
+    }
+
+    // Other roles cannot delete
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to delete cutting jobs'
     });
   } catch (error) {
     next(error);

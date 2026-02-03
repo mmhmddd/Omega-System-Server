@@ -1,5 +1,6 @@
-// src/services/receipt.service.js - UPDATED WITH includeStaticFile SUPPORT
+// src/services/receipt.service.js - UPDATED WITH FILE MANAGEMENT INTEGRATION
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const atomicWrite = require('../utils/atomic-write.util');
 const { generateId } = require('../utils/id-generator.util');
@@ -8,8 +9,6 @@ const pdfGenerator = require('../utils/pdf-generatorRecipts.util');
 const RECEIPTS_FILE = path.join(__dirname, '../../data/receipts/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
-
-// ✅ NEW: Path to your static PDF file
 const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class ReceiptService {
@@ -47,17 +46,14 @@ class ReceiptService {
         console.log(`  - ID: "${u.id}" (type: ${typeof u.id}) | Name: "${u.name}"`);
       });
       
-      // Try exact match first
       let user = users.find(u => u.id === userId);
       
-      // If not found, try string comparison
       if (!user && typeof userId !== 'string') {
         const userIdStr = String(userId);
         console.log('Trying string conversion:', userIdStr);
         user = users.find(u => u.id === userIdStr);
       }
       
-      // If still not found, try trimming whitespace
       if (!user && typeof userId === 'string') {
         const userIdTrimmed = userId.trim();
         console.log('Trying trimmed version:', userIdTrimmed);
@@ -173,14 +169,13 @@ class ReceiptService {
 
   /**
    * Create a new receipt
-   * ✅ UPDATED: Now accepts includeStaticFile parameter
    */
   async createReceipt(receiptData, userId, userRole) {
     console.log('\n=== CREATE RECEIPT DEBUG ===');
     console.log('userId:', userId);
     console.log('userId type:', typeof userId);
     console.log('userRole:', userRole);
-    console.log('includeStaticFile:', receiptData.includeStaticFile); // ✅ NEW LOG
+    console.log('includeStaticFile:', receiptData.includeStaticFile);
     
     const receipts = await this.loadReceipts();
     
@@ -195,7 +190,6 @@ class ReceiptService {
 
     const today = new Date().toISOString().split('T')[0];
 
-    // Get creator name with detailed logging
     console.log('Calling getUserNameById with:', userId);
     const createdByName = await this.getUserNameById(userId);
     console.log('getUserNameById returned:', createdByName);
@@ -217,7 +211,7 @@ class ReceiptService {
       additionalText: receiptData.additionalText || '',
       items: receiptData.items || [],
       notes: receiptData.notes || '',
-      includeStaticFile: receiptData.includeStaticFile || false, // ✅ NEW FIELD
+      includeStaticFile: receiptData.includeStaticFile || false,
       createdBy: userId,
       createdByName: createdByName || 'Unknown User',
       createdByRole: userRole,
@@ -229,7 +223,7 @@ class ReceiptService {
     await this.saveReceipts(receipts);
 
     console.log('Receipt created with name:', newReceipt.createdByName);
-    console.log('Include static file:', newReceipt.includeStaticFile); // ✅ NEW LOG
+    console.log('Include static file:', newReceipt.includeStaticFile);
     return newReceipt;
   }
 
@@ -240,17 +234,14 @@ class ReceiptService {
     const users = await this.loadUsers();
     
     return Promise.all(receipts.map(async receipt => {
-      // Always look up the current user name from users database
       const user = users.find(u => u.id === receipt.createdBy);
       
       if (user && user.name) {
-        // User found - use their current name
         return {
           ...receipt,
           createdByName: user.name
         };
       } else {
-        // User not found - use Unknown User
         return {
           ...receipt,
           createdByName: 'Unknown User'
@@ -265,7 +256,6 @@ class ReceiptService {
   async getAllReceipts(filters = {}, userId, userRole) {
     let receipts = await this.loadReceipts();
 
-    // Add creator names to all receipts
     receipts = await this.enrichReceiptsWithCreatorNames(receipts);
 
     if (userRole === 'employee' || userRole === 'admin') {
@@ -339,7 +329,6 @@ class ReceiptService {
       }
     }
 
-    // Add creator name
     const createdByName = await this.getUserNameById(receipt.createdBy);
 
     return {
@@ -365,7 +354,6 @@ class ReceiptService {
       }
     }
 
-    // Add creator name
     const createdByName = await this.getUserNameById(receipt.createdBy);
 
     return {
@@ -376,7 +364,6 @@ class ReceiptService {
 
   /**
    * Update receipt
-   * ✅ UPDATED: Now accepts includeStaticFile parameter
    */
   async updateReceipt(id, updateData, userId, userRole) {
     const receipts = await this.loadReceipts();
@@ -405,14 +392,13 @@ class ReceiptService {
     if (updateData.additionalText !== undefined) receipt.additionalText = updateData.additionalText;
     if (updateData.items !== undefined) receipt.items = updateData.items;
     if (updateData.notes !== undefined) receipt.notes = updateData.notes;
-    if (updateData.includeStaticFile !== undefined) receipt.includeStaticFile = updateData.includeStaticFile; // ✅ NEW FIELD
+    if (updateData.includeStaticFile !== undefined) receipt.includeStaticFile = updateData.includeStaticFile;
 
     receipt.updatedAt = new Date().toISOString();
 
     receipts[receiptIndex] = receipt;
     await this.saveReceipts(receipts);
 
-    // Add creator name
     const createdByName = await this.getUserNameById(receipt.createdBy);
 
     return {
@@ -422,7 +408,7 @@ class ReceiptService {
   }
 
   /**
-   * Delete receipt
+   * ✅ Delete receipt - WITH FILE MANAGEMENT INTEGRATION
    */
   async deleteReceipt(id) {
     const receipts = await this.loadReceipts();
@@ -430,6 +416,27 @@ class ReceiptService {
 
     if (receiptIndex === -1) {
       throw new Error('Receipt not found');
+    }
+
+    const receipt = receipts[receiptIndex];
+    
+    // ✅ DELETE FROM FILE MANAGEMENT (like price-quote)
+    if (receipt.pdfFilename) {
+      const fileManagementService = require('./File-management.service');
+      try {
+        await fileManagementService.deleteFileByFilename(receipt.pdfFilename);
+        console.log('✅ Receipt: File removed from File Management');
+      } catch (error) {
+        console.log('⚠️ Receipt: File Management deletion warning:', error.message);
+      }
+    }
+
+    // Delete physical PDF if exists
+    if (receipt.pdfFilename) {
+      const pdfPath = path.join(__dirname, '../../data/receipts/pdfs', receipt.pdfFilename);
+      if (fsSync.existsSync(pdfPath)) {
+        await fs.unlink(pdfPath).catch(() => {});
+      }
     }
 
     receipts.splice(receiptIndex, 1);
@@ -473,22 +480,17 @@ class ReceiptService {
 
   /**
    * Generate receipt PDF with optional attachment merge
-   * ✅ UPDATED: Now handles includeStaticFile option
    */
   async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
-    // Get receipt data
     const receipt = await this.getReceiptById(id, userId, userRole);
     
     console.log('🔵 Generating PDF for receipt:', receipt.receiptNumber);
     console.log('🔵 Include static file:', receipt.includeStaticFile);
     
-    // Generate the receipt PDF
     const pdfResult = await pdfGenerator.generateReceiptPDF(receipt);
     
-    // ✅ NEW: Prepare list of PDFs to merge
     const pdfsToMerge = [];
     
-    // Add user-uploaded attachment if provided
     if (attachmentPdf) {
       const isValid = await pdfGenerator.isValidPDF(attachmentPdf);
       if (isValid) {
@@ -499,10 +501,8 @@ class ReceiptService {
       }
     }
     
-    // ✅ NEW: Add static PDF if includeStaticFile is true
     if (receipt.includeStaticFile === true) {
       try {
-        const fsSync = require('fs');
         if (fsSync.existsSync(STATIC_PDF_PATH)) {
           const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
           pdfsToMerge.push(staticPdfBytes);
@@ -515,13 +515,11 @@ class ReceiptService {
       }
     }
     
-    // Merge all PDFs
     let finalPdfResult = pdfResult;
     try {
       if (pdfsToMerge.length > 0) {
         console.log(`🔄 Merging ${pdfsToMerge.length} PDF(s) with receipt...`);
         
-        // Merge first attachment
         let currentPath = pdfResult.filepath;
         
         for (let i = 0; i < pdfsToMerge.length; i++) {
@@ -534,7 +532,6 @@ class ReceiptService {
           currentPath = mergeResult.filepath;
           
           if (i === pdfsToMerge.length - 1) {
-            // Last merge, update final result
             finalPdfResult = {
               ...pdfResult,
               filename: mergeResult.filename,
@@ -547,7 +544,6 @@ class ReceiptService {
         
         console.log('✅ PDF merge completed successfully');
       } else {
-        // No PDFs to merge, just add headers/footers
         const headerResult = await pdfGenerator.mergePDFs(
           pdfResult.filepath,
           null,
@@ -568,7 +564,6 @@ class ReceiptService {
       finalPdfResult.mergeError = mergeError.message;
     }
     
-    // Update receipt record with PDF info
     const receipts = await this.loadReceipts();
     const receiptIndex = receipts.findIndex(r => r.id === id);
     

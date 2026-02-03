@@ -224,15 +224,47 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * DELETE receipt - Super admin only
+ * ✅ DELETE RECEIPT - UPDATED
+ * Super Admin: Can delete any receipt
+ * Admin/Employee: Can delete only their own receipts
  */
-router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
-    await receiptService.deleteReceipt(req.params.id);
+    // First, get the receipt to check ownership
+    const receipt = await receiptService.getReceiptById(
+      req.params.id,
+      req.user.id,
+      req.user.role
+    );
 
-    res.status(200).json({
-      success: true,
-      message: 'Receipt deleted successfully'
+    // Super admin can delete any receipt
+    if (req.user.role === 'super_admin') {
+      await receiptService.deleteReceipt(req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: 'Receipt deleted successfully'
+      });
+    }
+
+    // Admin and employee can only delete their own receipts
+    if (req.user.role === 'admin' || req.user.role === 'employee') {
+      if (receipt.createdBy !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to delete this receipt'
+        });
+      }
+      await receiptService.deleteReceipt(req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: 'Receipt deleted successfully'
+      });
+    }
+
+    // Other roles cannot delete
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to delete receipts'
     });
   } catch (error) {
     next(error);

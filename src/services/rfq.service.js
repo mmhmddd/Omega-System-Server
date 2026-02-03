@@ -1,6 +1,7 @@
 // src/services/rfq.service.js - FIXED WITH includeStaticFile SUPPORT
 
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const atomicWrite = require('../utils/atomic-write.util');
 const rfqPdfGenerator = require('../utils/pdf-generator-rfq.util');
@@ -348,19 +349,44 @@ class RFQService {
     return rfq;
   }
 
-  async deleteRFQ(id) {
-    const rfqs = await this.loadRFQs();
-    const rfqIndex = rfqs.findIndex(r => r.id === id);
+/**
+ * ✅ Delete RFQ - WITH FILE MANAGEMENT INTEGRATION (like price-quote)
+ */
+async deleteRFQ(id) {
+  const rfqs = await this.loadRFQs();
+  const rfqIndex = rfqs.findIndex(r => r.id === id);
 
-    if (rfqIndex === -1) {
-      throw new Error('RFQ not found');
+  if (rfqIndex === -1) throw new Error('RFQ not found');
+
+  const rfq = rfqs[rfqIndex];
+  
+  // ✅ DELETE FROM FILE MANAGEMENT (like price-quote)
+  if (rfq.pdfFilename) {
+    const fileManagementService = require('./File-management.service');
+    try {
+      await fileManagementService.deleteFileByFilename(rfq.pdfFilename);
+      console.log('✅ RFQ: File removed from File Management');
+    } catch (error) {
+      console.log('⚠️ RFQ: File Management deletion warning:', error.message);
     }
-
-    rfqs.splice(rfqIndex, 1);
-    await this.saveRFQs(rfqs);
-
-    return { message: 'RFQ deleted successfully' };
+    
+    // Delete physical PDF file
+    const pdfPath = path.join(__dirname, '../../data/rfqs/pdfs', rfq.pdfFilename);
+    if (fsSync.existsSync(pdfPath)) {
+      try {
+        fsSync.unlinkSync(pdfPath);
+      } catch (err) {
+        console.log('Could not delete PDF:', err.message);
+      }
+    }
   }
+
+  rfqs.splice(rfqIndex, 1);
+  await this.saveRFQs(rfqs);
+
+  return { message: 'RFQ deleted successfully' };
+}
+
 
   async getRFQStats(userId, userRole) {
     let rfqs = await this.loadRFQs();

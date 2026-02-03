@@ -198,15 +198,47 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * DELETE RFQ (Super Admin Only)
+ * ✅ DELETE RFQ - UPDATED
+ * Super Admin: Can delete any RFQ
+ * Admin/Employee: Can delete only their own RFQs
  */
-router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
-    await rfqService.deleteRFQ(req.params.id);
+    // First, get the RFQ to check ownership
+    const rfq = await rfqService.getRFQById(
+      req.params.id,
+      req.user.id,
+      req.user.role
+    );
 
-    res.status(200).json({
-      success: true,
-      message: 'RFQ deleted successfully'
+    // Super admin can delete any RFQ
+    if (req.user.role === 'super_admin') {
+      await rfqService.deleteRFQ(req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: 'RFQ deleted successfully'
+      });
+    }
+
+    // Admin and employee can only delete their own RFQs
+    if (req.user.role === 'admin' || req.user.role === 'employee') {
+      if (rfq.createdBy !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to delete this RFQ'
+        });
+      }
+      await rfqService.deleteRFQ(req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: 'RFQ deleted successfully'
+      });
+    }
+
+    // Other roles cannot delete
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to delete RFQs'
     });
   } catch (error) {
     next(error);

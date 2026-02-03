@@ -1,11 +1,11 @@
 // ============================================================
-// MATERIAL ROUTES - WITH TERMS AND CONDITIONS PDF SUPPORT
-// src/routes/materials.routes.js
+// COSTING SHEET ROUTES - WITH TERMS AND CONDITIONS PDF SUPPORT
+// src/routes/costing-sheet.routes.js
 // ============================================================
 const express = require('express');
 const router = express.Router();
 const path = require('path');
-const materialService = require('../services/material.service');
+const costingSheetService = require('../services/costing-sheet.service');
 const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 const multer = require('multer');
@@ -26,11 +26,11 @@ const upload = multer({
 });
 
 router.use(protect);
-router.use(checkRouteAccess('materialManagement'));
+router.use(checkRouteAccess('costingSheetManagement'));
 
 /**
- * ✅ CREATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
- * POST /api/materials
+ * ✅ CREATE COSTING SHEET - WITH includeStaticFile SUPPORT
+ * POST /api/costing-sheets
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -53,27 +53,27 @@ router.post('/', async (req, res, next) => {
       }
     }
 
-    const materialData = {
+    const costingSheetData = {
       date: req.body.date,
-      section: req.body.section,
+      client: req.body.client,
       project: req.body.project,
-      requestPriority: req.body.requestPriority,
-      requestReason: req.body.requestReason,
+      profitPercentage: req.body.profitPercentage,
+      notes: req.body.notes,
       items: items,
       additionalNotes: req.body.additionalNotes,
       includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true' // ✅ NEW FIELD
     };
 
-    const material = await materialService.createMaterialRequest(
-      materialData,
+    const costingSheet = await costingSheetService.createCostingSheet(
+      costingSheetData,
       req.user.id,
       req.user.role
     );
 
     res.status(201).json({
       success: true,
-      message: `Material Request created successfully (${material.language === 'ar' ? 'Arabic' : 'English'})`,
-      data: material
+      message: `Costing Sheet created successfully (${costingSheet.language === 'ar' ? 'Arabic' : 'English'})`,
+      data: costingSheet
     });
   } catch (error) {
     next(error);
@@ -81,32 +81,28 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * GET ALL MATERIAL REQUESTS
+ * GET ALL COSTING SHEETS
  */
 router.get('/', async (req, res, next) => {
   try {
     const { 
-      mrNumber, 
+      csNumber, 
       startDate, 
       endDate, 
-      section,
+      client,
       project,
-      priority,
-      status,
       search, 
       page, 
       limit 
     } = req.query;
 
-    const result = await materialService.getAllMaterialRequests(
+    const result = await costingSheetService.getAllCostingSheets(
       {
-        mrNumber,
+        csNumber,
         startDate,
         endDate,
-        section,
+        client,
         project,
-        priority,
-        status,
         search,
         page: parseInt(page) || 1,
         limit: parseInt(limit) || 10
@@ -117,7 +113,7 @@ router.get('/', async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: result.materials,
+      data: result.costingSheets,
       pagination: result.pagination,
       userRole: req.user.role
     });
@@ -127,11 +123,11 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
- * GET MATERIAL REQUEST STATISTICS
+ * GET COSTING SHEET STATISTICS
  */
 router.get('/stats', async (req, res, next) => {
   try {
-    const stats = await materialService.getMaterialStats(req.user.id, req.user.role);
+    const stats = await costingSheetService.getCostingSheetStats(req.user.id, req.user.role);
     res.status(200).json({
       success: true,
       data: stats
@@ -146,10 +142,10 @@ router.get('/stats', async (req, res, next) => {
  */
 router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) => {
   try {
-    const result = await materialService.resetMaterialCounter();
+    const result = await costingSheetService.resetCostingSheetCounter();
     res.status(200).json({
       success: true,
-      message: 'Material Request counter reset successfully',
+      message: 'Costing Sheet counter reset successfully',
       data: result
     });
   } catch (error) {
@@ -158,11 +154,11 @@ router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) 
 });
 
 /**
- * GET SPECIFIC MATERIAL REQUEST (By ID)
+ * GET SPECIFIC COSTING SHEET (By ID)
  */
 router.get('/:id', async (req, res, next) => {
   try {
-    const material = await materialService.getMaterialRequestById(
+    const costingSheet = await costingSheetService.getCostingSheetById(
       req.params.id, 
       req.user.id, 
       req.user.role
@@ -170,7 +166,7 @@ router.get('/:id', async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      data: material
+      data: costingSheet
     });
   } catch (error) {
     next(error);
@@ -178,7 +174,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ UPDATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
+ * ✅ UPDATE COSTING SHEET - WITH includeStaticFile SUPPORT
  */
 router.put('/:id', async (req, res, next) => {
   try {
@@ -207,10 +203,10 @@ router.put('/:id', async (req, res, next) => {
 
     const updateData = {
       date: req.body.date,
-      section: req.body.section,
+      client: req.body.client,
       project: req.body.project,
-      requestPriority: req.body.requestPriority,
-      requestReason: req.body.requestReason,
+      profitPercentage: req.body.profitPercentage,
+      notes: req.body.notes,
       items: items,
       additionalNotes: req.body.additionalNotes,
       status: req.body.status,
@@ -219,7 +215,7 @@ router.put('/:id', async (req, res, next) => {
         : undefined // ✅ NEW FIELD
     };
 
-    const material = await materialService.updateMaterialRequest(
+    const costingSheet = await costingSheetService.updateCostingSheet(
       req.params.id,
       updateData,
       req.user.id,
@@ -228,8 +224,8 @@ router.put('/:id', async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: `Material Request updated successfully (${material.language === 'ar' ? 'Arabic' : 'English'})`,
-      data: material
+      message: `Costing Sheet updated successfully (${costingSheet.language === 'ar' ? 'Arabic' : 'English'})`,
+      data: costingSheet
     });
   } catch (error) {
     next(error);
@@ -237,47 +233,47 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ DELETE MATERIAL REQUEST - UPDATED
- * Super Admin: Can delete any material request
- * Admin/Employee: Can delete only their own material requests
+ * ✅ DELETE COSTING SHEET - UPDATED
+ * Super Admin: Can delete any costing sheet
+ * Admin/Employee: Can delete only their own costing sheets
  */
 router.delete('/:id', async (req, res, next) => {
   try {
-    // First, get the material request to check ownership
-    const material = await materialService.getMaterialRequestById(
+    // First, get the costing sheet to check ownership
+    const costingSheet = await costingSheetService.getCostingSheetById(
       req.params.id,
       req.user.id,
       req.user.role
     );
 
-    // Super admin can delete any material request
+    // Super admin can delete any costing sheet
     if (req.user.role === 'super_admin') {
-      await materialService.deleteMaterialRequest(req.params.id);
+      await costingSheetService.deleteCostingSheet(req.params.id);
       return res.status(200).json({
         success: true,
-        message: 'Material Request deleted successfully'
+        message: 'Costing Sheet deleted successfully'
       });
     }
 
-    // Admin and employee can only delete their own material requests
+    // Admin and employee can only delete their own costing sheets
     if (req.user.role === 'admin' || req.user.role === 'employee') {
-      if (material.createdBy !== req.user.id) {
+      if (costingSheet.createdBy !== req.user.id) {
         return res.status(403).json({
           success: false,
-          message: 'You do not have permission to delete this material request'
+          message: 'You do not have permission to delete this costing sheet'
         });
       }
-      await materialService.deleteMaterialRequest(req.params.id);
+      await costingSheetService.deleteCostingSheet(req.params.id);
       return res.status(200).json({
         success: true,
-        message: 'Material Request deleted successfully'
+        message: 'Costing Sheet deleted successfully'
       });
     }
 
     // Other roles cannot delete
     return res.status(403).json({
       success: false,
-      message: 'You do not have permission to delete material requests'
+      message: 'You do not have permission to delete costing sheets'
     });
   } catch (error) {
     next(error);
@@ -285,8 +281,8 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ GENERATE MATERIAL REQUEST PDF (WITH OPTIONAL ATTACHMENT AND TERMS & CONDITIONS)
- * POST /api/materials/:id/generate-pdf
+ * ✅ GENERATE COSTING SHEET PDF (WITH OPTIONAL ATTACHMENT AND TERMS & CONDITIONS)
+ * POST /api/costing-sheets/:id/generate-pdf
  * 
  * The includeStaticFile logic is handled in the service layer
  */
@@ -294,7 +290,7 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
   try {
     const attachmentPdf = req.file ? req.file.buffer : null;
 
-    const result = await materialService.generateMaterialPDF(
+    const result = await costingSheetService.generateCostingSheetPDF(
       req.params.id,
       req.user.id,
       req.user.role,
@@ -302,11 +298,11 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
     );
 
     const responseData = {
-      mrId: result.material.id,
-      mrNumber: result.material.mrNumber,
+      csId: result.costingSheet.id,
+      csNumber: result.costingSheet.csNumber,
       pdfFilename: result.pdf.filename,
       language: result.pdf.language,
-      downloadUrl: `/api/materials/${req.params.id}/download-pdf`,
+      downloadUrl: `/api/costing-sheets/${req.params.id}/download-pdf`,
       merged: result.pdf.merged || false
     };
 
@@ -334,25 +330,25 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 });
 
 /**
- * DOWNLOAD MATERIAL REQUEST PDF
- * GET /api/materials/:id/download-pdf
+ * DOWNLOAD COSTING SHEET PDF
+ * GET /api/costing-sheets/:id/download-pdf
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {
-    const material = await materialService.getMaterialRequestById(
+    const costingSheet = await costingSheetService.getCostingSheetById(
       req.params.id, 
       req.user.id, 
       req.user.role
     );
 
-    if (!material.pdfFilename) {
+    if (!costingSheet.pdfFilename) {
       return res.status(404).json({
         success: false,
         message: 'PDF not generated yet. Please generate PDF first.'
       });
     }
 
-    const pdfPath = path.join(__dirname, '../../data/materials-requests/pdfs', material.pdfFilename);
+    const pdfPath = path.join(__dirname, '../../data/costing-sheets/pdfs', costingSheet.pdfFilename);
 
     const fs = require('fs');
     if (!fs.existsSync(pdfPath)) {
@@ -362,7 +358,7 @@ router.get('/:id/download-pdf', async (req, res, next) => {
       });
     }
 
-    res.download(pdfPath, `MR_${material.mrNumber}.pdf`, (err) => {
+    res.download(pdfPath, `CS_${costingSheet.csNumber}.pdf`, (err) => {
       if (err) next(err);
     });
   } catch (error) {

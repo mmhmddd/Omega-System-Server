@@ -200,15 +200,47 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * DELETE PURCHASE ORDER (Super Admin Only)
+ * ✅ DELETE PURCHASE ORDER - UPDATED
+ * Super Admin: Can delete any purchase order
+ * Admin/Employee: Can delete only their own purchase orders
  */
-router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
-    await purchaseService.deletePO(req.params.id);
+    // First, get the purchase order to check ownership
+    const po = await purchaseService.getPOById(
+      req.params.id,
+      req.user.id,
+      req.user.role
+    );
 
-    res.status(200).json({
-      success: true,
-      message: 'Purchase Order deleted successfully'
+    // Super admin can delete any purchase order
+    if (req.user.role === 'super_admin') {
+      await purchaseService.deletePO(req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: 'Purchase Order deleted successfully'
+      });
+    }
+
+    // Admin and employee can only delete their own purchase orders
+    if (req.user.role === 'admin' || req.user.role === 'employee') {
+      if (po.createdBy !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to delete this purchase order'
+        });
+      }
+      await purchaseService.deletePO(req.params.id);
+      return res.status(200).json({
+        success: true,
+        message: 'Purchase Order deleted successfully'
+      });
+    }
+
+    // Other roles cannot delete
+    return res.status(403).json({
+      success: false,
+      message: 'You do not have permission to delete purchase orders'
     });
   } catch (error) {
     next(error);
