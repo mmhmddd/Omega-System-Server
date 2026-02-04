@@ -1,7 +1,5 @@
-// ============================================================
-// MATERIAL ROUTES - WITH TERMS AND CONDITIONS PDF SUPPORT
-// src/routes/materials.routes.js
-// ============================================================
+// src/routes/materials.routes.js - FIXED WITH CORRECT ROUTE KEY
+
 const express = require('express');
 const router = express.Router();
 const path = require('path');
@@ -26,11 +24,10 @@ const upload = multer({
 });
 
 router.use(protect);
-router.use(checkRouteAccess('materialManagement'));
+router.use(checkRouteAccess('materialRequests')); // ✅ FIXED: Changed from 'materialManagement' to 'materialRequests'
 
 /**
- * ✅ CREATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
- * POST /api/materials
+ * CREATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -61,7 +58,7 @@ router.post('/', async (req, res, next) => {
       requestReason: req.body.requestReason,
       items: items,
       additionalNotes: req.body.additionalNotes,
-      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true' // ✅ NEW FIELD
+      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true'
     };
 
     const material = await materialService.createMaterialRequest(
@@ -178,11 +175,11 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ UPDATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
+ * UPDATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
  */
 router.put('/:id', async (req, res, next) => {
   try {
-    // ✅ Parse items - handle both JSON string and object
+    // Parse items - handle both JSON string and object
     let items = undefined;
     if (req.body.items) {
       if (typeof req.body.items === 'string') {
@@ -216,7 +213,7 @@ router.put('/:id', async (req, res, next) => {
       status: req.body.status,
       includeStaticFile: req.body.includeStaticFile !== undefined 
         ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
-        : undefined // ✅ NEW FIELD
+        : undefined
     };
 
     const material = await materialService.updateMaterialRequest(
@@ -237,20 +234,16 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ DELETE MATERIAL REQUEST - UPDATED
- * Super Admin: Can delete any material request
- * Admin/Employee: Can delete only their own material requests
+ * DELETE MATERIAL REQUEST
  */
 router.delete('/:id', async (req, res, next) => {
   try {
-    // First, get the material request to check ownership
     const material = await materialService.getMaterialRequestById(
       req.params.id,
       req.user.id,
       req.user.role
     );
 
-    // Super admin can delete any material request
     if (req.user.role === 'super_admin') {
       await materialService.deleteMaterialRequest(req.params.id);
       return res.status(200).json({
@@ -259,7 +252,6 @@ router.delete('/:id', async (req, res, next) => {
       });
     }
 
-    // Admin and employee can only delete their own material requests
     if (req.user.role === 'admin' || req.user.role === 'employee') {
       if (material.createdBy !== req.user.id) {
         return res.status(403).json({
@@ -274,7 +266,6 @@ router.delete('/:id', async (req, res, next) => {
       });
     }
 
-    // Other roles cannot delete
     return res.status(403).json({
       success: false,
       message: 'You do not have permission to delete material requests'
@@ -285,10 +276,7 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ GENERATE MATERIAL REQUEST PDF (WITH OPTIONAL ATTACHMENT AND TERMS & CONDITIONS)
- * POST /api/materials/:id/generate-pdf
- * 
- * The includeStaticFile logic is handled in the service layer
+ * GENERATE MATERIAL REQUEST PDF (WITH OPTIONAL ATTACHMENT AND TERMS & CONDITIONS)
  */
 router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -335,7 +323,6 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 
 /**
  * DOWNLOAD MATERIAL REQUEST PDF
- * GET /api/materials/:id/download-pdf
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {

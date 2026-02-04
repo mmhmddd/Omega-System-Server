@@ -1,17 +1,21 @@
-// src/routes/Items.routes.js
+// src/routes/Items.routes.js - FIXED WITH CORRECT ROUTE KEY
+
 const express = require('express');
 const router = express.Router();
 const itemsService = require('../services/Items.service');
-const { protect ,checkRouteAccess } = require('../middleware/auth.middleware');
+const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
+
+// Apply route access check to all routes
+router.use(protect);
+router.use(checkRouteAccess('itemsControl')); // ✅ FIXED: Changed from 'items' to 'itemsControl'
 
 /**
  * @route   POST /api/items
  * @desc    Create new item
  * @access  Private (Admin & Super Admin only)
  */
-router.post('/', protect, restrictTo('admin', 'super_admin'), async (req, res) => {
-router.use(checkRouteAccess('items'));
+router.post('/', restrictTo('admin', 'super_admin'), async (req, res) => {
   try {
     const { name, description, unit } = req.body;
 
@@ -39,7 +43,7 @@ router.use(checkRouteAccess('items'));
  * @desc    Get all items with pagination and search
  * @access  Private (All authenticated users)
  */
-router.get('/', protect, async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { page, limit, search } = req.query;
 
@@ -68,7 +72,7 @@ router.get('/', protect, async (req, res) => {
  * @desc    Get all items in simple format (id and name only)
  * @access  Private (All authenticated users)
  */
-router.get('/simple', protect, async (req, res) => {
+router.get('/simple', async (req, res) => {
   try {
     const items = await itemsService.getAllItemsSimple();
 
@@ -90,7 +94,7 @@ router.get('/simple', protect, async (req, res) => {
  * @desc    Get item by ID
  * @access  Private (All authenticated users)
  */
-router.get('/:id', protect, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const item = await itemsService.getItemById(req.params.id);
 
@@ -112,7 +116,7 @@ router.get('/:id', protect, async (req, res) => {
  * @desc    Update item
  * @access  Private (Admin & Super Admin only)
  */
-router.put('/:id', protect, restrictTo('admin', 'super_admin'), async (req, res) => {
+router.put('/:id', restrictTo('admin', 'super_admin'), async (req, res) => {
   try {
     const { name, description, unit } = req.body;
 
@@ -141,7 +145,7 @@ router.put('/:id', protect, restrictTo('admin', 'super_admin'), async (req, res)
  * @desc    Delete item
  * @access  Private (Admin & Super Admin only)
  */
-router.delete('/:id', protect, restrictTo('admin', 'super_admin'), async (req, res) => {
+router.delete('/:id', restrictTo('admin', 'super_admin'), async (req, res) => {
   try {
     const result = await itemsService.deleteItem(req.params.id);
 
