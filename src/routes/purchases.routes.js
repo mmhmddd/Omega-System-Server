@@ -331,5 +331,62 @@ router.get('/:id/download-pdf', async (req, res, next) => {
     next(error);
   }
 });
+/**
+ * ✅ POST /api/purchases/:id/send-email
+ * Send Purchase Order PDF by email
+ */
+router.post('/:id/send-email', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email address'
+      });
+    }
+
+    // Check ownership first
+    const po = await purchaseService.getPOById(
+      req.params.id,
+      req.user.id,
+      req.user.role
+    );
+    
+    // Role-based access control
+    if (req.user.role !== 'super_admin') {
+      if (po.createdBy !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to send this purchase order'
+        });
+      }
+    }
+
+    const result = await purchaseService.sendPOByEmail(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      email
+    );
+
+    res.status(200).json({
+      success: true,
+      message: result.message || 'Email sent successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error sending PO email:', error);
+    next(error);
+  }
+});
 
 module.exports = router;

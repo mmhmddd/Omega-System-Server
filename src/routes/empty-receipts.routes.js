@@ -1,4 +1,4 @@
-// src/routes/empty-receipts.routes.js - ENHANCED WITH ROLE-BASED FILTERING
+// src/routes/empty-receipts.routes.js - ENHANCED WITH EMAIL ENDPOINT (MATCHING RECEIPTS PATTERN)
 const express = require('express');
 const router = express.Router();
 const path = require('path');
@@ -8,27 +8,21 @@ const { restrictTo } = require('../middleware/role.middleware');
 
 // All routes require authentication
 router.use(protect);
-
-// TEMPORARY: Comment out to test if route access is the issue
-// Uncomment after confirming your user role has access to 'empty-receipts'
-// router.use(checkRouteAccess('empty-receipts'));
+router.use(checkRouteAccess('empty-receipts'));
 
 /**
- * ✅ GET /api/empty-receipts/stats
+ * GET /api/empty-receipts/stats
  * Get empty receipts statistics (role-based)
- * - Super Admin: See all stats
- * - Admin/Employee: See only their own stats
  */
 router.get('/stats', async (req, res, next) => {
   try {
     console.log('📊 GET /api/empty-receipts/stats');
     
-    // ✅ Role-based filtering
+    // Role-based filtering
     let userId = undefined;
     if (req.user.role === 'admin' || req.user.role === 'employee') {
-      userId = req.user.id; // Only their stats
+      userId = req.user.id;
     }
-    // super_admin sees all stats (userId = undefined)
     
     const stats = await emptyReceiptService.getStats(userId);
     res.status(200).json({
@@ -42,7 +36,7 @@ router.get('/stats', async (req, res, next) => {
 });
 
 /**
- * ✅ POST /api/empty-receipts/reset-counter
+ * POST /api/empty-receipts/reset-counter
  * Reset empty receipt counter (super admin only)
  */
 router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) => {
@@ -61,17 +55,15 @@ router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) 
 });
 
 /**
- * ✅ GET /api/empty-receipts/number/:receiptNumber
+ * GET /api/empty-receipts/number/:receiptNumber
  * Get empty receipt by receipt number (role-based access)
- * - Super Admin: Can access any receipt
- * - Admin/Employee: Can access only their own receipts
  */
 router.get('/number/:receiptNumber', async (req, res, next) => {
   try {
     console.log('🔍 GET /api/empty-receipts/number/' + req.params.receiptNumber);
     const receipt = await emptyReceiptService.getByReceiptNumber(req.params.receiptNumber);
     
-    // ✅ Role-based access control
+    // Role-based access control
     if (req.user.role !== 'super_admin') {
       if (receipt.createdBy !== req.user.id) {
         return res.status(403).json({
@@ -98,19 +90,17 @@ router.get('/number/:receiptNumber', async (req, res, next) => {
 });
 
 /**
- * ✅ GET /api/empty-receipts/:id/download-pdf
+ * GET /api/empty-receipts/:id/download-pdf
  * Download empty receipt PDF by ID (role-based access)
- * - Super Admin: Can download any PDF
- * - Admin/Employee: Can download only their own PDFs
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {
     console.log('⬇️ GET /api/empty-receipts/:id/download-pdf - ID:', req.params.id);
     
-    // ✅ First check ownership
+    // Check ownership
     const receipt = await emptyReceiptService.getById(req.params.id);
     
-    // ✅ Role-based access control
+    // Role-based access control
     if (req.user.role !== 'super_admin') {
       if (receipt.createdBy !== req.user.id) {
         return res.status(403).json({
@@ -142,19 +132,17 @@ router.get('/:id/download-pdf', async (req, res, next) => {
 });
 
 /**
- * ✅ POST /api/empty-receipts/:id/generate-pdf
+ * POST /api/empty-receipts/:id/generate-pdf
  * Generate PDF for empty receipt (role-based access)
- * - Super Admin: Can generate PDF for any receipt
- * - Admin/Employee: Can generate PDF only for their own receipts
  */
 router.post('/:id/generate-pdf', async (req, res, next) => {
   try {
     console.log('📄 POST /api/empty-receipts/:id/generate-pdf - ID:', req.params.id);
     
-    // ✅ First check ownership
+    // Check ownership
     const existingReceipt = await emptyReceiptService.getById(req.params.id);
     
-    // ✅ Role-based access control
+    // Role-based access control
     if (req.user.role !== 'super_admin') {
       if (existingReceipt.createdBy !== req.user.id) {
         return res.status(403).json({
@@ -183,9 +171,62 @@ router.post('/:id/generate-pdf', async (req, res, next) => {
 });
 
 /**
+ * ✅ POST /api/empty-receipts/:id/send-email
+ * Send empty receipt PDF by email (MATCHING RECEIPTS PATTERN)
+ */
+router.post('/:id/send-email', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email address'
+      });
+    }
+
+    // Check ownership first
+    const receipt = await emptyReceiptService.getById(req.params.id);
+    
+    // Role-based access control
+    if (req.user.role !== 'super_admin') {
+      if (receipt.createdBy !== req.user.id) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have permission to send this empty receipt'
+        });
+      }
+    }
+
+    const result = await emptyReceiptService.sendReceiptByEmail(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      email
+    );
+
+    res.status(200).json({
+      success: true,
+      message: result.message || 'Email sent successfully'
+    });
+  } catch (error) {
+    console.error('❌ Error sending email:', error);
+    next(error);
+  }
+});
+
+/**
  * POST /api/empty-receipts/generate
  * Generate empty receipt with header only
- * ✅ ENHANCED: Now returns receipt ID and receipt number
  */
 router.post('/generate', async (req, res, next) => {
   try {
@@ -198,7 +239,6 @@ router.post('/generate', async (req, res, next) => {
       });
     }
 
-    // Get user info from auth middleware
     const userId = req.user.id;
     const userRole = req.user.role;
     
@@ -227,11 +267,8 @@ router.post('/generate', async (req, res, next) => {
 });
 
 /**
- * ✅ GET /api/empty-receipts
- * Get all empty receipts with pagination and search
- * ✅ ROLE-BASED FILTERING:
- * - Super Admin: See all receipts
- * - Admin/Employee: See only their own receipts
+ * GET /api/empty-receipts
+ * Get all empty receipts with pagination and search (ROLE-BASED FILTERING)
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -252,13 +289,11 @@ router.get('/', async (req, res, next) => {
       createdBy: createdBy || undefined
     };
 
-    // ✅ ROLE-BASED FILTERING
+    // ROLE-BASED FILTERING
     if (req.user.role === 'admin' || req.user.role === 'employee') {
-      // Force filter to only show their own receipts
       params.createdBy = req.user.id;
       console.log('🔒 Filtering for user:', req.user.id);
     }
-    // super_admin can see all (no filter applied)
 
     const result = await emptyReceiptService.getAllEmptyReceipts(params);
 
@@ -268,7 +303,7 @@ router.get('/', async (req, res, next) => {
       success: true,
       data: result.data,
       pagination: result.pagination,
-      userRole: req.user.role // ✅ Include user role in response
+      userRole: req.user.role
     });
   } catch (error) {
     console.error('❌ Error in GET /api/empty-receipts:', error);
@@ -277,22 +312,19 @@ router.get('/', async (req, res, next) => {
 });
 
 /**
- * ✅ GET /api/empty-receipts/:id
+ * GET /api/empty-receipts/:id
  * Get empty receipt by ID (role-based access)
- * - Super Admin: Can view any receipt
- * - Admin/Employee: Can view only their own receipts
  */
 router.get('/:id', async (req, res, next) => {
   try {
-    // Check if this is a special route (not an ID)
     if (req.params.id === 'download' || req.params.id === 'view') {
-      return next(); // Let the next route handle it
+      return next();
     }
 
     console.log('🔍 GET /api/empty-receipts/:id - ID:', req.params.id);
     const receipt = await emptyReceiptService.getById(req.params.id);
     
-    // ✅ Role-based access control
+    // Role-based access control
     if (req.user.role !== 'super_admin') {
       if (receipt.createdBy !== req.user.id) {
         return res.status(403).json({
@@ -319,7 +351,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ POST /api/empty-receipts
+ * POST /api/empty-receipts
  * Create new empty receipt (without immediate PDF generation)
  */
 router.post('/', async (req, res, next) => {
@@ -346,19 +378,17 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * ✅ PUT /api/empty-receipts/:id
+ * PUT /api/empty-receipts/:id
  * Update empty receipt (role-based access)
- * - Super Admin: Can update any receipt
- * - Admin/Employee: Can update only their own receipts
  */
 router.put('/:id', async (req, res, next) => {
   try {
     console.log('✏️ PUT /api/empty-receipts/:id - ID:', req.params.id);
     
-    // ✅ First check ownership
+    // Check ownership
     const existingReceipt = await emptyReceiptService.getById(req.params.id);
     
-    // ✅ Role-based access control
+    // Role-based access control
     if (req.user.role !== 'super_admin') {
       if (existingReceipt.createdBy !== req.user.id) {
         return res.status(403).json({
@@ -389,15 +419,12 @@ router.put('/:id', async (req, res, next) => {
 
 /**
  * GET /api/empty-receipts/download/:filename
- * Download empty receipt PDF by filename
- * ⚠️ WARNING: Cannot check ownership with just filename
- * Recommend using /:id/download-pdf instead for better security
+ * Download empty receipt PDF by filename (BACKWARD COMPATIBILITY)
  */
 router.get('/download/:filename', async (req, res, next) => {
   try {
     const filename = req.params.filename;
     
-    // Security check: ensure filename is valid
     if (!filename || !filename.endsWith('.pdf')) {
       return res.status(400).json({
         success: false,
@@ -414,9 +441,6 @@ router.get('/download/:filename', async (req, res, next) => {
         message: 'PDF file not found'
       });
     }
-
-    // ⚠️ Note: This endpoint doesn't check ownership
-    // Consider deprecating in favor of /:id/download-pdf
     
     res.download(pdfPath, filename, (err) => {
       if (err) {
@@ -430,15 +454,12 @@ router.get('/download/:filename', async (req, res, next) => {
 
 /**
  * GET /api/empty-receipts/view/:filename
- * View empty receipt PDF in browser
- * ⚠️ WARNING: Cannot check ownership with just filename
- * Recommend using /:id/download-pdf with inline disposition instead
+ * View empty receipt PDF in browser (BACKWARD COMPATIBILITY)
  */
 router.get('/view/:filename', async (req, res, next) => {
   try {
     const filename = req.params.filename;
     
-    // Security check: ensure filename is valid
     if (!filename || !filename.endsWith('.pdf')) {
       return res.status(400).json({
         success: false,
@@ -455,9 +476,6 @@ router.get('/view/:filename', async (req, res, next) => {
         message: 'PDF file not found'
       });
     }
-
-    // ⚠️ Note: This endpoint doesn't check ownership
-    // Consider deprecating in favor of /:id/download-pdf with inline disposition
     
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename=' + filename);
@@ -470,10 +488,8 @@ router.get('/view/:filename', async (req, res, next) => {
 });
 
 /**
- * ✅ DELETE /api/empty-receipts/:id
+ * DELETE /api/empty-receipts/:id
  * Delete empty receipt (role-based permissions)
- * - Super Admin: Can delete any empty receipt
- * - Admin/Employee: Can delete only their own empty receipts
  */
 router.delete('/:id', async (req, res, next) => {
   try {
@@ -486,7 +502,7 @@ router.delete('/:id', async (req, res, next) => {
       });
     }
 
-    // First, get the empty receipt to check ownership
+    // Check ownership
     const receipt = await emptyReceiptService.getById(id);
 
     // Super admin can delete any empty receipt

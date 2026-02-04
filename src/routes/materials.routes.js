@@ -370,4 +370,44 @@ router.get('/:id/download-pdf', async (req, res, next) => {
   }
 });
 
+/**
+ * ✅ SEND MATERIAL REQUEST VIA EMAIL
+ * POST /api/materials/:id/send-email
+ */
+router.post('/:id/send-email', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email address'
+      });
+    }
+
+    const result = await materialService.sendMaterialByEmail(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      email
+    );
+
+    res.status(200).json({
+      success: true,
+      message: result.message || 'Email sent successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

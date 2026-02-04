@@ -414,4 +414,53 @@ router.get('/:id/pdf', async (req, res, next) => {
   }
 });
 
+/**
+ * @route   POST /api/proforma-invoices/:id/send-email
+ * @desc    Send invoice PDF by email
+ * @access  Private (Owner or Super Admin)
+ */
+router.post('/:id/send-email', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email address'
+      });
+    }
+
+    // Check permission
+    const invoice = await proformaInvoiceService.getInvoiceById(req.params.id);
+    if (req.user.role !== 'super_admin' && invoice.createdBy !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You do not have permission to send this invoice'
+      });
+    }
+
+    const result = await proformaInvoiceService.sendInvoiceByEmail(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      email
+    );
+
+    res.status(200).json({
+      success: true,
+      message: result.message || 'Email sent successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 module.exports = router;

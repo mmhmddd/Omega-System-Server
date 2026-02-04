@@ -7,7 +7,7 @@ const puppeteer = require('puppeteer');
 const { PDFDocument } = require('pdf-lib');
 const atomicWrite = require('../utils/atomic-write.util');
 const { generateId } = require('../utils/quotes-id-generator.util');
-
+const nodemailer = require('nodemailer');
 const pdfPoppler = require('pdf-poppler');
 const sharp = require('sharp');
 
@@ -21,6 +21,22 @@ const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
 // ✅ NEW: Path to static terms and conditions PDF
 const STATIC_TERMS_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
+
+// ✅ Email configuration
+const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
+const EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '587');
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
+const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
+
+// ✅ Log configuration on startup
+console.log('📧 Email Configuration (Price Quotes):');
+console.log('  - Host:', EMAIL_HOST);
+console.log('  - Port:', EMAIL_PORT);
+console.log('  - User:', EMAIL_USER ? '✅ Configured' : '❌ Missing');
+console.log('  - Password:', EMAIL_PASS ? '✅ Configured' : '❌ Missing');
+console.log('  - From:', EMAIL_FROM);
+
 
 class PriceQuoteService {
   async loadUsers() {
@@ -805,6 +821,155 @@ class PriceQuoteService {
 
     return { message: 'Quote deleted successfully' };
   }
+
+  /**
+   * ✅ Send quote PDF by email
+   */
+  async sendQuoteByEmail(quoteId, userId, userRole, recipientEmail) {
+    try {
+      console.log('\n📧 === SEND EMAIL DEBUG (QUOTE) ===');
+      console.log('Quote ID:', quoteId);
+      console.log('User ID:', userId);
+      console.log('Recipient:', recipientEmail);
+      
+      // ✅ Check credentials first
+      if (!EMAIL_USER || !EMAIL_PASS) {
+        console.error('❌ Email credentials missing!');
+        throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
+      }
+
+      // Get quote
+      const quote = await this.getQuoteById(quoteId);
+      console.log('✅ Quote found:', quote.quoteNumber);
+
+      if (!quote.pdfPath || !fsSync.existsSync(quote.pdfPath)) {
+        throw new Error('PDF file not found');
+      }
+      console.log('✅ PDF file found');
+
+      // Get creator's information
+      const users = await this.loadUsers();
+      const creator = users.find(u => u.id === quote.createdBy);
+      
+      const senderName = creator && creator.name ? creator.name : 'Omega System';
+      const creatorEmail = creator && creator.email ? creator.email : null;
+      
+      console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
+
+      // ✅ Create transporter with system credentials
+      console.log('📧 Creating email transporter...');
+      
+      const transporter = nodemailer.createTransport({
+        host: EMAIL_HOST,
+        port: EMAIL_PORT,
+        secure: EMAIL_PORT === 465,
+        auth: {
+          user: EMAIL_USER,
+          pass: EMAIL_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+
+      // ✅ Verify connection
+      console.log('🔄 Verifying SMTP connection...');
+      await transporter.verify();
+      console.log('✅ SMTP connection verified');
+
+      // Email subject and body
+      const subject = `Price Quote ${quote.quoteNumber}`;
+      const text = `Please find attached the price quote ${quote.quoteNumber}.\n\nClient: ${quote.clientName}\nDate: ${quote.date}\nProject: ${quote.projectName || 'N/A'}\n\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
+      const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0;">
+            <h2 style="margin: 0; font-size: 24px;">Price Quote ${quote.quoteNumber}</h2>
+          </div>
+          <div style="background: #f8fafc; padding: 20px; border-radius: 0 0 10px 10px;">
+            <p style="color: #475569; font-size: 16px; margin-bottom: 20px;">Please find attached the price quote document.</p>
+            <table style="border-collapse: collapse; width: 100%; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Quote Number:</td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #1565C0; font-weight: 600;">${quote.quoteNumber}</td>
+              </tr>
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Client:</td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #475569;">${quote.clientName}</td>
+              </tr>
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Date:</td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #475569;">${quote.date}</td>
+              </tr>
+              ${quote.projectName ? `
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Project:</td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #475569;">${quote.projectName}</td>
+              </tr>
+              ` : ''}
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; font-weight: bold; color: #334155;">Sent By:</td>
+                <td style="padding: 12px 16px; color: #475569;">${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}</td>
+              </tr>
+            </table>
+            <div style="margin-top: 20px; padding: 16px; background: #e0f2fe; border-left: 4px solid #1565C0; border-radius: 6px;">
+              <p style="margin: 0; color: #0c4a6e; font-size: 14px;">
+                <strong>Note:</strong> This is an automated email from Omega System.
+              </p>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // ✅ Send email
+      console.log('📧 Sending email...');
+      const mailOptions = {
+        from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
+        to: recipientEmail,
+        subject: subject,
+        text: text,
+        html: html,
+        attachments: [
+          {
+            filename: `Quote_${quote.quoteNumber}.pdf`,
+            path: quote.pdfPath,
+          },
+        ],
+      };
+
+      if (creatorEmail) {
+        mailOptions.replyTo = creatorEmail;
+        console.log('✅ Reply-to set:', creatorEmail);
+      }
+
+      const info = await transporter.sendMail(mailOptions);
+
+      console.log('✅ Email sent successfully!');
+      console.log('  - Message ID:', info.messageId);
+      console.log('========================\n');
+
+      return {
+        message: 'Email sent successfully',
+        messageId: info.messageId,
+        sentFrom: EMAIL_USER,
+        sentBy: senderName,
+        replyTo: creatorEmail || null
+      };
+    } catch (error) {
+      console.error('❌ Email sending error:', error);
+      
+      let errorMessage = error.message;
+      if (error.code === 'EAUTH') {
+        errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';
+      } else if (error.code === 'ESOCKET') {
+        errorMessage = 'Cannot connect to email server. Please check your EMAIL_HOST and EMAIL_PORT settings.';
+      } else if (error.message.includes('Missing credentials')) {
+        errorMessage = 'Email credentials are not configured. Please set EMAIL_USER and EMAIL_APP_PASSWORD in your .env file.';
+      }
+      
+      throw new Error(`Failed to send email: ${errorMessage}`);
+    }
+  }
 }
+
 
 module.exports = new PriceQuoteService();

@@ -1,4 +1,4 @@
-// src/routes/receipts.routes.js - UPDATED WITH includeStaticFile SUPPORT
+// src/routes/receipts.routes.js - UPDATED WITH EMAIL ENDPOINT
 const express = require('express');
 const router = express.Router();
 const path = require('path');
@@ -26,11 +26,10 @@ const upload = multer({
 });
 
 /**
- * ✅ UPDATED: CREATE receipt - Now accepts includeStaticFile
+ * CREATE receipt
  */
 router.post('/', async (req, res, next) => {
   try {
-    // ✅ Parse items - can be empty array
     let parsedItems = [];
     if (req.body.items && Array.isArray(req.body.items)) {
       parsedItems = req.body.items;
@@ -48,7 +47,7 @@ router.post('/', async (req, res, next) => {
       additionalText: req.body.additionalText,
       items: parsedItems,
       notes: req.body.notes,
-      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true' // ✅ NEW FIELD
+      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true'
     };
 
     const receipt = await receiptService.createReceipt(
@@ -68,7 +67,7 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * GET all receipts - Role-based filtering applied
+ * GET all receipts
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -177,11 +176,10 @@ router.get('/number/:receiptNumber', async (req, res, next) => {
 });
 
 /**
- * ✅ UPDATED: UPDATE receipt - Now accepts includeStaticFile
+ * UPDATE receipt
  */
 router.put('/:id', async (req, res, next) => {
   try {
-    // ✅ Parse items - can be empty array
     let parsedItems = undefined;
     if (req.body.items !== undefined) {
       if (Array.isArray(req.body.items)) {
@@ -203,7 +201,7 @@ router.put('/:id', async (req, res, next) => {
       notes: req.body.notes,
       includeStaticFile: req.body.includeStaticFile !== undefined 
         ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
-        : undefined // ✅ NEW FIELD
+        : undefined
     };
 
     const receipt = await receiptService.updateReceipt(
@@ -224,20 +222,16 @@ router.put('/:id', async (req, res, next) => {
 });
 
 /**
- * ✅ DELETE RECEIPT - UPDATED
- * Super Admin: Can delete any receipt
- * Admin/Employee: Can delete only their own receipts
+ * DELETE RECEIPT
  */
 router.delete('/:id', async (req, res, next) => {
   try {
-    // First, get the receipt to check ownership
     const receipt = await receiptService.getReceiptById(
       req.params.id,
       req.user.id,
       req.user.role
     );
 
-    // Super admin can delete any receipt
     if (req.user.role === 'super_admin') {
       await receiptService.deleteReceipt(req.params.id);
       return res.status(200).json({
@@ -246,7 +240,6 @@ router.delete('/:id', async (req, res, next) => {
       });
     }
 
-    // Admin and employee can only delete their own receipts
     if (req.user.role === 'admin' || req.user.role === 'employee') {
       if (receipt.createdBy !== req.user.id) {
         return res.status(403).json({
@@ -261,7 +254,6 @@ router.delete('/:id', async (req, res, next) => {
       });
     }
 
-    // Other roles cannot delete
     return res.status(403).json({
       success: false,
       message: 'You do not have permission to delete receipts'
@@ -272,8 +264,7 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 /**
- * GENERATE PDF (with optional attachment support)
- * ✅ The includeStaticFile logic is now handled in the service layer
+ * GENERATE PDF
  */
 router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -350,6 +341,45 @@ router.get('/:id/download-pdf', async (req, res, next) => {
       if (err) {
         next(err);
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * ✅ SEND RECEIPT VIA EMAIL
+ */
+router.post('/:id/send-email', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required'
+      });
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email address'
+      });
+    }
+
+    const result = await receiptService.sendReceiptByEmail(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      email
+    );
+
+    res.status(200).json({
+      success: true,
+      message: result.message || 'Email sent successfully'
     });
   } catch (error) {
     next(error);
