@@ -19,6 +19,12 @@ const EN_UPLOADS_DIR = path.join(__dirname, '../../data/proforma-invoices/EN-Upl
 const LOGO_PATH = path.join(__dirname, '../../assets/images/OmegaLogo.png');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
+// ✅ Email configuration
+const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
+const EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '587');
+const EMAIL_USER = process.env.EMAIL_USER;
+const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
+const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
 // ✅ NEW: Path to static terms and conditions PDF
 const STATIC_TERMS_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
