@@ -1,4 +1,4 @@
-// src/routes/materials.routes.js - FIXED WITH CORRECT ROUTE KEY
+// src/routes/materials.routes.js - WITH CUSTOM FILENAME PATTERN FOR DOWNLOAD
 
 const express = require('express');
 const router = express.Router();
@@ -24,7 +24,7 @@ const upload = multer({
 });
 
 router.use(protect);
-router.use(checkRouteAccess('materialRequests')); // ✅ FIXED: Changed from 'materialManagement' to 'materialRequests'
+router.use(checkRouteAccess('materialRequests'));
 
 /**
  * CREATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
@@ -322,7 +322,8 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 });
 
 /**
- * DOWNLOAD MATERIAL REQUEST PDF
+ * ✅ DOWNLOAD MATERIAL REQUEST PDF - WITH CUSTOM FILENAME PATTERN MR0001_ProjectName_DD-MM-YYYY.pdf
+ * GET /api/materials/:id/download-pdf
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {
@@ -349,7 +350,29 @@ router.get('/:id/download-pdf', async (req, res, next) => {
       });
     }
 
-    res.download(pdfPath, `MR_${material.mrNumber}.pdf`, (err) => {
+    // ✅ Create custom download filename: MR0001_ProjectName_DD-MM-YYYY.pdf
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    // ✅ Format date as DD-MM-YYYY
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const mrNumber = material.mrNumber || 'MR0000';
+    const projectName = sanitizeFilename(material.project); // ✅ Changed from section to project
+    const dateFormatted = formatDate(material.date);
+    const downloadFilename = `${mrNumber}_${projectName}_${dateFormatted}.pdf`;
+
+    res.download(pdfPath, downloadFilename, (err) => {
       if (err) next(err);
     });
   } catch (error) {

@@ -140,7 +140,7 @@ class CostingSheetService {
 
   generateCSNumber(counter) {
     const paddedNumber = String(counter).padStart(4, '0');
-    return `ICS${paddedNumber}`;
+    return `CS${paddedNumber}`;
   }
 
   detectLanguage(text) {
@@ -218,7 +218,7 @@ class CostingSheetService {
     const newCounter = counter + 1;
     
     const paddedCounter = String(newCounter).padStart(4, '0');
-    const id = `ICS-${paddedCounter}`;
+    const id = `CS-${paddedCounter}`;
     const csNumber = this.generateCSNumber(newCounter);
     
     await this.saveCounter(newCounter);
@@ -310,6 +310,7 @@ class CostingSheetService {
 
   /**
    * ✅ GENERATE COSTING SHEET PDF WITH TERMS & CONDITIONS SUPPORT
+   * ✅ UPDATED: Custom filename pattern CS0001_Client_DD-MM-YYYY.pdf
    * 
    * Merge order:
    * 1. Generated Costing Sheet PDF (always first)
@@ -341,8 +342,33 @@ class CostingSheetService {
       }
     }
 
-    // Generate the costing sheet PDF
-    const pdfResult = await costingSheetPdfGenerator.generateCostingSheetPDF(costingSheet);
+    // ✅ Create filename pattern: CS0001_Client_DD-MM-YYYY.pdf
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      // Remove special characters, keep alphanumeric, Arabic characters, and spaces
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    // ✅ Format date as DD-MM-YYYY
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const csNumber = costingSheet.csNumber || 'CS0000';
+    const clientName = sanitizeFilename(costingSheet.client);
+    const dateFormatted = formatDate(costingSheet.date);
+    const customFilename = `${csNumber}_${clientName}_${dateFormatted}`;
+
+    console.log('📝 Custom filename:', customFilename);
+
+    // Generate the costing sheet PDF with custom filename
+    const pdfResult = await costingSheetPdfGenerator.generateCostingSheetPDF(costingSheet, customFilename);
 
     // ✅ Prepare list of PDFs to merge (in order)
     const pdfsToMerge = [];
@@ -535,9 +561,6 @@ class CostingSheetService {
 
   /**
    * DELETE COSTING SHEET
-   */
-/**
-   * DELETE COSTING SHEET
    * ✅ UPDATED: Now notifies File Management service
    */
   async deleteCostingSheet(id) {
@@ -643,6 +666,7 @@ class CostingSheetService {
   }
 /**
  * ✅ Send costing sheet PDF by email
+ * ✅ UPDATED: Email attachment filename with DD-MM-YYYY format
  */
 async sendCostingSheetByEmail(csId, userId, userRole, recipientEmail) {
   try {
@@ -735,6 +759,29 @@ async sendCostingSheetByEmail(csId, userId, userRole, recipientEmail) {
     `;
 
     console.log('📧 Sending email...');
+    
+    // ✅ Use the custom filename with DD-MM-YYYY format for the email attachment
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    // ✅ Format date as DD-MM-YYYY
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const csNumber = costingSheet.csNumber || 'CS0000';
+    const clientName = sanitizeFilename(costingSheet.client);
+    const dateFormatted = formatDate(costingSheet.date);
+    const emailAttachmentName = `${csNumber}_${clientName}_${dateFormatted}.pdf`;
+
     const mailOptions = {
       from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
       to: recipientEmail,
@@ -743,7 +790,7 @@ async sendCostingSheetByEmail(csId, userId, userRole, recipientEmail) {
       html: html,
       attachments: [
         {
-          filename: `CS_${costingSheet.csNumber}.pdf`,
+          filename: emailAttachmentName,
           path: pdfPath,
         },
       ],
@@ -761,6 +808,7 @@ async sendCostingSheetByEmail(csId, userId, userRole, recipientEmail) {
     console.log('  - From:', EMAIL_USER);
     console.log('  - To:', recipientEmail);
     console.log('  - Sender Name:', senderName);
+    console.log('  - Attachment:', emailAttachmentName);
     if (creatorEmail) {
       console.log('  - Reply-To:', creatorEmail);
     }

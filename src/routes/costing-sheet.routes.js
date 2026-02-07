@@ -330,8 +330,9 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 });
 
 /**
- * DOWNLOAD COSTING SHEET PDF
+ * ✅ DOWNLOAD COSTING SHEET PDF
  * GET /api/costing-sheets/:id/download-pdf
+ * ✅ UPDATED: Custom filename pattern CS0001_Client_DD-MM-YYYY.pdf
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {
@@ -358,7 +359,29 @@ router.get('/:id/download-pdf', async (req, res, next) => {
       });
     }
 
-    res.download(pdfPath, `CS_${costingSheet.csNumber}.pdf`, (err) => {
+    // ✅ Generate custom filename pattern: CS0001_Client_DD-MM-YYYY.pdf
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    // ✅ Format date as DD-MM-YYYY
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const csNumber = costingSheet.csNumber || 'CS0000';
+    const clientName = sanitizeFilename(costingSheet.client);
+    const dateFormatted = formatDate(costingSheet.date);
+    const downloadFilename = `${csNumber}_${clientName}_${dateFormatted}.pdf`;
+
+    res.download(pdfPath, downloadFilename, (err) => {
       if (err) next(err);
     });
   } catch (error) {

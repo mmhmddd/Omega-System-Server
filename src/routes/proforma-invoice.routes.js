@@ -228,24 +228,50 @@ router.get('/my-latest', async (req, res, next) => {
 });
 
 /**
- * @route   GET /api/proforma-invoices/:id
- * @desc    Get specific proforma invoice by ID
- * @access  Private
+ * @route   GET /api/proforma-invoices/:id/pdf
+ * @desc    Download PDF of proforma invoice
+ * @access  Private (Owner or Super Admin)
  */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id/pdf', async (req, res, next) => {
   try {
     const invoice = await proformaInvoiceService.getInvoiceById(req.params.id);
 
     if (req.user.role !== 'super_admin' && invoice.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
-        message: 'You do not have permission to view this invoice'
+        message: 'You do not have permission to download this PDF'
       });
     }
 
-    res.status(200).json({
-      success: true,
-      data: invoice
+    // ✅ Generate custom filename for download
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const invoiceNumber = invoice.invoiceNumber || 'PI0000';
+    const clientName = sanitizeFilename(invoice.clientName);
+    const dateFormatted = formatDate(invoice.date);
+    const downloadFilename = `${invoiceNumber}_${clientName}_${dateFormatted}.pdf`;
+
+    console.log('📥 Download filename:', downloadFilename);
+    console.log('📁 File path:', invoice.pdfPath);
+
+    res.download(invoice.pdfPath, downloadFilename, (err) => {
+      if (err) {
+        console.error('Download error:', err);
+        next(err);
+      }
     });
   } catch (error) {
     next(error);

@@ -1,4 +1,4 @@
-// src/services/receipt.service.js - FIXED EMAIL CREDENTIALS
+// src/services/receipt.service.js - UPDATED WITH CUSTOM FILENAME PATTERN
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -12,7 +12,7 @@ const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
-// ✅ FIXED: Email configuration with proper credential checks
+// ✅ Email configuration with proper credential checks
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
 const EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '587');
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -28,6 +28,30 @@ console.log('  - Password:', EMAIL_PASS ? '✅ Configured' : '❌ Missing');
 console.log('  - From:', EMAIL_FROM);
 
 class ReceiptService {
+  /**
+   * ✅ NEW: Create custom filename pattern: DN0005_Tarek_2026-02-07.pdf
+   */
+  createReceiptFilename(receipt) {
+    // Get receipt number with 4 digits padding (e.g., DN0005)
+    const receiptNumber = receipt.receiptNumber || 'DN0000';
+    
+    // Get "to" field and sanitize it (remove special characters, spaces, limit length)
+    let toField = receipt.to || 'Unknown';
+    toField = toField
+      .replace(/[<>:"/\\|?*\s]/g, '') // Remove invalid filename characters and spaces
+      .trim()
+      .substring(0, 50); // Limit length to 50 characters
+    
+    // Get date in format YYYY-MM-DD
+    const dateField = receipt.date || new Date().toISOString().split('T')[0];
+    
+    // Combine: DN0005_Tarek_2026-02-07.pdf
+    const filename = `${receiptNumber}_${toField}_${dateField}.pdf`;
+    
+    console.log('📄 Created filename:', filename);
+    return filename;
+  }
+
   /**
    * Load users from JSON file
    */
@@ -156,7 +180,7 @@ class ReceiptService {
    */
   generateReceiptNumber(counter) {
     const paddedNumber = String(counter).padStart(4, '0');
-    return `RN${paddedNumber}`;
+    return `DN${paddedNumber}`;
   }
 
   /**
@@ -495,7 +519,7 @@ class ReceiptService {
   }
 
   /**
-   * Generate receipt PDF with optional attachment merge
+   * ✅ UPDATED: Generate receipt PDF with custom filename pattern
    */
   async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
     const receipt = await this.getReceiptById(id, userId, userRole);
@@ -503,7 +527,10 @@ class ReceiptService {
     console.log('🔵 Generating PDF for receipt:', receipt.receiptNumber);
     console.log('🔵 Include static file:', receipt.includeStaticFile);
     
-    const pdfResult = await pdfGenerator.generateReceiptPDF(receipt);
+    // ✅ Create custom filename: DN001_to_date.pdf
+    const customFilename = this.createReceiptFilename(receipt);
+    
+    const pdfResult = await pdfGenerator.generateReceiptPDF(receipt, customFilename);
     
     const pdfsToMerge = [];
     
@@ -542,7 +569,7 @@ class ReceiptService {
           const mergeResult = await pdfGenerator.mergePDFs(
             currentPath,
             pdfsToMerge[i],
-            null,
+            customFilename, // ✅ Pass custom filename
             pdfResult.language
           );
           currentPath = mergeResult.filepath;
@@ -563,7 +590,7 @@ class ReceiptService {
         const headerResult = await pdfGenerator.mergePDFs(
           pdfResult.filepath,
           null,
-          null,
+          customFilename, // ✅ Pass custom filename
           pdfResult.language
         );
         
@@ -601,7 +628,7 @@ class ReceiptService {
   }
 
   /**
-   * ✅ FIXED: Send receipt PDF by email - Using system credentials with creator info
+   * ✅ Send receipt PDF by email - Using system credentials with creator info
    */
   async sendReceiptByEmail(receiptId, userId, userRole, recipientEmail) {
     try {
@@ -642,7 +669,7 @@ class ReceiptService {
       
       console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
 
-      // ✅ FIXED: Create transporter with system credentials
+      // ✅ Create transporter with system credentials
       console.log('📧 Creating email transporter...');
       console.log('  - Host:', EMAIL_HOST);
       console.log('  - Port:', EMAIL_PORT);
@@ -651,13 +678,13 @@ class ReceiptService {
       const transporter = nodemailer.createTransport({
         host: EMAIL_HOST,
         port: EMAIL_PORT,
-        secure: EMAIL_PORT === 465, // true for 465, false for other ports
+        secure: EMAIL_PORT === 465,
         auth: {
           user: EMAIL_USER,
           pass: EMAIL_PASS,
         },
         tls: {
-          rejectUnauthorized: false // For development - remove in production
+          rejectUnauthorized: false
         }
       });
 
@@ -665,6 +692,9 @@ class ReceiptService {
       console.log('🔄 Verifying SMTP connection...');
       await transporter.verify();
       console.log('✅ SMTP connection verified');
+
+      // ✅ UPDATED: Use custom filename pattern in email attachment
+      const emailAttachmentName = this.createReceiptFilename(receipt);
 
       // Email subject and body
       const subject = `Receipt ${receipt.receiptNumber}`;
@@ -699,23 +729,22 @@ class ReceiptService {
         </div>
       `;
 
-      // ✅ FIXED: Send email using system credentials, but show creator info in body
+      // ✅ Send email with custom filename
       console.log('📧 Sending email...');
       const mailOptions = {
-        from: `"${senderName} - Omega System" <${EMAIL_USER}>`, // System email with creator name
+        from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
         to: recipientEmail,
         subject: subject,
         text: text,
         html: html,
         attachments: [
           {
-            filename: `Receipt_${receipt.receiptNumber}.pdf`,
+            filename: emailAttachmentName, // ✅ Use custom filename
             path: pdfPath,
           },
         ],
       };
 
-      // Add reply-to if creator has email
       if (creatorEmail) {
         mailOptions.replyTo = creatorEmail;
         console.log('✅ Reply-to set:', creatorEmail);
@@ -728,6 +757,7 @@ class ReceiptService {
       console.log('  - From:', EMAIL_USER);
       console.log('  - To:', recipientEmail);
       console.log('  - Sender Name:', senderName);
+      console.log('  - Attachment Name:', emailAttachmentName);
       if (creatorEmail) {
         console.log('  - Reply-To:', creatorEmail);
       }
@@ -748,7 +778,6 @@ class ReceiptService {
         command: error.command
       });
       
-      // Provide helpful error messages
       let errorMessage = error.message;
       if (error.code === 'EAUTH') {
         errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';

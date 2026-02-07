@@ -1,4 +1,4 @@
-// src/routes/receipts.routes.js - UPDATED WITH EMAIL ENDPOINT
+// src/routes/receipts.routes.js - UPDATED WITH CUSTOM FILENAME PATTERN
 const express = require('express');
 const router = express.Router();
 const path = require('path');
@@ -310,7 +310,7 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 });
 
 /**
- * DOWNLOAD PDF
+ * ✅ UPDATED: DOWNLOAD PDF - Uses custom filename pattern
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {
@@ -337,7 +337,10 @@ router.get('/:id/download-pdf', async (req, res, next) => {
       });
     }
 
-    res.download(pdfPath, `Receipt_${receipt.receiptNumber}.pdf`, (err) => {
+    // ✅ Use the stored filename which already has pattern: DN0005_Tarek_2026-02-07.pdf
+    const downloadFilename = receipt.pdfFilename;
+
+    res.download(pdfPath, downloadFilename, (err) => {
       if (err) {
         next(err);
       }

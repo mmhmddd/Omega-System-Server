@@ -1,4 +1,4 @@
-// src/utils/pdf-generator-rfq.util.js - FIXED VERSION
+// src/utils/pdf-generator-rfq.util.js - FIXED VERSION WITH CUSTOM FILENAME SUPPORT
 
 const fs = require('fs');
 const path = require('path');
@@ -633,6 +633,8 @@ body {
     </div>
   </div>
 
+  <!-- ✅ Blue separator line -->
+  <div class="blue-separator"></div>
 
   <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>
@@ -722,7 +724,8 @@ body {
     `;
   }
 
-  async generateRFQPDF(rfq) {
+  // ✅ UPDATED: Accept customFilename parameter
+  async generateRFQPDF(rfq, customFilename = null) {
     const language = this.detectLanguage(rfq);
 
     return new Promise(async (resolve, reject) => {
@@ -734,7 +737,10 @@ body {
           fs.mkdirSync(pdfDir, { recursive: true });
         }
 
-        const filename = `${rfq.rfqNumber || 'rfq'}_${Date.now()}.pdf`;
+        // ✅ Use custom filename if provided, otherwise use default pattern
+        const filename = customFilename 
+          ? `${customFilename}.pdf`
+          : `${rfq.rfqNumber || 'rfq'}_${Date.now()}.pdf`;
         const filepath = path.join(pdfDir, filename);
         const html = this.generateHTML(rfq);
 

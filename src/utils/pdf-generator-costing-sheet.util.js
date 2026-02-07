@@ -1,5 +1,5 @@
 // ============================================================
-// PDF GENERATOR COSTING SHEET - WITH UPDATED ARABIC NAME
+// PDF GENERATOR COSTING SHEET - WITH UPDATED ARABIC NAME AND CUSTOM FILENAME
 // src/utils/pdf-generator-costing-sheet.util.js
 // ============================================================
 const fsSync = require('fs');
@@ -700,7 +700,7 @@ body {
   `;
 }
 
-  async generateCostingSheetPDF(costingSheet) {
+  async generateCostingSheetPDF(costingSheet, customFilename = null) {
     const language = this.detectLanguage(costingSheet);
 
     return new Promise(async (resolve, reject) => {
@@ -712,7 +712,10 @@ body {
           fsSync.mkdirSync(pdfDir, { recursive: true });
         }
 
-        const filename = `${costingSheet.csNumber || 'costing-sheet'}_${Date.now()}.pdf`;
+        // ✅ Use custom filename if provided, otherwise use default pattern
+        const filename = customFilename 
+          ? `${customFilename}.pdf`
+          : `${costingSheet.csNumber || 'costing-sheet'}_${Date.now()}.pdf`;
         const filepath = path.join(pdfDir, filename);
         const html = this.generateHTML(costingSheet);
 

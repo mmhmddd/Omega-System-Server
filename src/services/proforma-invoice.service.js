@@ -1,4 +1,4 @@
-// src/services/proforma-invoice.service.js - UPDATED WITH BILINGUAL SUPPORT
+// src/services/proforma-invoice.service.js - UPDATED WITH CUSTOM FILENAME PATTERN
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -25,7 +25,7 @@ const EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '587');
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
-// ✅ NEW: Path to static terms and conditions PDF
+// ✅ Path to static terms and conditions PDF
 const STATIC_TERMS_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class ProformaInvoiceService {
@@ -301,7 +301,6 @@ class ProformaInvoiceService {
     `;
   }
 
-  // ✅ UPDATED: Add includeStaticFile parameter
   async generatePDF(invoiceData, attachmentPath = null, includeStaticFile = false) {
     let browser;
     try {
@@ -328,7 +327,7 @@ class ProformaInvoiceService {
         });
       }
 
-      // ✅ NEW: Add static terms PDF as images if includeStaticFile is true
+      // ✅ Add static terms PDF as images if includeStaticFile is true
       let staticTermsHTML = '';
       if (includeStaticFile === true) {
         try {
@@ -424,8 +423,26 @@ class ProformaInvoiceService {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForNetworkIdle({ timeout: 15000 }).catch(() => {});
 
-      const sanitizedClient = invoiceData.clientName.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
-      const filename = `${invoiceData.invoiceNumber}-${invoiceData.date}-${sanitizedClient}.pdf`;
+      // ✅ UPDATED: Use custom filename pattern: PI0001_ClientName_DD-MM-YYYY.pdf
+      const sanitizeFilename = (str) => {
+        if (!str) return 'Unknown';
+        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+      };
+      
+      const formatDate = (dateStr) => {
+        if (!dateStr) {
+          const today = new Date().toISOString().split('T')[0];
+          const [year, month, day] = today.split('-');
+          return `${day}-${month}-${year}`;
+        }
+        const [year, month, day] = dateStr.split('-');
+        return `${day}-${month}-${year}`;
+      };
+      
+      const invoiceNumber = invoiceData.invoiceNumber || 'PI0000';
+      const clientName = sanitizeFilename(invoiceData.clientName);
+      const dateFormatted = formatDate(invoiceData.date);
+      const filename = `${invoiceNumber}_${clientName}_${dateFormatted}.pdf`;
       const pdfPath = path.join(PDF_DIR, filename);
 
       await page.pdf({
@@ -483,7 +500,7 @@ class ProformaInvoiceService {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>المملكة الأردنية الهاشمية</p>
-        <p>+تلفون: 96264161060+ | فاكس: 96264162060</p>
+        <p>+تلفون: 96264161060+ | فاكس: +96264162060</p>
       </div>
       <div class="col-left">
         <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
@@ -622,13 +639,12 @@ class ProformaInvoiceService {
     `;
   }
 
-  // ✅ UPDATED: Add includeStaticFile parameter
   async createInvoice(invoiceData, currentUser, attachmentFile = null) {
     console.log('\n=== CREATE INVOICE DEBUG ===');
     console.log('currentUser.id:', currentUser.id);
     console.log('currentUser.name:', currentUser.name);
     console.log('invoiceData.projectName:', invoiceData.projectName);
-    console.log('invoiceData.includeStaticFile:', invoiceData.includeStaticFile); // ✅ NEW LOG
+    console.log('invoiceData.includeStaticFile:', invoiceData.includeStaticFile);
     
     const invoices = await this.loadInvoices();
     const invoiceNumber = await this.generateInvoiceNumber();
@@ -653,7 +669,7 @@ class ProformaInvoiceService {
       taxRate: invoiceData.includeTax ? (invoiceData.taxRate || 0) : 0,
       items: invoiceData.items || [],
       customNotes: invoiceData.customNotes || null,
-      includeStaticFile: invoiceData.includeStaticFile || false, // ✅ NEW FIELD
+      includeStaticFile: invoiceData.includeStaticFile || false,
       createdBy: currentUser.id,
       createdByName: createdByName || currentUser.name || 'Unknown User', 
       createdAt: new Date().toISOString(),
@@ -671,7 +687,6 @@ class ProformaInvoiceService {
       newInvoice.attachmentPath = attachmentPath;
     }
 
-    // ✅ UPDATED: Pass includeStaticFile to PDF generator
     const pdfPath = await this.generatePDF(newInvoice, attachmentPath, newInvoice.includeStaticFile);
     newInvoice.pdfPath = pdfPath;
 
@@ -680,7 +695,7 @@ class ProformaInvoiceService {
 
     console.log('Invoice created with name:', newInvoice.createdByName);
     console.log('Invoice created with projectName:', newInvoice.projectName);
-    console.log('Invoice created with includeStaticFile:', newInvoice.includeStaticFile); // ✅ NEW LOG
+    console.log('Invoice created with includeStaticFile:', newInvoice.includeStaticFile);
     return newInvoice;
   }
 
@@ -757,7 +772,6 @@ class ProformaInvoiceService {
     };
   }
 
-  // ✅ UPDATED: Add includeStaticFile parameter
   async updateInvoice(id, updateData, attachmentFile = null) {
     const invoices = await this.loadInvoices();
     const invoiceIndex = invoices.findIndex(inv => inv.id === id);
@@ -781,7 +795,7 @@ class ProformaInvoiceService {
     if (updateData.taxRate !== undefined) invoice.taxRate = updateData.taxRate;
     if (updateData.items !== undefined) invoice.items = updateData.items;
     if (updateData.customNotes !== undefined) invoice.customNotes = updateData.customNotes;
-    if (updateData.includeStaticFile !== undefined) invoice.includeStaticFile = updateData.includeStaticFile; // ✅ NEW FIELD
+    if (updateData.includeStaticFile !== undefined) invoice.includeStaticFile = updateData.includeStaticFile;
 
     const totals = this.calculateTotals(invoice.items, invoice.includeTax, invoice.taxRate);
     invoice.subtotal = totals.subtotal;
@@ -800,9 +814,8 @@ class ProformaInvoiceService {
     }
 
     console.log('Updating invoice with projectName:', invoice.projectName);
-    console.log('Updating invoice with includeStaticFile:', invoice.includeStaticFile); // ✅ NEW LOG
+    console.log('Updating invoice with includeStaticFile:', invoice.includeStaticFile);
     
-    // ✅ UPDATED: Pass includeStaticFile to PDF generator
     const pdfPath = await this.generatePDF(invoice, attachmentPath, invoice.includeStaticFile);
     invoice.pdfPath = pdfPath;
 
@@ -839,8 +852,9 @@ class ProformaInvoiceService {
 
     return { message: 'Invoice deleted successfully' };
   }
+
   /**
-   * ✅ Send invoice PDF by email
+   * ✅ Send invoice PDF by email with custom filename
    */
   async sendInvoiceByEmail(invoiceId, userId, userRole, recipientEmail) {
     try {
@@ -849,13 +863,11 @@ class ProformaInvoiceService {
       console.log('User ID:', userId);
       console.log('Recipient:', recipientEmail);
       
-      // ✅ Check credentials first
       if (!EMAIL_USER || !EMAIL_PASS) {
         console.error('❌ Email credentials missing!');
         throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
       }
 
-      // Get invoice
       const invoice = await this.getInvoiceById(invoiceId);
       console.log('✅ Invoice found:', invoice.invoiceNumber);
 
@@ -864,7 +876,6 @@ class ProformaInvoiceService {
       }
       console.log('✅ PDF file found');
 
-      // Get creator's information
       const users = await this.loadUsers();
       const creator = users.find(u => u.id === invoice.createdBy);
       
@@ -873,10 +884,9 @@ class ProformaInvoiceService {
       
       console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
 
-      // ✅ Create transporter
       console.log('📧 Creating email transporter...');
       
-      const transporter = nodemailer.createTransport({
+      const transporter = nodemailer.createTransporter({
         host: EMAIL_HOST,
         port: EMAIL_PORT,
         secure: EMAIL_PORT === 465,
@@ -889,12 +899,10 @@ class ProformaInvoiceService {
         }
       });
 
-      // ✅ Verify connection
       console.log('🔄 Verifying SMTP connection...');
       await transporter.verify();
       console.log('✅ SMTP connection verified');
 
-      // Email subject and body
       const subject = `Proforma Invoice ${invoice.invoiceNumber}`;
       const text = `Please find attached the proforma invoice ${invoice.invoiceNumber}.\n\nClient: ${invoice.clientName}\nDate: ${invoice.date}\nProject: ${invoice.projectName || 'N/A'}\n\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
       const html = `
@@ -937,7 +945,27 @@ class ProformaInvoiceService {
         </div>
       `;
 
-      // ✅ Send email
+      // ✅ Create custom email attachment filename: PI0001_ClientName_DD-MM-YYYY.pdf
+      const sanitizeFilename = (str) => {
+        if (!str) return 'Unknown';
+        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+      };
+      
+      const formatDate = (dateStr) => {
+        if (!dateStr) {
+          const today = new Date().toISOString().split('T')[0];
+          const [year, month, day] = today.split('-');
+          return `${day}-${month}-${year}`;
+        }
+        const [year, month, day] = dateStr.split('-');
+        return `${day}-${month}-${year}`;
+      };
+      
+      const invoiceNumber = invoice.invoiceNumber || 'PI0000';
+      const clientName = sanitizeFilename(invoice.clientName);
+      const dateFormatted = formatDate(invoice.date);
+      const emailAttachmentName = `${invoiceNumber}_${clientName}_${dateFormatted}.pdf`;
+
       console.log('📧 Sending email...');
       const mailOptions = {
         from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
@@ -947,7 +975,7 @@ class ProformaInvoiceService {
         html: html,
         attachments: [
           {
-            filename: `Invoice_${invoice.invoiceNumber}.pdf`,
+            filename: emailAttachmentName,
             path: invoice.pdfPath,
           },
         ],
@@ -962,6 +990,7 @@ class ProformaInvoiceService {
 
       console.log('✅ Email sent successfully!');
       console.log('  - Message ID:', info.messageId);
+      console.log('  - Attachment:', emailAttachmentName);
       console.log('========================\n');
 
       return {

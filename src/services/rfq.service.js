@@ -1,4 +1,4 @@
-// src/services/rfq.service.js - UPDATED WITH EMAIL SENDING
+// src/services/rfq.service.js - UPDATED WITH EMAIL SENDING AND CUSTOM FILENAME
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -437,6 +437,9 @@ class RFQService {
     return stats;
   }
 
+  /**
+   * ✅ GENERATE RFQ PDF WITH CUSTOM FILENAME PATTERN: RFQ0001_Requester_DD-MM-YYYY.pdf
+   */
   async generateRFQPDF(id, userId, userRole, attachmentPdf = null) {
     const rfq = await this.getRFQById(id, userId, userRole);
     
@@ -447,7 +450,31 @@ class RFQService {
     console.log('🔵 Generating PDF for RFQ:', rfq.rfqNumber);
     console.log('🔵 Include static file:', rfq.includeStaticFile);
     
-    const pdfResult = await rfqPdfGenerator.generateRFQPDF(rfq);
+    // ✅ Create custom filename: RFQ0001_Requester_DD-MM-YYYY
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    // ✅ Format date as DD-MM-YYYY
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const rfqNumber = rfq.rfqNumber || 'RFQ0000';
+    const requesterName = sanitizeFilename(rfq.requester);
+    const dateFormatted = formatDate(rfq.date);
+    const customFilename = `${rfqNumber}_${requesterName}_${dateFormatted}`;
+
+    console.log('📝 Custom filename:', customFilename);
+    
+    const pdfResult = await rfqPdfGenerator.generateRFQPDF(rfq, customFilename);
     
     const pdfsToMerge = [];
     
@@ -548,7 +575,7 @@ class RFQService {
   }
 
   /**
-   * ✅ NEW: Send RFQ PDF by email - Using system credentials with creator info
+   * ✅ Send RFQ PDF by email with custom filename DD-MM-YYYY format
    */
   async sendRFQByEmail(rfqId, userId, userRole, recipientEmail) {
     try {
@@ -648,6 +675,28 @@ class RFQService {
         </div>
       `;
 
+      // ✅ Create custom email attachment filename: RFQ0001_Requester_DD-MM-YYYY.pdf
+      const sanitizeFilename = (str) => {
+        if (!str) return 'Unknown';
+        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+      };
+      
+      // ✅ Format date as DD-MM-YYYY
+      const formatDate = (dateStr) => {
+        if (!dateStr) {
+          const today = new Date().toISOString().split('T')[0];
+          const [year, month, day] = today.split('-');
+          return `${day}-${month}-${year}`;
+        }
+        const [year, month, day] = dateStr.split('-');
+        return `${day}-${month}-${year}`;
+      };
+      
+      const rfqNumber = rfq.rfqNumber || 'RFQ0000';
+      const requesterName = sanitizeFilename(rfq.requester);
+      const dateFormatted = formatDate(rfq.date);
+      const emailAttachmentName = `${rfqNumber}_${requesterName}_${dateFormatted}.pdf`;
+
       // ✅ Send email using system credentials, but show creator info in body
       console.log('📧 Sending email...');
       const mailOptions = {
@@ -658,7 +707,7 @@ class RFQService {
         html: html,
         attachments: [
           {
-            filename: `RFQ_${rfq.rfqNumber}.pdf`,
+            filename: emailAttachmentName,
             path: pdfPath,
           },
         ],
@@ -677,6 +726,7 @@ class RFQService {
       console.log('  - From:', EMAIL_USER);
       console.log('  - To:', recipientEmail);
       console.log('  - Sender Name:', senderName);
+      console.log('  - Attachment:', emailAttachmentName);
       if (creatorEmail) {
         console.log('  - Reply-To:', creatorEmail);
       }

@@ -1,4 +1,4 @@
-// src/services/price-quote.service.js - UPDATED WITH includeStaticFile SUPPORT
+// src/services/price-quote.service.js - UPDATED WITH CUSTOM FILENAME PATTERN
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -19,7 +19,7 @@ const EN_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/EN-Uploads');
 const LOGO_PATH = path.join(__dirname, '../../assets/images/OmegaLogo.png');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
-// ✅ NEW: Path to static terms and conditions PDF
+// ✅ Path to static terms and conditions PDF
 const STATIC_TERMS_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 // ✅ Email configuration
@@ -185,15 +185,15 @@ class PriceQuoteService {
 
   async generateQuoteNumber() {
     const quotes = await this.loadQuotes();
-    if (quotes.length === 0) return 'PQ0001';
+    if (quotes.length === 0) return 'Q0001';
 
     const numbers = quotes.map(q => {
-      const match = q.quoteNumber.match(/PQ(\d+)/);
+      const match = q.quoteNumber.match(/Q(\d+)/);
       return match ? parseInt(match[1]) : 0;
     });
 
     const maxNumber = Math.max(...numbers);
-    return `PQ${(maxNumber + 1).toString().padStart(4, '0')}`;
+    return `Q${(maxNumber + 1).toString().padStart(4, '0')}`;
   }
 
   calculateTotals(items, includeTax, taxRate) {
@@ -308,7 +308,6 @@ class PriceQuoteService {
     `;
   }
 
-  // ✅ UPDATED: Add includeStaticFile parameter
   async generatePDF(quoteData, attachmentPath = null, includeStaticFile = false) {
     let browser;
     try {
@@ -333,7 +332,7 @@ class PriceQuoteService {
         });
       }
 
-      // ✅ NEW: Add static terms PDF as images if includeStaticFile is true
+      // ✅ Add static terms PDF as images if includeStaticFile is true
       let staticTermsHTML = '';
       if (includeStaticFile === true) {
         try {
@@ -429,8 +428,26 @@ class PriceQuoteService {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForNetworkIdle({ timeout: 15000 }).catch(() => {});
 
-      const sanitizedClient = quoteData.clientName.replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
-      const filename = `${quoteData.quoteNumber}-${quoteData.date}-${sanitizedClient}.pdf`;
+      // ✅ UPDATED: Use custom filename pattern: Q0001_ClientName_DD-MM-YYYY.pdf
+      const sanitizeFilename = (str) => {
+        if (!str) return 'Unknown';
+        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+      };
+      
+      const formatDate = (dateStr) => {
+        if (!dateStr) {
+          const today = new Date().toISOString().split('T')[0];
+          const [year, month, day] = today.split('-');
+          return `${day}-${month}-${year}`;
+        }
+        const [year, month, day] = dateStr.split('-');
+        return `${day}-${month}-${year}`;
+      };
+      
+      const quoteNumber = quoteData.quoteNumber || 'Q0000';
+      const clientName = sanitizeFilename(quoteData.clientName);
+      const dateFormatted = formatDate(quoteData.date);
+      const filename = `${quoteNumber}_${clientName}_${dateFormatted}.pdf`;
       const pdfPath = path.join(PDF_DIR, filename);
 
       await page.pdf({
@@ -604,13 +621,12 @@ class PriceQuoteService {
     `;
   }
 
-  // ✅ UPDATED: Add includeStaticFile parameter
   async createQuote(quoteData, currentUser, attachmentFile = null) {
     console.log('\n=== CREATE QUOTE DEBUG ===');
     console.log('currentUser.id:', currentUser.id);
     console.log('currentUser.name:', currentUser.name);
     console.log('quoteData.projectName:', quoteData.projectName);
-    console.log('quoteData.includeStaticFile:', quoteData.includeStaticFile); // ✅ NEW LOG
+    console.log('quoteData.includeStaticFile:', quoteData.includeStaticFile);
     
     const quotes = await this.loadQuotes();
     const quoteNumber = await this.generateQuoteNumber();
@@ -635,7 +651,7 @@ class PriceQuoteService {
       taxRate: quoteData.includeTax ? (quoteData.taxRate || 0) : 0,
       items: quoteData.items || [],
       customNotes: quoteData.customNotes || null,
-      includeStaticFile: quoteData.includeStaticFile || false, // ✅ NEW FIELD
+      includeStaticFile: quoteData.includeStaticFile || false,
       createdBy: currentUser.id,
       createdByName: createdByName || currentUser.name || 'Unknown User', 
       createdAt: new Date().toISOString(),
@@ -653,7 +669,6 @@ class PriceQuoteService {
       newQuote.attachmentPath = attachmentPath;
     }
 
-    // ✅ UPDATED: Pass includeStaticFile to PDF generator
     const pdfPath = await this.generatePDF(newQuote, attachmentPath, newQuote.includeStaticFile);
     newQuote.pdfPath = pdfPath;
 
@@ -662,7 +677,7 @@ class PriceQuoteService {
 
     console.log('Quote created with name:', newQuote.createdByName);
     console.log('Quote created with projectName:', newQuote.projectName);
-    console.log('Quote created with includeStaticFile:', newQuote.includeStaticFile); // ✅ NEW LOG
+    console.log('Quote created with includeStaticFile:', newQuote.includeStaticFile);
     return newQuote;
   }
 
@@ -739,7 +754,6 @@ class PriceQuoteService {
     };
   }
 
-  // ✅ UPDATED: Add includeStaticFile parameter
   async updateQuote(id, updateData, attachmentFile = null) {
     const quotes = await this.loadQuotes();
     const quoteIndex = quotes.findIndex(q => q.id === id);
@@ -763,7 +777,7 @@ class PriceQuoteService {
     if (updateData.taxRate !== undefined) quote.taxRate = updateData.taxRate;
     if (updateData.items !== undefined) quote.items = updateData.items;
     if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
-    if (updateData.includeStaticFile !== undefined) quote.includeStaticFile = updateData.includeStaticFile; // ✅ NEW FIELD
+    if (updateData.includeStaticFile !== undefined) quote.includeStaticFile = updateData.includeStaticFile;
 
     const totals = this.calculateTotals(quote.items, quote.includeTax, quote.taxRate);
     quote.subtotal = totals.subtotal;
@@ -782,9 +796,8 @@ class PriceQuoteService {
     }
 
     console.log('Updating quote with projectName:', quote.projectName);
-    console.log('Updating quote with includeStaticFile:', quote.includeStaticFile); // ✅ NEW LOG
+    console.log('Updating quote with includeStaticFile:', quote.includeStaticFile);
     
-    // ✅ UPDATED: Pass includeStaticFile to PDF generator
     const pdfPath = await this.generatePDF(quote, attachmentPath, quote.includeStaticFile);
     quote.pdfPath = pdfPath;
 
@@ -823,7 +836,7 @@ class PriceQuoteService {
   }
 
   /**
-   * ✅ Send quote PDF by email
+   * ✅ Send quote PDF by email with custom filename
    */
   async sendQuoteByEmail(quoteId, userId, userRole, recipientEmail) {
     try {
@@ -832,13 +845,11 @@ class PriceQuoteService {
       console.log('User ID:', userId);
       console.log('Recipient:', recipientEmail);
       
-      // ✅ Check credentials first
       if (!EMAIL_USER || !EMAIL_PASS) {
         console.error('❌ Email credentials missing!');
         throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
       }
 
-      // Get quote
       const quote = await this.getQuoteById(quoteId);
       console.log('✅ Quote found:', quote.quoteNumber);
 
@@ -847,7 +858,6 @@ class PriceQuoteService {
       }
       console.log('✅ PDF file found');
 
-      // Get creator's information
       const users = await this.loadUsers();
       const creator = users.find(u => u.id === quote.createdBy);
       
@@ -856,10 +866,9 @@ class PriceQuoteService {
       
       console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
 
-      // ✅ Create transporter with system credentials
       console.log('📧 Creating email transporter...');
       
-      const transporter = nodemailer.createTransport({
+      const transporter = nodemailer.createTransporter({
         host: EMAIL_HOST,
         port: EMAIL_PORT,
         secure: EMAIL_PORT === 465,
@@ -872,12 +881,10 @@ class PriceQuoteService {
         }
       });
 
-      // ✅ Verify connection
       console.log('🔄 Verifying SMTP connection...');
       await transporter.verify();
       console.log('✅ SMTP connection verified');
 
-      // Email subject and body
       const subject = `Price Quote ${quote.quoteNumber}`;
       const text = `Please find attached the price quote ${quote.quoteNumber}.\n\nClient: ${quote.clientName}\nDate: ${quote.date}\nProject: ${quote.projectName || 'N/A'}\n\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
       const html = `
@@ -920,7 +927,27 @@ class PriceQuoteService {
         </div>
       `;
 
-      // ✅ Send email
+      // ✅ Create custom email attachment filename: Q0001_ClientName_DD-MM-YYYY.pdf
+      const sanitizeFilename = (str) => {
+        if (!str) return 'Unknown';
+        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+      };
+      
+      const formatDate = (dateStr) => {
+        if (!dateStr) {
+          const today = new Date().toISOString().split('T')[0];
+          const [year, month, day] = today.split('-');
+          return `${day}-${month}-${year}`;
+        }
+        const [year, month, day] = dateStr.split('-');
+        return `${day}-${month}-${year}`;
+      };
+      
+      const quoteNumber = quote.quoteNumber || 'Q0000';
+      const clientName = sanitizeFilename(quote.clientName);
+      const dateFormatted = formatDate(quote.date);
+      const emailAttachmentName = `${quoteNumber}_${clientName}_${dateFormatted}.pdf`;
+
       console.log('📧 Sending email...');
       const mailOptions = {
         from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
@@ -930,7 +957,7 @@ class PriceQuoteService {
         html: html,
         attachments: [
           {
-            filename: `Quote_${quote.quoteNumber}.pdf`,
+            filename: emailAttachmentName,
             path: quote.pdfPath,
           },
         ],
@@ -945,6 +972,7 @@ class PriceQuoteService {
 
       console.log('✅ Email sent successfully!');
       console.log('  - Message ID:', info.messageId);
+      console.log('  - Attachment:', emailAttachmentName);
       console.log('========================\n');
 
       return {

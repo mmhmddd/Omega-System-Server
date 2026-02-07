@@ -1,4 +1,4 @@
-// src/routes/rfqs.routes.js - FIXED WITH CORRECT ROUTE KEY
+// src/routes/rfqs.routes.js - FIXED WITH REQUESTER NAME IN FILENAME
 
 const express = require('express');
 const router = express.Router();
@@ -8,7 +8,7 @@ const rfqService = require('../services/rfq.service');
 const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 router.use(protect);
-router.use(checkRouteAccess('rfqs')); // ✅ FIXED: Changed from 'purchaseManagement' to 'rfqs'
+router.use(checkRouteAccess('rfqs'));
 
 // Configure multer for PDF uploads (memory storage)
 const upload = multer({
@@ -285,7 +285,8 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 });
 
 /**
- * DOWNLOAD RFQ PDF
+ * ✅ DOWNLOAD RFQ PDF - WITH CUSTOM FILENAME PATTERN RFQ0001_Requester_DD-MM-YYYY.pdf
+ * GET /api/rfqs/:id/download-pdf
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {
@@ -312,7 +313,29 @@ router.get('/:id/download-pdf', async (req, res, next) => {
       });
     }
 
-    res.download(pdfPath, `RFQ_${rfq.rfqNumber}.pdf`, (err) => {
+    // ✅ Create custom download filename: RFQ0001_Requester_DD-MM-YYYY.pdf
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    // ✅ Format date as DD-MM-YYYY
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const rfqNumber = rfq.rfqNumber || 'RFQ0000';
+    const requesterName = sanitizeFilename(rfq.requester);
+    const dateFormatted = formatDate(rfq.date);
+    const downloadFilename = `${rfqNumber}_${requesterName}_${dateFormatted}.pdf`;
+
+    res.download(pdfPath, downloadFilename, (err) => {
       if (err) {
         next(err);
       }

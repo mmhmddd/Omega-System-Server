@@ -1,5 +1,5 @@
 // ============================================================
-// PDF GENERATOR MATERIAL - WITH CONDITIONAL RENDERING & NEW LAYOUT
+// PDF GENERATOR MATERIAL - WITH CUSTOM FILENAME SUPPORT
 // src/utils/pdf-generator-material.util.js
 // ============================================================
 const fsSync = require('fs');
@@ -677,7 +677,10 @@ body {
   `;
 }
 
-  async generateMaterialPDF(material) {
+  /**
+   * ✅ UPDATED: Generate Material PDF with custom filename support
+   */
+  async generateMaterialPDF(material, customFilename = null) {
     const language = this.detectLanguage(material);
 
     return new Promise(async (resolve, reject) => {
@@ -689,7 +692,10 @@ body {
           fsSync.mkdirSync(pdfDir, { recursive: true });
         }
 
-        const filename = `${material.mrNumber || 'material'}_${Date.now()}.pdf`;
+        // ✅ Use custom filename if provided, otherwise use default pattern
+        const filename = customFilename 
+          ? `${customFilename}.pdf`
+          : `${material.mrNumber || 'material'}_${Date.now()}.pdf`;
         const filepath = path.join(pdfDir, filename);
         const html = this.generateHTML(material);
 
@@ -752,7 +758,7 @@ body {
 
   async resizePageToA4(page) {
     const a4 = this.getA4Dimensions();
-    const { width, height } = page.getSize();
+    const { width, height} = page.getSize();
 
     const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
     if (isA4) return page;
@@ -852,7 +858,6 @@ body {
       });
 
       if (isRTL) {
-
         page.drawText(dateOfIssue, {
           x: width - 200,
           y: height - 63,
@@ -861,7 +866,6 @@ body {
           color: textGray
         });
       } else {
-
         page.drawText(dateOfIssue, {
           x: 60,
           y: height - 63,

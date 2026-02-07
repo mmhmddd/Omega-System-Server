@@ -1,4 +1,4 @@
-// src/utils/pdf-generator.util.js - UPDATED: SINGLE BLUE LINE, NO REV NO
+// src/utils/pdf-generatorRecipts.util.js - UPDATED: Accepts custom filename parameter
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -584,7 +584,10 @@ body {
     `;
   }
 
-  async generateReceiptPDF(receipt) {
+  /**
+   * ✅ UPDATED: Generate receipt PDF with custom filename parameter
+   */
+  async generateReceiptPDF(receipt, customFilename = null) {
     const language = this.detectLanguage(receipt);
 
     return new Promise(async (resolve, reject) => {
@@ -596,7 +599,8 @@ body {
           fs.mkdirSync(pdfDir, { recursive: true });
         }
 
-        const filename = `${receipt.receiptNumber || 'receipt'}_${Date.now()}.pdf`;
+        // ✅ Use custom filename if provided, otherwise use default
+        const filename = customFilename || `${receipt.receiptNumber || 'receipt'}_${Date.now()}.pdf`;
         const filepath = path.join(pdfDir, filename);
         const html = this.generateHTML(receipt);
 
@@ -630,6 +634,8 @@ body {
         });
 
         await browser.close();
+
+        console.log('✅ PDF generated with filename:', filename);
 
         resolve({ 
           filename, 
@@ -718,7 +724,6 @@ body {
         continue;
       }
       
-      // ✅ REMOVED: REV. No: 00
       const dateOfIssue = `DATE OF ISSUE: ${new Date().toISOString().split('T')[0]}`;
       const docCode = 'OMEGA-RIC-01';
       const pageNumber = `Page ${i + 1} of ${totalPages}`;
@@ -761,7 +766,6 @@ body {
         color: primaryBlue
       });
 
-      // ✅ UPDATED: Only show DATE OF ISSUE (no REV No)
       if (isRTL) {
         page.drawText(dateOfIssue, {
           x: width - 200,
@@ -823,6 +827,9 @@ body {
     return pdfDoc;
   }
 
+  /**
+   * ✅ UPDATED: mergePDFs now preserves custom filename when merging
+   */
   async mergePDFs(generatedPdfPath, attachmentPdf = null, outputFilename = null, language = 'ar') {
     try {
       if (!attachmentPdf) {
@@ -882,9 +889,9 @@ body {
 
       await this.addHeadersFootersToAllPages(mergedPdf, language);
 
-      const timestamp = Date.now();
+      // ✅ Use custom filename if provided, otherwise create default
       const finalFilename = outputFilename || 
-        path.basename(generatedPdfPath).replace('.pdf', `_merged_${timestamp}.pdf`);
+        path.basename(generatedPdfPath).replace('.pdf', `_merged_${Date.now()}.pdf`);
       
       const outputDir = path.dirname(generatedPdfPath);
       const outputPath = path.join(outputDir, finalFilename);
@@ -897,6 +904,8 @@ body {
       } catch (err) {
         console.log('Could not delete original');
       }
+
+      console.log('✅ PDF merged with filename:', finalFilename);
 
       return {
         filepath: outputPath,

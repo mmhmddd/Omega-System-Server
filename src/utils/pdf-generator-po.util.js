@@ -1,4 +1,4 @@
-// src/utils/pdf-generator-po.util.js - PURCHASE ORDER PDF GENERATOR WITH CONDITIONAL RENDERING
+// src/utils/pdf-generator-po.util.js - PURCHASE ORDER PDF GENERATOR WITH CUSTOM FILENAME SUPPORT
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -775,7 +775,8 @@ body {
     </div>
   </div>
 
-
+  <!-- ✅ Blue separator line -->
+  <div class="separator-line"></div>
 
   <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>
@@ -970,7 +971,8 @@ body {
     `;
   }
 
-  async generatePOPDF(po) {
+  // ✅ UPDATED: Accept customFilename parameter
+  async generatePOPDF(po, customFilename = null) {
     const language = this.detectLanguage(po);
 
     return new Promise(async (resolve, reject) => {
@@ -982,7 +984,10 @@ body {
           fs.mkdirSync(pdfDir, { recursive: true });
         }
 
-        const filename = `${po.poNumber || 'po'}_${Date.now()}.pdf`;
+        // ✅ Use custom filename if provided, otherwise use default pattern
+        const filename = customFilename 
+          ? `${customFilename}.pdf`
+          : `${po.poNumber || 'po'}_${Date.now()}.pdf`;
         const filepath = path.join(pdfDir, filename);
         const html = this.generateHTML(po);
 

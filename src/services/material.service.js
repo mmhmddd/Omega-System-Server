@@ -1,4 +1,4 @@
-// src/services/material.service.js - WITH FILE MANAGEMENT INTEGRATION (like price-quote)
+// src/services/material.service.js - WITH FILE MANAGEMENT INTEGRATION AND CUSTOM FILENAME
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -18,7 +18,7 @@ const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
 
 // ✅ Log configuration on startup (without exposing password)
-console.log('📧 Email Configuration:');
+console.log('📧 Material Email Configuration:');
 console.log('  - Host:', EMAIL_HOST);
 console.log('  - Port:', EMAIL_PORT);
 console.log('  - User:', EMAIL_USER ? '✅ Configured' : '❌ Missing');
@@ -126,7 +126,7 @@ class MaterialService {
 
   generateMRNumber(counter) {
     const paddedNumber = String(counter).padStart(4, '0');
-    return `IMR${paddedNumber}`;
+    return `MR${paddedNumber}`;
   }
 
   detectLanguage(text) {
@@ -195,7 +195,7 @@ class MaterialService {
     const newCounter = counter + 1;
     
     const paddedCounter = String(newCounter).padStart(4, '0');
-    const id = `IMR-${paddedCounter}`;
+    const id = `MR-${paddedCounter}`;
     const mrNumber = this.generateMRNumber(newCounter);
     
     await this.saveCounter(newCounter);
@@ -279,6 +279,9 @@ class MaterialService {
     };
   }
 
+  /**
+   * ✅ GENERATE MATERIAL PDF WITH CUSTOM FILENAME PATTERN: MR0001_ProjectName_DD-MM-YYYY.pdf
+   */
   async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
     const material = await this.getMaterialRequestById(id, userId, userRole);
 
@@ -302,7 +305,32 @@ class MaterialService {
       }
     }
 
-    const pdfResult = await materialPdfGenerator.generateMaterialPDF(material);
+    // ✅ Create filename pattern: MR0001_ProjectName_DD-MM-YYYY.pdf
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      // Remove special characters, keep alphanumeric, Arabic characters, and spaces
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    // ✅ Format date as DD-MM-YYYY
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const mrNumber = material.mrNumber || 'MR0000';
+    const projectName = sanitizeFilename(material.project); // ✅ Changed from section to project
+    const dateFormatted = formatDate(material.date);
+    const customFilename = `${mrNumber}_${projectName}_${dateFormatted}`;
+
+    console.log('📝 Custom filename:', customFilename);
+
+    const pdfResult = await materialPdfGenerator.generateMaterialPDF(material, customFilename);
 
     const pdfsToMerge = [];
     
@@ -579,24 +607,20 @@ class MaterialService {
   }
 
   /**
- * ✅ Send material request PDF by email - Using system credentials with creator info
+ * ✅ Send material request PDF by email - WITH CUSTOM FILENAME DD-MM-YYYY and Project Name
  */
 async sendMaterialByEmail(materialId, userId, userRole, recipientEmail) {
   try {
-    console.log('\n📧 === SEND EMAIL DEBUG ===');
+    console.log('\n📧 === SEND MATERIAL EMAIL DEBUG ===');
     console.log('Material ID:', materialId);
     console.log('User ID:', userId);
     console.log('Recipient:', recipientEmail);
     
-    // ✅ Check credentials first
     if (!EMAIL_USER || !EMAIL_PASS) {
       console.error('❌ Email credentials missing!');
-      console.error('EMAIL_USER:', EMAIL_USER ? '✅ Set' : '❌ Not set');
-      console.error('EMAIL_PASS:', EMAIL_PASS ? '✅ Set' : '❌ Not set');
       throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
     }
 
-    // Get material request
     const material = await this.getMaterialRequestById(materialId, userId, userRole);
     console.log('✅ Material Request found:', material.mrNumber);
 
@@ -611,7 +635,6 @@ async sendMaterialByEmail(materialId, userId, userRole, recipientEmail) {
     }
     console.log('✅ PDF file found');
 
-    // Get creator's information
     const users = await this.loadUsers();
     const creator = users.find(u => u.id === material.createdBy);
     
@@ -620,31 +643,25 @@ async sendMaterialByEmail(materialId, userId, userRole, recipientEmail) {
     
     console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
 
-    // ✅ Create transporter with system credentials
     console.log('📧 Creating email transporter...');
-    console.log('  - Host:', EMAIL_HOST);
-    console.log('  - Port:', EMAIL_PORT);
-    console.log('  - User:', EMAIL_USER);
     
     const transporter = nodemailer.createTransport({
       host: EMAIL_HOST,
       port: EMAIL_PORT,
-      secure: EMAIL_PORT === 465, // true for 465, false for other ports
+      secure: EMAIL_PORT === 465,
       auth: {
         user: EMAIL_USER,
         pass: EMAIL_PASS,
       },
       tls: {
-        rejectUnauthorized: false // For development - remove in production
+        rejectUnauthorized: false
       }
     });
 
-    // ✅ Verify connection
     console.log('🔄 Verifying SMTP connection...');
     await transporter.verify();
     console.log('✅ SMTP connection verified');
 
-    // Email subject and body
     const subject = `Material Request ${material.mrNumber}`;
     const text = `Please find attached the Material Request ${material.mrNumber}.\n\nSection: ${material.section || 'N/A'}\nProject: ${material.project || 'N/A'}\nDate: ${material.date}\nPriority: ${material.requestPriority || 'N/A'}\n\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
     const html = `
@@ -677,23 +694,43 @@ async sendMaterialByEmail(materialId, userId, userRole, recipientEmail) {
       </div>
     `;
 
-    // ✅ Send email using system credentials, but show creator info in body
+    // ✅ Create custom email attachment filename: MR0001_ProjectName_DD-MM-YYYY.pdf
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    // ✅ Format date as DD-MM-YYYY
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const mrNumber = material.mrNumber || 'MR0000';
+    const projectName = sanitizeFilename(material.project); // ✅ Changed from section to project
+    const dateFormatted = formatDate(material.date);
+    const emailAttachmentName = `${mrNumber}_${projectName}_${dateFormatted}.pdf`;
+
     console.log('📧 Sending email...');
     const mailOptions = {
-      from: `"${senderName} - Omega System" <${EMAIL_USER}>`, // System email with creator name
+      from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
       to: recipientEmail,
       subject: subject,
       text: text,
       html: html,
       attachments: [
         {
-          filename: `MR_${material.mrNumber}.pdf`,
+          filename: emailAttachmentName,
           path: pdfPath,
         },
       ],
     };
 
-    // Add reply-to if creator has email
     if (creatorEmail) {
       mailOptions.replyTo = creatorEmail;
       console.log('✅ Reply-to set:', creatorEmail);
@@ -706,6 +743,7 @@ async sendMaterialByEmail(materialId, userId, userRole, recipientEmail) {
     console.log('  - From:', EMAIL_USER);
     console.log('  - To:', recipientEmail);
     console.log('  - Sender Name:', senderName);
+    console.log('  - Attachment:', emailAttachmentName);
     if (creatorEmail) {
       console.log('  - Reply-To:', creatorEmail);
     }
@@ -720,13 +758,7 @@ async sendMaterialByEmail(materialId, userId, userRole, recipientEmail) {
     };
   } catch (error) {
     console.error('❌ Email sending error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      code: error.code,
-      command: error.command
-    });
     
-    // Provide helpful error messages
     let errorMessage = error.message;
     if (error.code === 'EAUTH') {
       errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';

@@ -1,4 +1,4 @@
-// src/routes/purchases.routes.js - FIXED WITH CORRECT ROUTE KEY
+// src/routes/purchases.routes.js - FIXED WITH RECEIVER NAME IN FILENAME
 
 const express = require('express');
 const router = express.Router();
@@ -9,7 +9,7 @@ const { protect, checkRouteAccess } = require('../middleware/auth.middleware');
 const { restrictTo } = require('../middleware/role.middleware');
 
 router.use(protect);
-router.use(checkRouteAccess('purchases')); // ✅ FIXED: Changed from 'purchaseManagement' to 'purchases'
+router.use(checkRouteAccess('purchases'));
 
 // Configure multer for PDF uploads (memory storage)
 const upload = multer({
@@ -288,7 +288,8 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 });
 
 /**
- * DOWNLOAD PO PDF
+ * ✅ DOWNLOAD PO PDF - WITH CUSTOM FILENAME PATTERN PO00001_Receiver_DD-MM-YYYY.pdf
+ * GET /api/purchases/:id/download-pdf
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {
@@ -315,7 +316,29 @@ router.get('/:id/download-pdf', async (req, res, next) => {
       });
     }
 
-    res.download(pdfPath, `PO_${po.poNumber}.pdf`, (err) => {
+    // ✅ Create custom download filename: PO00001_Receiver_DD-MM-YYYY.pdf
+    const sanitizeFilename = (str) => {
+      if (!str) return 'Unknown';
+      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+    };
+    
+    // ✅ Format date as DD-MM-YYYY
+    const formatDate = (dateStr) => {
+      if (!dateStr) {
+        const today = new Date().toISOString().split('T')[0];
+        const [year, month, day] = today.split('-');
+        return `${day}-${month}-${year}`;
+      }
+      const [year, month, day] = dateStr.split('-');
+      return `${day}-${month}-${year}`;
+    };
+    
+    const poNumber = po.poNumber || 'PO00000';
+    const receiverName = sanitizeFilename(po.receiver);
+    const dateFormatted = formatDate(po.date);
+    const downloadFilename = `${poNumber}_${receiverName}_${dateFormatted}.pdf`;
+
+    res.download(pdfPath, downloadFilename, (err) => {
       if (err) {
         next(err);
       }
@@ -324,6 +347,7 @@ router.get('/:id/download-pdf', async (req, res, next) => {
     next(error);
   }
 });
+
 /**
  * ✅ POST /api/purchases/:id/send-email
  * Send Purchase Order PDF by email
