@@ -1,4 +1,4 @@
-// src/routes/proforma-invoice.routes.js - UPDATED WITH includeStaticFile SUPPORT
+// src/routes/proforma-invoice.routes.js - UPDATED WITH includeStaticFile SUPPORT AND DATE IN FILENAME
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -229,7 +229,7 @@ router.get('/my-latest', async (req, res, next) => {
 
 /**
  * @route   GET /api/proforma-invoices/:id/pdf
- * @desc    Download PDF of proforma invoice
+ * @desc    Download PDF of proforma invoice - uses actual stored filename
  * @access  Private (Owner or Super Admin)
  */
 router.get('/:id/pdf', async (req, res, next) => {
@@ -243,26 +243,24 @@ router.get('/:id/pdf', async (req, res, next) => {
       });
     }
 
-    // ✅ Generate custom filename for download
-    const sanitizeFilename = (str) => {
-      if (!str) return 'Unknown';
-      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
-    };
-    
-    const formatDate = (dateStr) => {
-      if (!dateStr) {
-        const today = new Date().toISOString().split('T')[0];
-        const [year, month, day] = today.split('-');
-        return `${day}-${month}-${year}`;
-      }
-      const [year, month, day] = dateStr.split('-');
-      return `${day}-${month}-${year}`;
-    };
-    
-    const invoiceNumber = invoice.invoiceNumber || 'PI0000';
-    const clientName = sanitizeFilename(invoice.clientName);
-    const dateFormatted = formatDate(invoice.date);
-    const downloadFilename = `${invoiceNumber}_${clientName}_${dateFormatted}.pdf`;
+    if (!invoice.pdfPath) {
+      return res.status(404).json({
+        success: false,
+        message: 'PDF not found'
+      });
+    }
+
+    const fs = require('fs');
+    if (!fs.existsSync(invoice.pdfPath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'PDF file not found'
+      });
+    }
+
+    // ✅ Extract the actual filename from the stored pdfPath
+    const path = require('path');
+    const downloadFilename = path.basename(invoice.pdfPath);
 
     console.log('📥 Download filename:', downloadFilename);
     console.log('📁 File path:', invoice.pdfPath);
@@ -413,34 +411,6 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 /**
- * @route   GET /api/proforma-invoices/:id/pdf
- * @desc    Download PDF of proforma invoice
- * @access  Private (Owner or Super Admin)
- */
-router.get('/:id/pdf', async (req, res, next) => {
-  try {
-    const invoice = await proformaInvoiceService.getInvoiceById(req.params.id);
-
-    if (req.user.role !== 'super_admin' && invoice.createdBy !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have permission to download this PDF'
-      });
-    }
-
-    const filename = invoice.pdfPath.split('/').pop();
-
-    res.download(invoice.pdfPath, filename, (err) => {
-      if (err) {
-        next(err);
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
  * @route   POST /api/proforma-invoices/:id/send-email
  * @desc    Send invoice PDF by email
  * @access  Private (Owner or Super Admin)
@@ -489,4 +459,5 @@ router.post('/:id/send-email', async (req, res, next) => {
     next(error);
   }
 });
+
 module.exports = router;

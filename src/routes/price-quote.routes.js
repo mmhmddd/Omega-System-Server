@@ -1,4 +1,4 @@
-// src/routes/price-quote.routes.js - UPDATED WITH includeStaticFile SUPPORT
+// src/routes/price-quote.routes.js - UPDATED WITH CUSTOM DOWNLOAD FILENAME PATTERN
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -228,8 +228,8 @@ router.get('/my-latest', async (req, res, next) => {
 });
 
 /**
- * @route   GET /api/price-quotes/:id/pdf
- * @desc    Download PDF of price quote
+ * ✅ UPDATED: GET /api/price-quotes/:id/pdf
+ * @desc    Download PDF of price quote with custom filename pattern
  * @access  Private (Owner or Super Admin)
  */
 router.get('/:id/pdf', async (req, res, next) => {
@@ -243,12 +243,28 @@ router.get('/:id/pdf', async (req, res, next) => {
       });
     }
 
-    // ✅ Generate custom filename for download
+    if (!quote.pdfPath) {
+      return res.status(404).json({
+        success: false,
+        message: 'PDF not found'
+      });
+    }
+
+    const fs = require('fs');
+    if (!fs.existsSync(quote.pdfPath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'PDF file not found'
+      });
+    }
+
+    // ✅ Create custom download filename: Q0001_ClientName_DD-MM-YYYY.pdf
     const sanitizeFilename = (str) => {
       if (!str) return 'Unknown';
       return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
     };
     
+    // ✅ Format date as DD-MM-YYYY
     const formatDate = (dateStr) => {
       if (!dateStr) {
         const today = new Date().toISOString().split('T')[0];
@@ -277,6 +293,7 @@ router.get('/:id/pdf', async (req, res, next) => {
     next(error);
   }
 });
+
 /**
  * @route   PUT /api/price-quotes/:id
  * @desc    Update price quote
@@ -412,33 +429,6 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 /**
- * @route   GET /api/price-quotes/:id/pdf
- * @desc    Download PDF of price quote
- * @access  Private (Owner or Super Admin)
- */
-router.get('/:id/pdf', async (req, res, next) => {
-  try {
-    const quote = await priceQuoteService.getQuoteById(req.params.id);
-
-    if (req.user.role !== 'super_admin' && quote.createdBy !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'You do not have permission to download this PDF'
-      });
-    }
-
-    const filename = quote.pdfPath.split('/').pop();
-
-    res.download(quote.pdfPath, filename, (err) => {
-      if (err) {
-        next(err);
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-/**
  * @route   POST /api/price-quotes/:id/send-email
  * @desc    Send quote PDF by email
  * @access  Private (Owner or Super Admin)
@@ -487,4 +477,5 @@ router.post('/:id/send-email', async (req, res, next) => {
     next(error);
   }
 });
+
 module.exports = router;

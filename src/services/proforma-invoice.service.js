@@ -1,4 +1,4 @@
-// src/services/proforma-invoice.service.js - UPDATED WITH CUSTOM FILENAME PATTERN
+// src/services/proforma-invoice.service.js - CORRECTED FILENAME GENERATION WITH DATE
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -301,6 +301,30 @@ class ProformaInvoiceService {
     `;
   }
 
+  // ✅ Helper function to sanitize filenames
+  sanitizeFilename(str) {
+    if (!str) return 'Unknown';
+    return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+  }
+
+  // ✅ Helper function to format date as DD-MM-YYYY
+  formatDateForFilename(dateStr) {
+    if (!dateStr) {
+      const today = new Date();
+      const day = String(today.getDate()).padStart(2, '0');
+      const month = String(today.getMonth() + 1).padStart(2, '0');
+      const year = today.getFullYear();
+      return `${day}-${month}-${year}`;
+    }
+    // Convert YYYY-MM-DD to DD-MM-YYYY
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const [year, month, day] = parts;
+      return `${day}-${month}-${year}`;
+    }
+    return dateStr;
+  }
+
   async generatePDF(invoiceData, attachmentPath = null, includeStaticFile = false) {
     let browser;
     try {
@@ -423,27 +447,17 @@ class ProformaInvoiceService {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForNetworkIdle({ timeout: 15000 }).catch(() => {});
 
-      // ✅ UPDATED: Use custom filename pattern: PI0001_ClientName_DD-MM-YYYY.pdf
-      const sanitizeFilename = (str) => {
-        if (!str) return 'Unknown';
-        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
-      };
-      
-      const formatDate = (dateStr) => {
-        if (!dateStr) {
-          const today = new Date().toISOString().split('T')[0];
-          const [year, month, day] = today.split('-');
-          return `${day}-${month}-${year}`;
-        }
-        const [year, month, day] = dateStr.split('-');
-        return `${day}-${month}-${year}`;
-      };
-      
+      // ✅ CORRECTED: Generate filename with pattern: PI0001_ClientName_DD-MM-YYYY.pdf
       const invoiceNumber = invoiceData.invoiceNumber || 'PI0000';
-      const clientName = sanitizeFilename(invoiceData.clientName);
-      const dateFormatted = formatDate(invoiceData.date);
+      const clientName = this.sanitizeFilename(invoiceData.clientName);
+      const dateFormatted = this.formatDateForFilename(invoiceData.date);
       const filename = `${invoiceNumber}_${clientName}_${dateFormatted}.pdf`;
       const pdfPath = path.join(PDF_DIR, filename);
+
+      console.log('🔵 Generated filename:', filename);
+      console.log('🔵 Date from invoice:', invoiceData.date);
+      console.log('🔵 Formatted date:', dateFormatted);
+      console.log('🔵 Full path:', pdfPath);
 
       await page.pdf({
         path: pdfPath,
@@ -645,6 +659,7 @@ class ProformaInvoiceService {
     console.log('currentUser.name:', currentUser.name);
     console.log('invoiceData.projectName:', invoiceData.projectName);
     console.log('invoiceData.includeStaticFile:', invoiceData.includeStaticFile);
+    console.log('invoiceData.date:', invoiceData.date);
     
     const invoices = await this.loadInvoices();
     const invoiceNumber = await this.generateInvoiceNumber();
@@ -696,6 +711,7 @@ class ProformaInvoiceService {
     console.log('Invoice created with name:', newInvoice.createdByName);
     console.log('Invoice created with projectName:', newInvoice.projectName);
     console.log('Invoice created with includeStaticFile:', newInvoice.includeStaticFile);
+    console.log('Invoice PDF path:', newInvoice.pdfPath);
     return newInvoice;
   }
 
@@ -815,6 +831,12 @@ class ProformaInvoiceService {
 
     console.log('Updating invoice with projectName:', invoice.projectName);
     console.log('Updating invoice with includeStaticFile:', invoice.includeStaticFile);
+    
+    // ✅ Delete old PDF before generating new one
+    if (invoice.pdfPath && fsSync.existsSync(invoice.pdfPath)) {
+      await fs.unlink(invoice.pdfPath).catch(() => {});
+      console.log('🗑️ Deleted old PDF:', invoice.pdfPath);
+    }
     
     const pdfPath = await this.generatePDF(invoice, attachmentPath, invoice.includeStaticFile);
     invoice.pdfPath = pdfPath;
@@ -945,26 +967,8 @@ class ProformaInvoiceService {
         </div>
       `;
 
-      // ✅ Create custom email attachment filename: PI0001_ClientName_DD-MM-YYYY.pdf
-      const sanitizeFilename = (str) => {
-        if (!str) return 'Unknown';
-        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
-      };
-      
-      const formatDate = (dateStr) => {
-        if (!dateStr) {
-          const today = new Date().toISOString().split('T')[0];
-          const [year, month, day] = today.split('-');
-          return `${day}-${month}-${year}`;
-        }
-        const [year, month, day] = dateStr.split('-');
-        return `${day}-${month}-${year}`;
-      };
-      
-      const invoiceNumber = invoice.invoiceNumber || 'PI0000';
-      const clientName = sanitizeFilename(invoice.clientName);
-      const dateFormatted = formatDate(invoice.date);
-      const emailAttachmentName = `${invoiceNumber}_${clientName}_${dateFormatted}.pdf`;
+      // ✅ Use the actual filename from the stored path
+      const emailAttachmentName = path.basename(invoice.pdfPath);
 
       console.log('📧 Sending email...');
       const mailOptions = {
