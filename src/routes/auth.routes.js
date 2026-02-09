@@ -1,4 +1,5 @@
-// src/routes/auth.routes.js
+// src/routes/auth.routes.js (UPDATED - Add this to your existing file)
+
 const express = require('express');
 const router = express.Router();
 const authService = require('../services/auth.service');
@@ -17,10 +18,11 @@ router.post('/login', async (req, res, next) => {
     if (!username || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide username and password'
+        message: 'Username and password are required'
       });
     }
 
+    // Login user - authService now handles JWT generation with systemAccess and routeAccess
     const result = await authService.login(username, password);
 
     res.status(200).json({
@@ -35,7 +37,7 @@ router.post('/login', async (req, res, next) => {
 
 /**
  * @route   POST /api/auth/forgot-password
- * @desc    Request password reset token
+ * @desc    Request password reset
  * @access  Public
  */
 router.post('/forgot-password', async (req, res, next) => {
@@ -45,7 +47,7 @@ router.post('/forgot-password', async (req, res, next) => {
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide email address'
+        message: 'Email is required'
       });
     }
 
@@ -53,7 +55,6 @@ router.post('/forgot-password', async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Password reset token generated successfully',
       data: result
     });
   } catch (error) {
@@ -73,7 +74,7 @@ router.post('/reset-password', async (req, res, next) => {
     if (!token || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide reset token and new password'
+        message: 'Token and new password are required'
       });
     }
 
@@ -84,11 +85,11 @@ router.post('/reset-password', async (req, res, next) => {
       });
     }
 
-    await authService.resetPassword(token, newPassword);
+    const result = await authService.resetPassword(token, newPassword);
 
     res.status(200).json({
       success: true,
-      message: 'Password reset successful. Please login with your new password'
+      data: result
     });
   } catch (error) {
     next(error);
@@ -98,7 +99,7 @@ router.post('/reset-password', async (req, res, next) => {
 /**
  * @route   POST /api/auth/change-password
  * @desc    Change password for logged in user
- * @access  Private
+ * @access  Protected
  */
 router.post('/change-password', protect, async (req, res, next) => {
   try {
@@ -107,7 +108,7 @@ router.post('/change-password', protect, async (req, res, next) => {
     if (!currentPassword || !newPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide current password and new password'
+        message: 'Current password and new password are required'
       });
     }
 
@@ -118,11 +119,15 @@ router.post('/change-password', protect, async (req, res, next) => {
       });
     }
 
-    await authService.changePassword(req.user.id, currentPassword, newPassword);
+    const result = await authService.changePassword(
+      req.user.id,
+      currentPassword,
+      newPassword
+    );
 
     res.status(200).json({
       success: true,
-      message: 'Password changed successfully'
+      data: result
     });
   } catch (error) {
     next(error);
@@ -131,8 +136,8 @@ router.post('/change-password', protect, async (req, res, next) => {
 
 /**
  * @route   GET /api/auth/me
- * @desc    Get current logged in user
- * @access  Private
+ * @desc    Get current user data
+ * @access  Protected
  */
 router.get('/me', protect, async (req, res, next) => {
   try {
@@ -148,29 +153,60 @@ router.get('/me', protect, async (req, res, next) => {
 });
 
 /**
- * @route   POST /api/auth/verify-token
- * @desc    Verify if reset token is valid
+ * @route   GET /api/auth/verify-token
+ * @desc    Verify reset token validity
  * @access  Public
  */
-router.post('/verify-token', async (req, res, next) => {
+router.get('/verify-token/:token', async (req, res, next) => {
   try {
-    const { token } = req.body;
-
-    if (!token) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide token'
-      });
-    }
+    const { token } = req.params;
 
     const isValid = await authService.verifyResetToken(token);
 
     res.status(200).json({
       success: true,
-      valid: isValid,
-      message: isValid ? 'Token is valid' : 'Token is invalid or expired'
+      data: { valid: isValid }
     });
   } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * ✅ NEW ENDPOINT
+ * @route   POST /api/auth/refresh-token
+ * @desc    Refresh JWT token with latest user permissions
+ * @access  Protected
+ */
+router.post('/refresh-token', protect, async (req, res, next) => {
+  try {
+    console.log('==========================================');
+    console.log('🔄 TOKEN REFRESH REQUEST');
+    console.log('User ID:', req.user.id);
+    console.log('Current role:', req.user.role);
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('==========================================');
+
+    // Get fresh user data and generate new token
+    const result = await authService.refreshToken(req.user.id);
+
+    console.log('==========================================');
+    console.log('✅ TOKEN REFRESH SUCCESSFUL');
+    console.log('User:', result.user.username);
+    console.log('Updated systemAccess:', result.user.systemAccess);
+    console.log('Updated routeAccess:', result.user.routeAccess);
+    console.log('==========================================');
+
+    res.status(200).json({
+      success: true,
+      message: 'Token refreshed successfully',
+      data: result
+    });
+  } catch (error) {
+    console.log('==========================================');
+    console.error('❌ TOKEN REFRESH ERROR');
+    console.error('Error:', error.message);
+    console.log('==========================================');
     next(error);
   }
 });

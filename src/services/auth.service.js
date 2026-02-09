@@ -1,4 +1,4 @@
-// src/services/auth.service.js (UPDATED)
+// src/services/auth.service.js (FIXED - Complete Version)
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
@@ -69,21 +69,29 @@ class AuthService {
     }
   }
 
-  /**
-   * Generate JWT token with systemAccess and routeAccess
-   */
-  _generateToken(userId, role, systemAccess = {}, routeAccess = []) {
-    return jwt.sign(
-      { 
-        id: userId, 
-        role: role,
-        systemAccess: systemAccess,
-        routeAccess: routeAccess // NEW
-      },
-      process.env.JWT_SECRET || 'your-secret-key-change-this',
-      { expiresIn: process.env.JWT_EXPIRE || '7d' }
-    );
-  }
+// ✅ NEW VERSION
+_generateToken(user) {
+  const systemAccess = user.systemAccess || {
+    laserCuttingManagement: false
+  };
+
+  const routeAccess = Array.isArray(user.routeAccess) ? user.routeAccess : [];
+
+  const payload = {
+    id: user.id,
+    role: user.role,
+    systemAccess: systemAccess,
+    routeAccess: routeAccess
+  };
+
+  console.log('🔐 Generating JWT with:', payload);
+
+  return jwt.sign(
+    payload,
+    process.env.JWT_SECRET || 'your-secret-key-change-this',
+    { expiresIn: process.env.JWT_EXPIRE || '7d' }
+  );
+}
 
   /**
    * Generate password reset token
@@ -93,23 +101,29 @@ class AuthService {
   }
 
   /**
-   * Login user with username and password
+   * ✅ FIXED: Login user with username and password
    */
   async login(username, password) {
     try {
       const users = this._readUsers();
 
+      console.log('🔍 Login attempt for username:', username);
+
       // Find user by username (case-insensitive)
       const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
 
       if (!user) {
+        console.log('❌ User not found:', username);
         const error = new Error('Invalid username or password');
         error.statusCode = 401;
         throw error;
       }
 
+      console.log('✅ User found:', user.username);
+
       // Check if user is active
       if (!user.active) {
+        console.log('❌ User account is deactivated:', user.username);
         const error = new Error('Account is deactivated. Please contact administrator');
         error.statusCode = 403;
         throw error;
@@ -117,27 +131,41 @@ class AuthService {
 
       // Verify password (plain text comparison - you should hash in production)
       if (user.password !== password) {
+        console.log('❌ Invalid password for user:', user.username);
         const error = new Error('Invalid username or password');
         error.statusCode = 401;
         throw error;
       }
 
+      console.log('✅ Password verified for user:', user.username);
+
       // Initialize systemAccess if it doesn't exist
-      const systemAccess = user.systemAccess || {
-        laserCuttingManagement: false
-      };
+      if (!user.systemAccess) {
+        user.systemAccess = {
+          laserCuttingManagement: false
+        };
+        console.log('⚠️ systemAccess was missing, initialized with defaults');
+      }
 
-      // Initialize routeAccess if it doesn't exist (NEW)
-      const routeAccess = user.routeAccess || [];
+      // Initialize routeAccess if it doesn't exist
+      if (!user.routeAccess) {
+        user.routeAccess = [];
+        console.log('⚠️ routeAccess was missing, initialized as empty array');
+      }
 
-      // Generate token with systemAccess and routeAccess
-      const token = this._generateToken(user.id, user.role, systemAccess, routeAccess);
+      console.log('📊 User permissions:', {
+        systemAccess: user.systemAccess,
+        routeAccess: user.routeAccess
+      });
 
+      // ✅ Generate token with complete user object
+      const token = this._generateToken(user);
       // Update last login
       user.lastLogin = new Date().toISOString();
       this._writeUsers(users);
 
-      logger.info(`User logged in: ${user.username}`);
+      logger.info(`User logged in: ${user.username} (${user.role})`);
+      console.log('✅ Login successful for user:', user.username);
 
       // Return user data without password
       const { password: _, ...userWithoutPassword } = user;
@@ -148,6 +176,7 @@ class AuthService {
       };
     } catch (error) {
       logger.error('Login error', error);
+      console.error('❌ Login error:', error.message);
       throw error;
     }
   }
@@ -159,10 +188,13 @@ class AuthService {
     try {
       const users = this._readUsers();
 
+      console.log('🔍 Password reset request for email:', email);
+
       // Find user by email
       const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
 
       if (!user) {
+        console.log('❌ User not found with email:', email);
         const error = new Error('No user found with this email address');
         error.statusCode = 404;
         throw error;
@@ -170,6 +202,7 @@ class AuthService {
 
       // Check if user is active
       if (!user.active) {
+        console.log('❌ User account is deactivated:', user.email);
         const error = new Error('Account is deactivated. Please contact administrator');
         error.statusCode = 403;
         throw error;
@@ -197,12 +230,16 @@ class AuthService {
 
       this._writeResetTokens(filteredTokens);
 
+      console.log('✅ Reset token generated for user:', user.email);
+
       // Send email with reset token
       try {
         await emailService.sendPasswordResetEmail(user.email, resetToken, user.name);
         logger.info(`Password reset email sent to: ${user.email}`);
+        console.log('✅ Password reset email sent to:', user.email);
       } catch (emailError) {
         logger.error('Failed to send password reset email', emailError);
+        console.error('❌ Failed to send email:', emailError.message);
         // Remove the token if email fails
         this._writeResetTokens(resetTokens.filter(t => t.userId !== user.id));
         throw new Error('Failed to send password reset email. Please try again later.');
@@ -223,6 +260,8 @@ class AuthService {
    */
   async resetPassword(token, newPassword) {
     try {
+      console.log('🔍 Password reset attempt with token');
+
       const resetTokens = this._readResetTokens();
 
       // Find valid token
@@ -233,16 +272,20 @@ class AuthService {
       );
 
       if (!tokenData) {
+        console.log('❌ Invalid or expired reset token');
         const error = new Error('Invalid or expired reset token');
         error.statusCode = 400;
         throw error;
       }
+
+      console.log('✅ Valid reset token found for user:', tokenData.email);
 
       // Update user password
       const users = this._readUsers();
       const userIndex = users.findIndex(u => u.id === tokenData.userId);
 
       if (userIndex === -1) {
+        console.log('❌ User not found for token');
         const error = new Error('User not found');
         error.statusCode = 404;
         throw error;
@@ -259,6 +302,7 @@ class AuthService {
       this._writeResetTokens(resetTokens);
 
       logger.info(`Password reset successful for user: ${users[userIndex].email}`);
+      console.log('✅ Password reset successful for user:', users[userIndex].email);
 
       return { message: 'Password reset successful' };
     } catch (error) {
@@ -272,10 +316,13 @@ class AuthService {
    */
   async changePassword(userId, currentPassword, newPassword) {
     try {
+      console.log('🔍 Password change request for user ID:', userId);
+
       const users = this._readUsers();
       const userIndex = users.findIndex(u => u.id === userId);
 
       if (userIndex === -1) {
+        console.log('❌ User not found:', userId);
         const error = new Error('User not found');
         error.statusCode = 404;
         throw error;
@@ -285,10 +332,13 @@ class AuthService {
 
       // Verify current password
       if (user.password !== currentPassword) {
+        console.log('❌ Current password is incorrect for user:', user.username);
         const error = new Error('Current password is incorrect');
         error.statusCode = 401;
         throw error;
       }
+
+      console.log('✅ Current password verified for user:', user.username);
 
       // Update password
       users[userIndex].password = newPassword;
@@ -296,6 +346,7 @@ class AuthService {
       this._writeUsers(users);
 
       logger.info(`Password changed for user: ${user.email}`);
+      console.log('✅ Password changed successfully for user:', user.username);
 
       return { message: 'Password changed successfully' };
     } catch (error) {
@@ -309,14 +360,36 @@ class AuthService {
    */
   async getCurrentUser(userId) {
     try {
+      console.log('🔍 Fetching current user data for ID:', userId);
+
       const users = this._readUsers();
       const user = users.find(u => u.id === userId);
 
       if (!user) {
+        console.log('❌ User not found:', userId);
         const error = new Error('User not found');
         error.statusCode = 404;
         throw error;
       }
+
+      // Initialize systemAccess if it doesn't exist
+      if (!user.systemAccess) {
+        user.systemAccess = {
+          laserCuttingManagement: false
+        };
+      }
+
+      // Initialize routeAccess if it doesn't exist
+      if (!user.routeAccess) {
+        user.routeAccess = [];
+      }
+
+      console.log('✅ Current user data fetched:', {
+        username: user.username,
+        role: user.role,
+        systemAccess: user.systemAccess,
+        routeAccess: user.routeAccess
+      });
 
       // Return user without password
       const { password, ...userWithoutPassword } = user;
@@ -340,7 +413,10 @@ class AuthService {
         new Date(t.expiresAt) > new Date()
       );
 
-      return !!tokenData;
+      const isValid = !!tokenData;
+      console.log(`🔍 Reset token verification: ${isValid ? 'Valid' : 'Invalid'}`);
+
+      return isValid;
     } catch (error) {
       logger.error('Verify reset token error', error);
       return false;
@@ -355,14 +431,82 @@ class AuthService {
       const resetTokens = this._readResetTokens();
       const now = new Date();
 
+      const beforeCount = resetTokens.length;
       const validTokens = resetTokens.filter(t => 
         !t.used && new Date(t.expiresAt) > now
       );
+      const afterCount = validTokens.length;
 
       this._writeResetTokens(validTokens);
-      logger.info(`Cleaned up expired reset tokens`);
+      
+      const cleanedCount = beforeCount - afterCount;
+      if (cleanedCount > 0) {
+        logger.info(`Cleaned up ${cleanedCount} expired reset tokens`);
+        console.log(`🧹 Cleaned up ${cleanedCount} expired reset tokens`);
+      }
     } catch (error) {
       logger.error('Clean expired tokens error', error);
+    }
+  }
+
+  /**
+   * ✅ NEW: Refresh token with latest user data
+   * This is used when user permissions change and they need a new token
+   */
+  async refreshToken(userId) {
+    try {
+      console.log('🔄 Token refresh request for user ID:', userId);
+
+      const users = this._readUsers();
+      const user = users.find(u => u.id === userId);
+
+      if (!user) {
+        console.log('❌ User not found:', userId);
+        const error = new Error('User not found');
+        error.statusCode = 404;
+        throw error;
+      }
+
+      if (!user.active) {
+        console.log('❌ User account is deactivated:', user.username);
+        const error = new Error('Account is deactivated');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      // Initialize systemAccess if it doesn't exist
+      if (!user.systemAccess) {
+        user.systemAccess = {
+          laserCuttingManagement: false
+        };
+      }
+
+      // Initialize routeAccess if it doesn't exist
+      if (!user.routeAccess) {
+        user.routeAccess = [];
+      }
+
+      console.log('📊 Refreshing token with permissions:', {
+        systemAccess: user.systemAccess,
+        routeAccess: user.routeAccess
+      });
+
+      // Generate new token with latest permissions
+      const token = this._generateToken(user);
+
+      logger.info(`Token refreshed for user: ${user.username}`);
+      console.log('✅ Token refreshed successfully for user:', user.username);
+
+      // Return user data without password
+      const { password: _, ...userWithoutPassword } = user;
+
+      return {
+        user: userWithoutPassword,
+        token
+      };
+    } catch (error) {
+      logger.error('Refresh token error', error);
+      throw error;
     }
   }
 }
