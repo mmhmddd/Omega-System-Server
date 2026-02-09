@@ -1,42 +1,29 @@
-// src/services/user.service.js (FIXED with matching route keys)
+// src/services/user.service.js (COMPLETE FIX - All Issues Resolved)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const atomicWrite = require('../utils/atomic-write.util');
 const { generateId } = require('../utils/id-generator.util');
-const emailService = require('../utils/email.util');
 
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
-// ✅ FIXED: Route keys now match app.routes.ts exactly (camelCase, not kebab-case)
+// ✅ Complete list of allowed routes for employees (11 routes)
 const AVAILABLE_ROUTES = [
-  // إدارة النظام (Management)
+  // Management
   { 
-    key: 'dashboard', 
-    label: 'لوحة التحكم', 
-    path: '/dashboard',
-    category: 'management'
-  },
-  { 
-    key: 'users', 
-    label: 'إدارة المستخدمين', 
-    path: '/users',
-    category: 'management'
-  },
-  { 
-    key: 'itemsControl', // ✅ Changed from 'items-control'
+    key: 'itemsControl',
     label: 'إدارة الأصناف', 
     path: '/items-control',
     category: 'management'
   },
   { 
-    key: 'filesControl', // ✅ Changed from 'files-control'
+    key: 'filesControl',
     label: 'إدارة الملفات', 
     path: '/files-control',
     category: 'management'
   },
 
-  // المشتريات والموردين (Procurement)
+  // Procurement
   { 
     key: 'suppliers', 
     label: 'إدارة الموردين', 
@@ -50,7 +37,7 @@ const AVAILABLE_ROUTES = [
     category: 'procurement'
   },
   { 
-    key: 'priceQuotes', // ✅ Changed from 'price-quotes'
+    key: 'priceQuotes',
     label: 'عروض الأسعار', 
     path: '/price-quotes',
     category: 'procurement'
@@ -62,9 +49,9 @@ const AVAILABLE_ROUTES = [
     category: 'procurement'
   },
 
-  // المخزون والمواد (Inventory)
+  // Inventory
   { 
-    key: 'materialRequests', // ✅ Changed from 'material-requests'
+    key: 'materialRequests',
     label: 'طلبات المواد', 
     path: '/material-requests',
     category: 'inventory'
@@ -75,55 +62,67 @@ const AVAILABLE_ROUTES = [
     path: '/receipts',
     category: 'inventory'
   },
-  { 
-    key: 'emptyReceipt', // ✅ Added missing route
-    label: 'إشعار استلام فارغ', 
-    path: '/empty-receipt',
-    category: 'inventory'
-  },
 
-  // العمليات التشغيلية (Operations)
+  // Operations
   { 
-    key: 'proformaInvoice', // ✅ Changed from 'Proforma-invoice'
+    key: 'proformaInvoice',
     label: 'فاتورة مُقدمة', 
     path: '/Proforma-invoice',
     category: 'operations'
   },
   { 
-    key: 'costingSheet', // ✅ Added missing route
+    key: 'costingSheet',
     label: 'كشف التكاليف', 
     path: '/costing-sheet',
     category: 'operations'
   },
   { 
-    key: 'cutting', 
-    label: 'إدارة أعمال القص', 
-    path: '/cutting',
-    category: 'operations'
-  },
-  { 
-    key: 'secretariatUserManagement', // ✅ Changed from 'secretariat-user'
+    key: 'secretariatUserManagement',
     label: 'نماذج الموظف', 
     path: '/secretariat-user',
     category: 'operations'
-  },
-  { 
-    key: 'secretariat', 
-    label: 'إدارة السكرتارية', 
-    path: '/secretariat',
-    category: 'operations'
-  },
-
-  // التقارير والتحليلات (Reports)
-  { 
-    key: 'analysis', 
-    label: 'التحليلات والإحصائيات', 
-    path: '/analysis',
-    category: 'reports'
   }
 ];
 
+const VALID_ROUTE_KEYS = AVAILABLE_ROUTES.map(r => r.key);
+
+console.log('✅ Valid employee route keys:', VALID_ROUTE_KEYS);
+console.log('📋 Total allowed routes for employees:', VALID_ROUTE_KEYS.length);
+
 class UserService {
+  /**
+   * ✅ CRITICAL: Initialize missing fields for a user
+   */
+  _initializeUserFields(user) {
+    // Initialize systemAccess
+    if (!user.systemAccess || typeof user.systemAccess !== 'object') {
+      user.systemAccess = {
+        laserCuttingManagement: false
+      };
+      console.log('⚠️ Initialized missing systemAccess for user:', user.username);
+    }
+
+    // Ensure all systemAccess fields exist
+    if (user.systemAccess.laserCuttingManagement === undefined) {
+      user.systemAccess.laserCuttingManagement = false;
+    }
+
+    // Initialize routeAccess
+    if (!Array.isArray(user.routeAccess)) {
+      user.routeAccess = [];
+      console.log('⚠️ Initialized missing routeAccess for user:', user.username);
+    }
+
+    // Filter out invalid route keys
+    const validRoutes = user.routeAccess.filter(key => VALID_ROUTE_KEYS.includes(key));
+    if (validRoutes.length !== user.routeAccess.length) {
+      console.log(`⚠️ Removed ${user.routeAccess.length - validRoutes.length} invalid routes for user:`, user.username);
+      user.routeAccess = validRoutes;
+    }
+
+    return user;
+  }
+
   async initializeUsersFile() {
     try {
       const usersDir = path.dirname(USERS_FILE);
@@ -156,7 +155,6 @@ class UserService {
         ];
         await atomicWrite(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
         console.log('✅ Created users.json with default super admin');
-        console.log('📧 Email: admin@laser.com | Password: admin123');
       }
     } catch (error) {
       console.error('❌ Error initializing users file:', error);
@@ -167,7 +165,28 @@ class UserService {
   async loadUsers() {
     try {
       const data = await fs.readFile(USERS_FILE, 'utf8');
-      return JSON.parse(data);
+      const users = JSON.parse(data);
+      
+      // ✅ Initialize missing fields for all users
+      let updated = false;
+      users.forEach((user, index) => {
+        const before = JSON.stringify(user);
+        this._initializeUserFields(user);
+        const after = JSON.stringify(user);
+        
+        if (before !== after) {
+          updated = true;
+          console.log('✅ Fixed user data:', user.username);
+        }
+      });
+
+      // Save if any users were updated
+      if (updated) {
+        await this.saveUsers(users);
+        console.log('✅ Saved corrected user data');
+      }
+
+      return users;
     } catch (error) {
       if (error.code === 'ENOENT') {
         await this.initializeUsersFile();
@@ -179,6 +198,8 @@ class UserService {
   }
 
   async saveUsers(users) {
+    // ✅ Ensure all users have proper fields before saving
+    users.forEach(user => this._initializeUserFields(user));
     await atomicWrite(USERS_FILE, JSON.stringify(users, null, 2));
   }
 
@@ -228,7 +249,7 @@ class UserService {
     username = `${cleanName}.${timestamp}`;
     
     if (users.some(u => u.username === username)) {
-      throw new Error('Failed to generate unique username after multiple attempts');
+      throw new Error('Failed to generate unique username');
     }
     
     return username;
@@ -244,6 +265,22 @@ class UserService {
     return users.some(u => u.username === username && u.id !== excludeId);
   }
 
+  validateRouteKeys(routeKeys) {
+    if (!Array.isArray(routeKeys)) {
+      throw new Error('Route access must be an array');
+    }
+
+    const invalidKeys = routeKeys.filter(key => !VALID_ROUTE_KEYS.includes(key));
+    
+    if (invalidKeys.length > 0) {
+      console.error('❌ Invalid route keys:', invalidKeys);
+      console.log('✅ Valid route keys:', VALID_ROUTE_KEYS);
+      throw new Error(`Invalid route keys: ${invalidKeys.join(', ')}`);
+    }
+
+    return true;
+  }
+
   async createUser(userData) {
     const users = await this.loadUsers();
 
@@ -253,7 +290,7 @@ class UserService {
 
     const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
     if (!validRoles.includes(userData.role)) {
-      throw new Error('Invalid role specified. Valid roles: super_admin, admin, employee, secretariat');
+      throw new Error('Invalid role specified');
     }
 
     const username = await this.generateUniqueUsername(
@@ -262,27 +299,23 @@ class UserService {
       users
     );
 
-    if (users.some(u => u.username === username)) {
-      throw new Error('Username already exists - generation error occurred');
-    }
-
-    const systemAccess = userData.systemAccess || {
+    // ✅ Initialize systemAccess properly
+    const systemAccess = {
       laserCuttingManagement: false,
+      ...(userData.systemAccess || {})
     };
 
-    // Initialize routeAccess for employees
+    // ✅ Initialize routeAccess for employees only
     let routeAccess = [];
     if (userData.role === 'employee') {
       routeAccess = userData.routeAccess || [];
       
-      // ✅ Validate routeAccess with correct keys
-      const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
-      const invalidRoutes = routeAccess.filter(r => !validRouteKeys.includes(r));
-      if (invalidRoutes.length > 0) {
-        console.error('❌ Invalid route keys:', invalidRoutes);
-        console.log('✅ Valid route keys:', validRouteKeys);
-        throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
+      if (routeAccess.length > 0) {
+        this.validateRouteKeys(routeAccess);
       }
+      
+      routeAccess = [...new Set(routeAccess)];
+      console.log('✅ Creating employee with routeAccess:', routeAccess);
     }
 
     const newUser = {
@@ -302,8 +335,6 @@ class UserService {
     users.push(newUser);
     await this.saveUsers(users);
 
-    console.log('✅ User created with routeAccess:', newUser.routeAccess);
-
     const { password, ...userWithoutPassword } = newUser;
     return userWithoutPassword;
   }
@@ -313,6 +344,10 @@ class UserService {
 
     if (filters.role) {
       users = users.filter(u => u.role === filters.role);
+    }
+
+    if (filters.active !== undefined) {
+      users = users.filter(u => u.active === filters.active);
     }
 
     if (filters.search) {
@@ -351,10 +386,16 @@ class UserService {
       throw new Error('User not found');
     }
 
+    // ✅ Initialize missing fields
+    this._initializeUserFields(user);
+
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 
+  /**
+   * ✅ FIXED: Update user with proper handling of systemAccess and routeAccess
+   */
   async updateUser(id, updateData) {
     const users = await this.loadUsers();
     const userIndex = users.findIndex(u => u.id === id);
@@ -365,45 +406,63 @@ class UserService {
 
     const user = users[userIndex];
 
+    // Validate email if changed
     if (updateData.email && updateData.email !== user.email) {
       if (await this.emailExists(updateData.email, id)) {
         throw new Error('Email already exists');
       }
     }
 
+    // Validate role if provided
     if (updateData.role) {
       const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
       if (!validRoles.includes(updateData.role)) {
-        throw new Error('Invalid role specified. Valid roles: super_admin, admin, employee, secretariat');
+        throw new Error('Invalid role specified');
       }
     }
 
+    // Update basic fields
     if (updateData.name) user.name = updateData.name;
     if (updateData.email) user.email = updateData.email;
     if (updateData.password) user.password = updateData.password;
     if (updateData.role) user.role = updateData.role;
     if (updateData.active !== undefined) user.active = updateData.active;
     
+    // ✅ CRITICAL FIX: Update systemAccess properly
     if (updateData.systemAccess !== undefined) {
+      // Validate that systemAccess is an object
+      if (typeof updateData.systemAccess !== 'object' || updateData.systemAccess === null) {
+        throw new Error('systemAccess must be an object');
+      }
+
+      // Merge with existing systemAccess, don't replace
       user.systemAccess = {
         ...user.systemAccess,
         ...updateData.systemAccess
       };
+
+      console.log('✅ Updated systemAccess:', user.systemAccess);
     }
 
-    // Handle routeAccess updates for employees
+    // ✅ CRITICAL FIX: Update routeAccess properly
     if (updateData.routeAccess !== undefined) {
-      if (user.role === 'employee') {
-        // ✅ Validate routeAccess with correct keys
-        const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
-        const invalidRoutes = updateData.routeAccess.filter(r => !validRouteKeys.includes(r));
-        if (invalidRoutes.length > 0) {
-          console.error('❌ Invalid route keys:', invalidRoutes);
-          console.log('✅ Valid route keys:', validRouteKeys);
-          throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
+      const currentRole = updateData.role || user.role;
+      
+      if (currentRole === 'employee') {
+        // Validate that routeAccess is an array
+        if (!Array.isArray(updateData.routeAccess)) {
+          throw new Error('routeAccess must be an array');
         }
-        user.routeAccess = updateData.routeAccess;
+
+        // Validate route keys
+        this.validateRouteKeys(updateData.routeAccess);
+        
+        // Remove duplicates and assign
+        user.routeAccess = [...new Set(updateData.routeAccess)];
+        
+        console.log('✅ Updated employee routeAccess:', user.routeAccess);
       } else {
+        // Non-employees don't use routeAccess
         user.routeAccess = [];
       }
     }
@@ -429,7 +488,7 @@ class UserService {
     if (user.role === 'super_admin') {
       const superAdmins = users.filter(u => u.role === 'super_admin');
       if (superAdmins.length === 1) {
-        throw new Error('Cannot delete the last super admin in the system');
+        throw new Error('Cannot delete the last super admin');
       }
     }
 
@@ -437,46 +496,6 @@ class UserService {
     await this.saveUsers(users);
 
     return { message: 'User deleted successfully' };
-  }
-
-  async updateUserRole(id, role) {
-    const users = await this.loadUsers();
-    const userIndex = users.findIndex(u => u.id === id);
-
-    if (userIndex === -1) {
-      throw new Error('User not found');
-    }
-
-    const user = users[userIndex];
-
-    if (user.role === 'super_admin' && role !== 'super_admin') {
-      const superAdmins = users.filter(u => u.role === 'super_admin');
-      if (superAdmins.length === 1) {
-        throw new Error('Cannot change the role of the last super admin in the system');
-      }
-    }
-
-    const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
-    if (!validRoles.includes(role)) {
-      throw new Error('Invalid role specified. Valid roles: super_admin, admin, employee, secretariat');
-    }
-
-    user.role = role;
-    
-    // Reset routeAccess when changing role
-    if (role !== 'employee') {
-      user.routeAccess = [];
-    } else if (!user.routeAccess) {
-      user.routeAccess = [];
-    }
-    
-    user.updatedAt = new Date().toISOString();
-
-    users[userIndex] = user;
-    await this.saveUsers(users);
-
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
   }
 
   async toggleUserActive(id) {
@@ -506,118 +525,29 @@ class UserService {
     return userWithoutPassword;
   }
 
-  async checkUsernameAvailability(username) {
+  async isUsernameAvailable(username) {
     const users = await this.loadUsers();
-    return !users.some(u => u.username === username.toLowerCase());
+    return !users.some(u => u.username.toLowerCase() === username.toLowerCase());
   }
 
-  async updateUsername(id, newUsername) {
-    const users = await this.loadUsers();
-    const userIndex = users.findIndex(u => u.id === id);
-
-    if (userIndex === -1) {
-      throw new Error('User not found');
-    }
-
-    const normalizedUsername = newUsername.toLowerCase().trim();
-
-    const usernameExists = users.some(
-      u => u.username === normalizedUsername && u.id !== id
-    );
-
-    if (usernameExists) {
-      throw new Error('Username already exists');
-    }
-
-    const user = users[userIndex];
-    user.username = normalizedUsername;
-    user.updatedAt = new Date().toISOString();
-
-    users[userIndex] = user;
-    await this.saveUsers(users);
-
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
-  }
-
-  async updateSystemAccess(id, systemAccessUpdates) {
-    const users = await this.loadUsers();
-    const userIndex = users.findIndex(u => u.id === id);
-
-    if (userIndex === -1) {
-      throw new Error('User not found');
-    }
-
-    const user = users[userIndex];
-
-    if (!user.systemAccess) {
-      user.systemAccess = {};
-    }
-
-    user.systemAccess = {
-      ...user.systemAccess,
-      ...systemAccessUpdates
-    };
-
-    user.updatedAt = new Date().toISOString();
-
-    users[userIndex] = user;
-    await this.saveUsers(users);
-
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
-  }
-
-  /**
-   * ✅ FIXED: Update route access for employee users
-   */
-  async updateRouteAccess(id, routeAccessArray) {
-    const users = await this.loadUsers();
-    const userIndex = users.findIndex(u => u.id === id);
-
-    if (userIndex === -1) {
-      throw new Error('User not found');
-    }
-
-    const user = users[userIndex];
-
-    if (user.role !== 'employee') {
-      throw new Error('Route access can only be assigned to employees');
-    }
-
-    // ✅ Validate that routeAccessArray is an array
-    if (!Array.isArray(routeAccessArray)) {
-      throw new Error('Route access must be an array');
-    }
-
-    // ✅ Validate routeAccess keys with correct camelCase keys
-    const validRouteKeys = AVAILABLE_ROUTES.map(r => r.key);
-    const invalidRoutes = routeAccessArray.filter(r => !validRouteKeys.includes(r));
-    
-    if (invalidRoutes.length > 0) {
-      console.error('❌ Invalid route keys:', invalidRoutes);
-      console.log('✅ Valid route keys:', validRouteKeys);
-      throw new Error(`Invalid route access keys: ${invalidRoutes.join(', ')}`);
-    }
-
-    // ✅ Remove duplicates
-    user.routeAccess = [...new Set(routeAccessArray)];
-    user.updatedAt = new Date().toISOString();
-
-    users[userIndex] = user;
-    await this.saveUsers(users);
-
-    console.log('✅ Updated routeAccess for user:', user.username, '→', user.routeAccess);
-
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
-  }
-
-  /**
-   * Get available routes
-   */
   getAvailableRoutes() {
     return AVAILABLE_ROUTES;
+  }
+
+  async getUserStats() {
+    const users = await this.loadUsers();
+
+    return {
+      total: users.length,
+      active: users.filter(u => u.active).length,
+      inactive: users.filter(u => !u.active).length,
+      byRole: {
+        super_admin: users.filter(u => u.role === 'super_admin').length,
+        admin: users.filter(u => u.role === 'admin').length,
+        employee: users.filter(u => u.role === 'employee').length,
+        secretariat: users.filter(u => u.role === 'secretariat').length
+      }
+    };
   }
 }
 

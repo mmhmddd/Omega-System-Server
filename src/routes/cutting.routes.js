@@ -1,9 +1,9 @@
-// src/routes/cutting.routes.js
+// src/routes/cutting.routes.js (FIXED VERSION)
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const cuttingService = require('../services/cutting.service');
-const { protect, checkRouteAccess ,checkSystemAccess  } = require('../middleware/auth.middleware');
+const { protect, checkSystemAccess } = require('../middleware/auth.middleware');
 
 // Configure multer for file upload (memory storage)
 const storage = multer.memoryStorage();
@@ -24,20 +24,22 @@ const upload = multer({
   }
 });
 
-// Apply authentication to all routes
+// ✅ Apply authentication to all routes
 router.use(protect);
 
-// Check system access for laser cutting management
-// Super admins automatically have access, others need laserCuttingManagement permission
-router.use(checkSystemAccess('laserCuttingManagement'));
-router.use(checkRouteAccess('cutting'));
+/**
+ * ✅ FIXED: Check system access instead of role
+ * Anyone with laserCuttingManagement system access can use this
+ * NOTE: We removed checkRouteAccess('cutting') because cutting uses SYSTEM access, not route access
+ */
+const laserCuttingAccess = checkSystemAccess('laserCuttingManagement');
 
 /**
  * @route   POST /api/cutting
  * @desc    Create new cutting job
  * @access  Private (Super Admin or users with cutting access)
  */
-router.post('/', upload.single('file'), async (req, res, next) => {
+router.post('/', laserCuttingAccess, upload.single('file'), async (req, res, next) => {
   try {
     const {
       projectName,
@@ -96,9 +98,9 @@ router.post('/', upload.single('file'), async (req, res, next) => {
 /**
  * @route   GET /api/cutting
  * @desc    Get all cutting jobs with filters and pagination
- * @access  Private
+ * @access  Private - ALL USERS with system access can see ALL tasks
  */
-router.get('/', async (req, res, next) => {
+router.get('/', laserCuttingAccess, async (req, res, next) => {
   try {
     const {
       fileStatus,
@@ -120,6 +122,9 @@ router.get('/', async (req, res, next) => {
       limit: parseInt(limit)
     };
 
+    // ✅ ALL USERS with system access can see all cutting tasks (no filtering by user)
+    console.log(`✅ User ${req.user.id} (${req.user.role}) accessing cutting tasks`);
+
     const result = await cuttingService.getAllCuttingJobs(filters);
 
     res.status(200).json({
@@ -137,7 +142,7 @@ router.get('/', async (req, res, next) => {
  * @desc    Get cutting jobs statistics
  * @access  Private
  */
-router.get('/statistics', async (req, res, next) => {
+router.get('/statistics', laserCuttingAccess, async (req, res, next) => {
   try {
     const stats = await cuttingService.getStatistics();
 
@@ -153,9 +158,9 @@ router.get('/statistics', async (req, res, next) => {
 /**
  * @route   GET /api/cutting/download/:id
  * @desc    Download cutting job file
- * @access  Private
+ * @access  Private - ALL USERS with system access can download
  */
-router.get('/download/:id', async (req, res, next) => {
+router.get('/download/:id', laserCuttingAccess, async (req, res, next) => {
   try {
     const job = await cuttingService.getCuttingJobById(req.params.id);
 
@@ -182,9 +187,9 @@ router.get('/download/:id', async (req, res, next) => {
 /**
  * @route   GET /api/cutting/:id
  * @desc    Get specific cutting job by ID
- * @access  Private
+ * @access  Private - ALL USERS with system access can view
  */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', laserCuttingAccess, async (req, res, next) => {
   try {
     const job = await cuttingService.getCuttingJobById(req.params.id);
 
@@ -200,9 +205,9 @@ router.get('/:id', async (req, res, next) => {
 /**
  * @route   PUT /api/cutting/:id
  * @desc    Update cutting job
- * @access  Private
+ * @access  Private - ALL USERS with system access can update
  */
-router.put('/:id', upload.single('file'), async (req, res, next) => {
+router.put('/:id', laserCuttingAccess, upload.single('file'), async (req, res, next) => {
   try {
     const {
       projectName,
@@ -289,7 +294,7 @@ router.put('/:id', upload.single('file'), async (req, res, next) => {
  * Super Admin: Can delete any cutting job
  * Admin/Employee: Can delete only their own cutting jobs
  */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', laserCuttingAccess, async (req, res, next) => {
   try {
     // First, get the cutting job to check ownership
     const job = await cuttingService.getCuttingJobById(req.params.id);
@@ -331,9 +336,9 @@ router.delete('/:id', async (req, res, next) => {
 /**
  * @route   PATCH /api/cutting/:id/status
  * @desc    Update only the file status of a cutting job
- * @access  Private
+ * @access  Private - ALL USERS with system access can update status
  */
-router.patch('/:id/status', async (req, res, next) => {
+router.patch('/:id/status', laserCuttingAccess, async (req, res, next) => {
   try {
     const { fileStatus } = req.body;
 
@@ -373,9 +378,9 @@ router.patch('/:id/status', async (req, res, next) => {
 /**
  * @route   PATCH /api/cutting/:id/track
  * @desc    Update cutting progress (currentlyCut) for a job
- * @access  Private
+ * @access  Private - ALL USERS with system access can track
  */
-router.patch('/:id/track', async (req, res, next) => {
+router.patch('/:id/track', laserCuttingAccess, async (req, res, next) => {
   try {
     const { currentlyCut, fileStatus, notes } = req.body;
 

@@ -26,6 +26,12 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-this');
 
+      // 🔍 DEBUG: Log what's in the token
+      console.log('🎫 Token decoded - User info:');
+      console.log('   - ID:', decoded.id);
+      console.log('   - Role:', decoded.role);
+      console.log('   - routeAccess from token:', decoded.routeAccess);
+
       // Attach user info to request (including systemAccess and routeAccess)
       req.user = {
         id: decoded.id,
@@ -85,6 +91,8 @@ const checkRouteAccess = (routeKey) => {
     console.log('Route Key:', routeKey);
     console.log('User Role:', user.role);
     console.log('User Route Access:', user.routeAccess);
+    console.log('Is Array:', Array.isArray(user.routeAccess));
+    console.log('Includes route:', user.routeAccess?.includes(routeKey));
     
     // Super admins and admins have access to all routes
     if (user.role === 'super_admin' || user.role === 'admin') {
@@ -111,6 +119,8 @@ const checkRouteAccess = (routeKey) => {
     if (user.role === 'employee') {
       if (!user.routeAccess || !Array.isArray(user.routeAccess)) {
         console.log('❌ Access denied: No routeAccess array found for employee');
+        console.log('   - routeAccess value:', user.routeAccess);
+        console.log('   - Type:', typeof user.routeAccess);
         return res.status(403).json({
           success: false,
           message: 'You do not have access to this route. Please contact your administrator.'
@@ -119,7 +129,13 @@ const checkRouteAccess = (routeKey) => {
 
       if (!user.routeAccess.includes(routeKey)) {
         console.log('❌ Access denied: Route key not in employee routeAccess array');
-        console.log('Available routes:', user.routeAccess);
+        console.log('   - Looking for:', routeKey);
+        console.log('   - Available routes:', user.routeAccess);
+        console.log('   - Array length:', user.routeAccess.length);
+        console.log('   - Each route:');
+        user.routeAccess.forEach((route, index) => {
+          console.log(`     [${index}]: "${route}" (${typeof route})`);
+        });
         return res.status(403).json({
           success: false,
           message: `You do not have access to ${routeKey}. Please contact your administrator.`
@@ -131,7 +147,8 @@ const checkRouteAccess = (routeKey) => {
     }
 
     // Default deny
-    console.log('❌ Access denied: Default deny');
+    console.log('❌ Access denied: Default deny (unknown role or condition)');
+    console.log('   - User role:', user.role);
     return res.status(403).json({
       success: false,
       message: 'You do not have permission to access this resource.'

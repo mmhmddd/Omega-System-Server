@@ -1,5 +1,5 @@
 // ============================================================
-// COSTING SHEET ROUTES - WITH TERMS AND CONDITIONS PDF SUPPORT
+// COSTING SHEET ROUTES - FIXED WITH PROPER ACCESS CONTROL
 // src/routes/costing-sheet.routes.js
 // ============================================================
 const express = require('express');
@@ -25,14 +25,20 @@ const upload = multer({
   }
 });
 
+// ✅ Apply authentication to all routes
 router.use(protect);
-router.use(checkRouteAccess('costingSheetManagement'));
+
+/**
+ * ✅ FIXED: Check route access instead of hardcoded role
+ * Employees with 'costingSheet' in routeAccess can access
+ */
+const costingSheetAccess = checkRouteAccess('costingSheet');
 
 /**
  * ✅ CREATE COSTING SHEET - WITH includeStaticFile SUPPORT
  * POST /api/costing-sheets
  */
-router.post('/', async (req, res, next) => {
+router.post('/', costingSheetAccess, async (req, res, next) => {
   try {
     // Parse items - handle both JSON string and object
     let items = [];
@@ -81,9 +87,9 @@ router.post('/', async (req, res, next) => {
 });
 
 /**
- * GET ALL COSTING SHEETS
+ * ✅ GET ALL COSTING SHEETS - WITH EMPLOYEE FILTERING
  */
-router.get('/', async (req, res, next) => {
+router.get('/', costingSheetAccess, async (req, res, next) => {
   try {
     const { 
       csNumber, 
@@ -96,20 +102,30 @@ router.get('/', async (req, res, next) => {
       limit 
     } = req.query;
 
+    const filters = {
+      csNumber,
+      startDate,
+      endDate,
+      client,
+      project,
+      search,
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 10
+    };
+
+    // ✅ CRITICAL: Employees only see their own costing sheets
+    if (req.user.role === 'employee') {
+      filters.createdBy = req.user.id;
+      console.log(`✅ Employee ${req.user.id} - filtering costing sheets by createdBy`);
+    }
+
     const result = await costingSheetService.getAllCostingSheets(
-      {
-        csNumber,
-        startDate,
-        endDate,
-        client,
-        project,
-        search,
-        page: parseInt(page) || 1,
-        limit: parseInt(limit) || 10
-      },
+      filters,
       req.user.id,
       req.user.role
     );
+
+    console.log(`✅ Retrieved ${result.costingSheets.length} costing sheets for user role: ${req.user.role}`);
 
     res.status(200).json({
       success: true,
@@ -125,7 +141,7 @@ router.get('/', async (req, res, next) => {
 /**
  * GET COSTING SHEET STATISTICS
  */
-router.get('/stats', async (req, res, next) => {
+router.get('/stats', costingSheetAccess, async (req, res, next) => {
   try {
     const stats = await costingSheetService.getCostingSheetStats(req.user.id, req.user.role);
     res.status(200).json({
@@ -154,15 +170,23 @@ router.post('/reset-counter', restrictTo('super_admin'), async (req, res, next) 
 });
 
 /**
- * GET SPECIFIC COSTING SHEET (By ID)
+ * ✅ GET SPECIFIC COSTING SHEET (By ID) - WITH PERMISSION CHECK
  */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', costingSheetAccess, async (req, res, next) => {
   try {
     const costingSheet = await costingSheetService.getCostingSheetById(
       req.params.id, 
       req.user.id, 
       req.user.role
     );
+
+    // ✅ Employees can only view their own costing sheets
+    if (req.user.role === 'employee' && costingSheet.createdBy !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only view your own costing sheets'
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -176,8 +200,23 @@ router.get('/:id', async (req, res, next) => {
 /**
  * ✅ UPDATE COSTING SHEET - WITH includeStaticFile SUPPORT
  */
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', costingSheetAccess, async (req, res, next) => {
   try {
+    // Check if costing sheet exists and user has permission
+    const existingSheet = await costingSheetService.getCostingSheetById(
+      req.params.id,
+      req.user.id,
+      req.user.role
+    );
+
+    // ✅ Employees can only update their own costing sheets
+    if (req.user.role === 'employee' && existingSheet.createdBy !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only update your own costing sheets'
+      });
+    }
+
     // ✅ Parse items - handle both JSON string and object
     let items = undefined;
     if (req.body.items) {
@@ -237,7 +276,7 @@ router.put('/:id', async (req, res, next) => {
  * Super Admin: Can delete any costing sheet
  * Admin/Employee: Can delete only their own costing sheets
  */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', costingSheetAccess, async (req, res, next) => {
   try {
     // First, get the costing sheet to check ownership
     const costingSheet = await costingSheetService.getCostingSheetById(
@@ -260,7 +299,7 @@ router.delete('/:id', async (req, res, next) => {
       if (costingSheet.createdBy !== req.user.id) {
         return res.status(403).json({
           success: false,
-          message: 'You do not have permission to delete this costing sheet'
+          message: 'You can only delete your own costing sheets'
         });
       }
       await costingSheetService.deleteCostingSheet(req.params.id);
@@ -286,8 +325,22 @@ router.delete('/:id', async (req, res, next) => {
  * 
  * The includeStaticFile logic is handled in the service layer
  */
-router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
+router.post('/:id/generate-pdf', costingSheetAccess, upload.single('attachment'), async (req, res, next) => {
   try {
+    const costingSheet = await costingSheetService.getCostingSheetById(
+      req.params.id,
+      req.user.id,
+      req.user.role
+    );
+
+    // ✅ Employees can only generate PDFs for their own costing sheets
+    if (req.user.role === 'employee' && costingSheet.createdBy !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only generate PDFs for your own costing sheets'
+      });
+    }
+
     const attachmentPdf = req.file ? req.file.buffer : null;
 
     const result = await costingSheetService.generateCostingSheetPDF(
@@ -334,13 +387,21 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
  * GET /api/costing-sheets/:id/download-pdf
  * ✅ UPDATED: Custom filename pattern CS0001_Client_DD-MM-YYYY.pdf
  */
-router.get('/:id/download-pdf', async (req, res, next) => {
+router.get('/:id/download-pdf', costingSheetAccess, async (req, res, next) => {
   try {
     const costingSheet = await costingSheetService.getCostingSheetById(
       req.params.id, 
       req.user.id, 
       req.user.role
     );
+
+    // ✅ Employees can only download their own costing sheets
+    if (req.user.role === 'employee' && costingSheet.createdBy !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only download your own costing sheets'
+      });
+    }
 
     if (!costingSheet.pdfFilename) {
       return res.status(404).json({
@@ -393,7 +454,7 @@ router.get('/:id/download-pdf', async (req, res, next) => {
  * ✅ SEND COSTING SHEET VIA EMAIL
  * POST /api/costing-sheets/:id/send-email
  */
-router.post('/:id/send-email', async (req, res, next) => {
+router.post('/:id/send-email', costingSheetAccess, async (req, res, next) => {
   try {
     const { email } = req.body;
 
@@ -413,6 +474,20 @@ router.post('/:id/send-email', async (req, res, next) => {
       });
     }
 
+    const costingSheet = await costingSheetService.getCostingSheetById(
+      req.params.id,
+      req.user.id,
+      req.user.role
+    );
+
+    // ✅ Employees can only email their own costing sheets
+    if (req.user.role === 'employee' && costingSheet.createdBy !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only email your own costing sheets'
+      });
+    }
+
     const result = await costingSheetService.sendCostingSheetByEmail(
       req.params.id,
       req.user.id,
@@ -428,4 +503,5 @@ router.post('/:id/send-email', async (req, res, next) => {
     next(error);
   }
 });
+
 module.exports = router;

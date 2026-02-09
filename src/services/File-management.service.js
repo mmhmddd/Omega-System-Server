@@ -18,7 +18,6 @@ class FileManagementService {
       purchases: path.join(__dirname, '../../data/purchases/pdfs'),
       materials: path.join(__dirname, '../../data/materials-requests/pdfs'),
       filesPhysical: path.join(__dirname, '../../data/files/physical'),
-      emptyReceipts: path.join(__dirname, '../../data/empty-receipts/pdfs'),
       proformaInvoices: path.join(__dirname, '../../data/proforma-invoices/pdfs'),
       costingSheets: path.join(__dirname, '../../data/costing-sheets/pdfs')
     };
@@ -37,7 +36,6 @@ class FileManagementService {
       suppliers: path.join(__dirname, '../../data/suppliers/index.json'),
       users: path.join(__dirname, '../../data/users/users.json'),
       files: path.join(__dirname, '../../data/files/index.json'),
-      emptyReceipts: path.join(__dirname, '../../data/empty-receipts/index.json'),
       proformaInvoices: path.join(__dirname, '../../data/proforma-invoices/index.json'),
       costingSheets: path.join(__dirname, '../../data/costing-sheets/index.json')
     };
@@ -243,11 +241,6 @@ class FileManagementService {
         metadata.documentNumber = record.fileId || record.id;
         metadata.description = record.description;
         break;
-      case 'emptyReceipts':
-        metadata.documentNumber = record.receiptNumber || 'N/A';
-        metadata.recipientName = record.to || 'N/A';
-        metadata.notes = record.notes;
-        break;
       case 'proformaInvoices':
         metadata.documentNumber = record.invoiceNumber;
         metadata.projectName = record.projectName;
@@ -338,8 +331,6 @@ class FileManagementService {
                 return m.pdfFilename === filename;
               } else if (type === 'filesPhysical') {
                 return m.filePath && m.filePath.includes(filename);
-              } else if (type === 'emptyReceipts') {
-                return m.pdfFilename === filename;
               } else if (type === 'proformaInvoices') {
                 return m.pdfFilename === filename;
               } else if (type === 'costingSheets') {
@@ -600,8 +591,6 @@ class FileManagementService {
             return record.pdfFilename !== file.name;
           } else if (file.type === 'cuttingJobs') {
             return record.fileName !== file.name;
-          } else if (file.type === 'emptyReceipts') {
-            return record.pdfFilename !== file.name;
           } else if (file.type === 'proformaInvoices') {
             return record.pdfFilename !== file.name;
           } else if (file.type === 'costingSheets') {

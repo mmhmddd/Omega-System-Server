@@ -150,7 +150,6 @@ router.get('/duplicates', async (req, res, next) => {
 });
 
 /**
- * ✅ UPDATED: Get available file types and categories WITH NEW TYPES INCLUDING EMPTY RECEIPTS
  * @route   GET /api/file-management/types
  * @desc    Get available file types and categories
  * @access  Super Admin ONLY
@@ -171,8 +170,6 @@ router.get('/types', (req, res) => {
         { value: 'purchases', label: 'طلبات الشراء', icon: '🛒' },
         { value: 'materials', label: 'طلبات المواد', icon: '📦' },
         { value: 'filesPhysical', label: 'الملفات الفعلية', icon: '📁' },
-        // ✅ NEW: Added 3 new file types with emptyReceipts now having metadata support
-        { value: 'emptyReceipts', label: 'إشعارات فارغة', icon: '🧾' },
         { value: 'proformaInvoices', label: 'فواتير أولية', icon: '📋' },
         { value: 'costingSheets', label: 'كشوف تكاليف', icon: '📊' }
       ],

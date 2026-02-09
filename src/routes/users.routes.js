@@ -1,4 +1,4 @@
-// src/routes/users.routes.js - FINAL VERSION MATCHING API ENDPOINTS
+// src/routes/users.routes.js (COMPLETE FIX - All Validation Issues Resolved)
 const express = require('express');
 const router = express.Router();
 const userService = require('../services/user.service');
@@ -9,34 +9,16 @@ const { restrictTo } = require('../middleware/role.middleware');
 router.use(protect);
 
 // ============================================
-// CURRENT USER ENDPOINTS (All Authenticated Users)
+// CURRENT USER ENDPOINTS
 // ============================================
 
-/**
- * ✅ GET CURRENT USER DATA
- * @route   GET /api/users/me
- * @desc    Get current logged-in user's data (for auto-refresh)
- * @access  Private (Any authenticated user)
- */
 router.get('/me', async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const user = await userService.getUserById(req.user.id);
     
-    console.log('📥 GET /api/users/me - User:', userId);
-    
-    const user = await userService.getUserById(userId);
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-    
-    // Remove password from response
     const { password, ...userWithoutPassword } = user;
     
-    console.log('✅ Returning user data:', {
+    console.log('✅ GET /me - Returning user:', {
       id: user.id,
       role: user.role,
       systemAccess: user.systemAccess,
@@ -48,31 +30,14 @@ router.get('/me', async (req, res, next) => {
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error getting current user:', error);
+    console.error('❌ Error in GET /me:', error);
     next(error);
   }
 });
 
-/**
- * @route   GET /api/users/profile
- * @desc    Get current user's profile
- * @access  Private (Any authenticated user)
- */
 router.get('/profile', async (req, res, next) => {
   try {
-    const userId = req.user.id;
-    
-    console.log('📥 GET /api/users/profile - User:', userId);
-    
-    const user = await userService.getUserById(userId);
-    
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-    
+    const user = await userService.getUserById(req.user.id);
     const { password, ...userWithoutPassword } = user;
     
     res.status(200).json({
@@ -80,22 +45,13 @@ router.get('/profile', async (req, res, next) => {
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error getting profile:', error);
     next(error);
   }
 });
 
-/**
- * @route   PUT /api/users/profile
- * @desc    Update current user's profile (limited fields)
- * @access  Private (Any authenticated user)
- */
 router.put('/profile', async (req, res, next) => {
   try {
-    const userId = req.user.id;
     const { name, email } = req.body;
-    
-    console.log('📝 PUT /api/users/profile - Updating:', { userId, name, email });
     
     const allowedUpdates = {};
     if (name !== undefined) allowedUpdates.name = name;
@@ -104,14 +60,12 @@ router.put('/profile', async (req, res, next) => {
     if (Object.keys(allowedUpdates).length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No valid update fields provided. Allowed: name, email'
+        message: 'No valid update fields provided'
       });
     }
     
-    const user = await userService.updateUser(userId, allowedUpdates);
+    const user = await userService.updateUser(req.user.id, allowedUpdates);
     const { password, ...userWithoutPassword } = user;
-    
-    console.log('✅ Profile updated successfully');
     
     res.status(200).json({
       success: true,
@@ -119,82 +73,43 @@ router.put('/profile', async (req, res, next) => {
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error updating profile:', error);
     next(error);
   }
 });
 
-/**
- * @route   GET /api/users/available-routes
- * @desc    Get list of available routes for permission assignment
- * @access  Private (Super Admin only)
- */
 router.get('/available-routes', restrictTo('super_admin'), async (req, res, next) => {
   try {
-    console.log('📋 GET /api/users/available-routes');
-    
-    const availableRoutes = [
-      { key: 'suppliers', label: 'إدارة الموردين', path: '/suppliers' },
-      { key: 'itemsControl', label: 'إدارة الأصناف', path: '/items-control' },
-      { key: 'receipts', label: 'إشعارات الاستلام', path: '/receipts' },
-      { key: 'emptyReceipt', label: 'إشعار استلام فارغ', path: '/empty-receipt' },
-      { key: 'rfqs', label: 'طلبات التسعير', path: '/rfqs' },
-      { key: 'purchases', label: 'أوامر الشراء', path: '/purchases' },
-      { key: 'materialRequests', label: 'طلبات المواد', path: '/material-requests' },
-      { key: 'priceQuotes', label: 'عروض الأسعار', path: '/price-quotes' },
-      { key: 'proformaInvoice', label: 'الفواتير الأولية', path: '/Proforma-invoice' },
-      { key: 'costingSheet', label: 'كشف التكاليف', path: '/costing-sheet' },
-      { key: 'secretariatUserManagement', label: 'طلبات الموظفين', path: '/secretariat-user' },
-      { key: 'secretariat', label: 'قسم السكرتاريا', path: '/secretariat' },
-    ];
+    const availableRoutes = userService.getAvailableRoutes();
     
     res.status(200).json({
       success: true,
       data: availableRoutes
     });
   } catch (error) {
-    console.error('❌ Error getting available routes:', error);
     next(error);
   }
 });
 
-/**
- * @route   GET /api/users/stats/summary
- * @desc    Get user statistics
- * @access  Private (Super Admin only)
- */
 router.get('/stats/summary', restrictTo('super_admin'), async (req, res, next) => {
   try {
-    console.log('📊 GET /api/users/stats/summary');
-    
     const stats = await userService.getUserStats();
-    
-    console.log('✅ Statistics retrieved');
     
     res.status(200).json({
       success: true,
       data: stats
     });
   } catch (error) {
-    console.error('❌ Error getting statistics:', error);
     next(error);
   }
 });
 
 // ============================================
-// ADMIN ENDPOINTS (Super Admin Only)
+// ADMIN ENDPOINTS
 // ============================================
 
-/**
- * @route   GET /api/users
- * @desc    Get all users with filters and pagination
- * @access  Private (Super Admin only)
- */
 router.get('/', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { role, active, search, page = 1, limit = 10 } = req.query;
-
-    console.log('📋 GET /api/users - Filters:', { role, active, search, page, limit });
 
     const filters = {
       role,
@@ -206,32 +121,32 @@ router.get('/', restrictTo('super_admin'), async (req, res, next) => {
 
     const result = await userService.getAllUsers(filters);
 
-    console.log('✅ Retrieved users:', result.pagination.totalUsers);
-
     res.status(200).json({
       success: true,
       data: result.users,
       pagination: result.pagination
     });
   } catch (error) {
-    console.error('❌ Error getting users:', error);
     next(error);
   }
 });
 
-/**
- * @route   POST /api/users
- * @desc    Create new user
- * @access  Private (Super Admin only)
- */
 router.post('/', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const userData = req.body;
     
-    console.log('➕ POST /api/users - Creating:', { username: userData.username, role: userData.role });
+    console.log('==========================================');
+    console.log('➕ POST /api/users - Creating user');
+    console.log('Data:', {
+      name: userData.name,
+      role: userData.role,
+      systemAccess: userData.systemAccess,
+      routeAccess: userData.routeAccess
+    });
+    console.log('==========================================');
     
     // Validate required fields
-    const requiredFields = ['username', 'name', 'email', 'password', 'role'];
+    const requiredFields = ['name', 'email', 'password', 'role'];
     const missingFields = requiredFields.filter(field => !userData[field]);
     
     if (missingFields.length > 0) {
@@ -246,7 +161,7 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
     if (!validRoles.includes(userData.role)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid role. Valid roles: ${validRoles.join(', ')}`
+        message: `Invalid role. Valid: ${validRoles.join(', ')}`
       });
     }
 
@@ -267,10 +182,36 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
       });
     }
 
+    // ✅ Validate systemAccess if provided
+    if (userData.systemAccess !== undefined) {
+      if (typeof userData.systemAccess !== 'object' || userData.systemAccess === null) {
+        return res.status(400).json({
+          success: false,
+          message: 'systemAccess must be an object'
+        });
+      }
+    }
+
+    // ✅ Validate routeAccess if provided
+    if (userData.routeAccess !== undefined) {
+      if (!Array.isArray(userData.routeAccess)) {
+        return res.status(400).json({
+          success: false,
+          message: 'routeAccess must be an array'
+        });
+      }
+    }
+
     const user = await userService.createUser(userData);
     const { password, ...userWithoutPassword } = user;
 
-    console.log('✅ User created:', user.id);
+    console.log('==========================================');
+    console.log('✅ User created successfully');
+    console.log('ID:', user.id);
+    console.log('Username:', user.username);
+    console.log('System Access:', user.systemAccess);
+    console.log('Route Access:', user.routeAccess);
+    console.log('==========================================');
 
     res.status(201).json({
       success: true,
@@ -278,7 +219,9 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error creating user:', error);
+    console.error('==========================================');
+    console.error('❌ Error creating user:', error.message);
+    console.error('==========================================');
     
     if (error.message && error.message.includes('already exists')) {
       return res.status(409).json({
@@ -291,50 +234,23 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
   }
 });
 
-/**
- * @route   GET /api/users/check/username/:username
- * @desc    Check if username is available
- * @access  Private (Super Admin only)
- */
 router.get('/check/username/:username', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { username } = req.params;
-    
-    console.log('🔍 Checking username availability:', username);
-    
     const isAvailable = await userService.isUsernameAvailable(username);
     
     res.status(200).json({
       success: true,
-      data: {
-        username,
-        available: isAvailable
-      }
+      data: { username, available: isAvailable }
     });
   } catch (error) {
-    console.error('❌ Error checking username:', error);
     next(error);
   }
 });
 
-/**
- * @route   GET /api/users/:id
- * @desc    Get user by ID
- * @access  Private (Super Admin only)
- */
 router.get('/:id', restrictTo('super_admin'), async (req, res, next) => {
   try {
-    console.log('🔍 GET /api/users/:id -', req.params.id);
-    
     const user = await userService.getUserById(req.params.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
     const { password, ...userWithoutPassword } = user;
 
     res.status(200).json({
@@ -342,22 +258,14 @@ router.get('/:id', restrictTo('super_admin'), async (req, res, next) => {
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error getting user:', error);
     next(error);
   }
 });
 
-/**
- * @route   PUT /api/users/:id
- * @desc    Update user
- * @access  Private (Super Admin only)
- */
 router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const updateData = req.body;
     
-    console.log('📝 PUT /api/users/:id -', req.params.id);
-
     // Validate role if provided
     if (updateData.role) {
       const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
@@ -388,10 +296,28 @@ router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
       });
     }
 
+    // ✅ Validate systemAccess if provided
+    if (updateData.systemAccess !== undefined) {
+      if (typeof updateData.systemAccess !== 'object' || updateData.systemAccess === null) {
+        return res.status(400).json({
+          success: false,
+          message: 'systemAccess must be an object'
+        });
+      }
+    }
+
+    // ✅ Validate routeAccess if provided
+    if (updateData.routeAccess !== undefined) {
+      if (!Array.isArray(updateData.routeAccess)) {
+        return res.status(400).json({
+          success: false,
+          message: 'routeAccess must be an array'
+        });
+      }
+    }
+
     const user = await userService.updateUser(req.params.id, updateData);
     const { password, ...userWithoutPassword } = user;
-
-    console.log('✅ User updated:', user.id);
 
     res.status(200).json({
       success: true,
@@ -399,8 +325,6 @@ router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error updating user:', error);
-    
     if (error.message && error.message.includes('already exists')) {
       return res.status(409).json({
         success: false,
@@ -412,15 +336,8 @@ router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
   }
 });
 
-/**
- * @route   DELETE /api/users/:id
- * @desc    Delete user
- * @access  Private (Super Admin only)
- */
 router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
   try {
-    console.log('🗑️ DELETE /api/users/:id -', req.params.id);
-    
     if (req.params.id === req.user.id) {
       return res.status(400).json({
         success: false,
@@ -430,28 +347,18 @@ router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
 
     await userService.deleteUser(req.params.id);
 
-    console.log('✅ User deleted');
-
     res.status(200).json({
       success: true,
       message: 'User deleted successfully'
     });
   } catch (error) {
-    console.error('❌ Error deleting user:', error);
     next(error);
   }
 });
 
-/**
- * @route   PATCH /api/users/:id/role
- * @desc    Update user role
- * @access  Private (Super Admin only)
- */
 router.patch('/:id/role', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { role } = req.body;
-    
-    console.log('🔄 PATCH /api/users/:id/role -', req.params.id, role);
     
     if (!role) {
       return res.status(400).json({
@@ -471,28 +378,18 @@ router.patch('/:id/role', restrictTo('super_admin'), async (req, res, next) => {
     const user = await userService.updateUser(req.params.id, { role });
     const { password, ...userWithoutPassword } = user;
 
-    console.log('✅ Role updated');
-
     res.status(200).json({
       success: true,
-      message: 'User role updated successfully',
+      message: 'Role updated successfully',
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error updating role:', error);
     next(error);
   }
 });
 
-/**
- * @route   PATCH /api/users/:id/toggle-active
- * @desc    Toggle user active status
- * @access  Private (Super Admin only)
- */
 router.patch('/:id/toggle-active', restrictTo('super_admin'), async (req, res, next) => {
   try {
-    console.log('🔄 PATCH /api/users/:id/toggle-active -', req.params.id);
-    
     if (req.params.id === req.user.id) {
       return res.status(400).json({
         success: false,
@@ -503,75 +400,47 @@ router.patch('/:id/toggle-active', restrictTo('super_admin'), async (req, res, n
     const user = await userService.toggleUserActive(req.params.id);
     const { password, ...userWithoutPassword } = user;
 
-    console.log('✅ Active status toggled:', user.active);
-
     res.status(200).json({
       success: true,
       message: `User ${user.active ? 'activated' : 'deactivated'} successfully`,
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error toggling active status:', error);
     next(error);
   }
 });
 
 /**
- * @route   PATCH /api/users/:id/username
- * @desc    Update username
- * @access  Private (Super Admin only)
- */
-router.patch('/:id/username', restrictTo('super_admin'), async (req, res, next) => {
-  try {
-    const { username } = req.body;
-    
-    console.log('📝 PATCH /api/users/:id/username -', req.params.id, username);
-    
-    if (!username) {
-      return res.status(400).json({
-        success: false,
-        message: 'Username is required'
-      });
-    }
-
-    const user = await userService.updateUser(req.params.id, { username });
-    const { password, ...userWithoutPassword } = user;
-
-    console.log('✅ Username updated');
-
-    res.status(200).json({
-      success: true,
-      message: 'Username updated successfully',
-      data: userWithoutPassword
-    });
-  } catch (error) {
-    console.error('❌ Error updating username:', error);
-    next(error);
-  }
-});
-
-/**
- * @route   PATCH /api/users/:id/system-access
- * @desc    Update user system access
- * @access  Private (Super Admin only)
+ * ✅ FIXED: UPDATE SYSTEM ACCESS with proper validation
  */
 router.patch('/:id/system-access', restrictTo('super_admin'), async (req, res, next) => {
   try {
-    const { systemAccess } = req.body;
+    const systemAccess = req.body;
     
-    console.log('🔐 PATCH /api/users/:id/system-access -', req.params.id, systemAccess);
+    console.log('==========================================');
+    console.log('🔐 PATCH /api/users/:id/system-access');
+    console.log('User ID:', req.params.id);
+    console.log('Received:', systemAccess);
+    console.log('Type:', typeof systemAccess);
+    console.log('==========================================');
     
-    if (!systemAccess || typeof systemAccess !== 'object') {
+    // ✅ Validate that systemAccess is an object
+    if (typeof systemAccess !== 'object' || systemAccess === null || Array.isArray(systemAccess)) {
+      console.error('❌ systemAccess validation failed');
       return res.status(400).json({
         success: false,
         message: 'systemAccess must be an object'
       });
     }
 
+    // ✅ Update only systemAccess field
     const user = await userService.updateUser(req.params.id, { systemAccess });
     const { password, ...userWithoutPassword } = user;
 
+    console.log('==========================================');
     console.log('✅ System access updated');
+    console.log('New value:', userWithoutPassword.systemAccess);
+    console.log('==========================================');
 
     res.status(200).json({
       success: true,
@@ -579,33 +448,45 @@ router.patch('/:id/system-access', restrictTo('super_admin'), async (req, res, n
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error updating system access:', error);
+    console.error('==========================================');
+    console.error('❌ Error updating system access:', error.message);
+    console.error('==========================================');
     next(error);
   }
 });
 
 /**
- * @route   PATCH /api/users/:id/route-access
- * @desc    Update user route access
- * @access  Private (Super Admin only)
+ * ✅ FIXED: UPDATE ROUTE ACCESS with proper validation
  */
 router.patch('/:id/route-access', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { routeAccess } = req.body;
     
-    console.log('🔐 PATCH /api/users/:id/route-access -', req.params.id, routeAccess);
+    console.log('==========================================');
+    console.log('🔐 PATCH /api/users/:id/route-access');
+    console.log('User ID:', req.params.id);
+    console.log('Received:', routeAccess);
+    console.log('Type:', typeof routeAccess);
+    console.log('Is Array:', Array.isArray(routeAccess));
+    console.log('==========================================');
     
+    // ✅ Validate that routeAccess is an array
     if (!Array.isArray(routeAccess)) {
+      console.error('❌ routeAccess validation failed');
       return res.status(400).json({
         success: false,
         message: 'routeAccess must be an array'
       });
     }
 
+    // ✅ Update only routeAccess field
     const user = await userService.updateUser(req.params.id, { routeAccess });
     const { password, ...userWithoutPassword } = user;
 
+    console.log('==========================================');
     console.log('✅ Route access updated');
+    console.log('New value:', userWithoutPassword.routeAccess);
+    console.log('==========================================');
 
     res.status(200).json({
       success: true,
@@ -613,25 +494,21 @@ router.patch('/:id/route-access', restrictTo('super_admin'), async (req, res, ne
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error updating route access:', error);
+    console.error('==========================================');
+    console.error('❌ Error updating route access:', error.message);
+    console.error('==========================================');
     next(error);
   }
 });
 
 /**
- * ✅ COMBINED PERMISSIONS UPDATE
- * @route   PATCH /api/users/:id/permissions
- * @desc    Update both systemAccess and routeAccess
- * @access  Private (Super Admin only)
+ * ✅ UPDATE BOTH PERMISSIONS
  */
 router.patch('/:id/permissions', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { systemAccess, routeAccess } = req.body;
     
-    console.log('🔐 PATCH /api/users/:id/permissions -', req.params.id, {
-      systemAccess,
-      routeAccess
-    });
+    console.log('🔐 PATCH /api/users/:id/permissions');
 
     if (!systemAccess && !routeAccess) {
       return res.status(400).json({
@@ -643,7 +520,7 @@ router.patch('/:id/permissions', restrictTo('super_admin'), async (req, res, nex
     const updateData = {};
     
     if (systemAccess !== undefined) {
-      if (typeof systemAccess !== 'object') {
+      if (typeof systemAccess !== 'object' || systemAccess === null || Array.isArray(systemAccess)) {
         return res.status(400).json({
           success: false,
           message: 'systemAccess must be an object'
@@ -665,15 +542,12 @@ router.patch('/:id/permissions', restrictTo('super_admin'), async (req, res, nex
     const user = await userService.updateUser(req.params.id, updateData);
     const { password, ...userWithoutPassword } = user;
 
-    console.log('✅ Permissions updated');
-
     res.status(200).json({
       success: true,
-      message: 'User permissions updated successfully',
+      message: 'Permissions updated successfully',
       data: userWithoutPassword
     });
   } catch (error) {
-    console.error('❌ Error updating permissions:', error);
     next(error);
   }
 });
