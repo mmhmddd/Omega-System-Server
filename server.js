@@ -132,6 +132,7 @@ if (process.env.NODE_ENV === 'development') {
   });
 }
 
+// ========================================
 // Routes
 app.get('/', (req, res) => {
   res.json({
@@ -142,6 +143,7 @@ app.get('/', (req, res) => {
   });
 });
 
+// API routes
 app.use('/api', routes);
 
 // 404 handler
@@ -197,4 +199,5 @@ process.on('SIGINT', () => {
   process.exit(0);
 });
 
+// Export for Vercel serverless
 module.exports = app;

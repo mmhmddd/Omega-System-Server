@@ -1,5 +1,5 @@
 // ============================================================
-// COSTING SHEET SERVICE - WITH TERMS AND CONDITIONS PDF SUPPORT
+// COSTING SHEET SERVICE - WITH TEXT-BASED TERMS AND CONDITIONS
 // src/services/costing-sheet.service.js
 // ============================================================
 const fs = require('fs').promises;
@@ -11,9 +11,6 @@ const nodemailer = require('nodemailer');
 const COSTING_SHEETS_FILE = path.join(__dirname, '../../data/costing-sheets/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
-
-// ✅ Path to your static Terms and Conditions PDF file
-const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 // ✅ Email configuration
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
@@ -203,14 +200,15 @@ class CostingSheetService {
   }
 
   /**
-   * ✅ CREATE COSTING SHEET - WITH includeStaticFile (Terms & Conditions) SUPPORT
+   * ✅ CREATE COSTING SHEET - WITH TEXT-BASED TERMS & CONDITIONS
    */
   async createCostingSheet(costingSheetData, userId, userRole) {
     console.log('\n=== CREATE COSTING SHEET DEBUG ===');
     console.log('userId:', userId);
     console.log('userId type:', typeof userId);
     console.log('userRole:', userRole);
-    console.log('Include Terms & Conditions PDF:', costingSheetData.includeStaticFile); // ✅ LOG
+    console.log('Include Terms & Conditions:', costingSheetData.includeTermsAndConditions);
+    console.log('Terms & Conditions Text Length:', costingSheetData.termsAndConditionsText?.length || 0);
     
     const costingSheets = await this.loadCostingSheets();
     
@@ -244,7 +242,9 @@ class CostingSheetService {
       notes: costingSheetData.notes || '',
       items: costingSheetData.items || [],
       additionalNotes: costingSheetData.additionalNotes || '',
-      includeStaticFile: costingSheetData.includeStaticFile || false, // ✅ STORE THE FLAG
+      // ✅ NEW: Store Terms & Conditions as text instead of file flag
+      includeTermsAndConditions: costingSheetData.includeTermsAndConditions || false,
+      termsAndConditionsText: costingSheetData.termsAndConditionsText || '',
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
@@ -258,12 +258,13 @@ class CostingSheetService {
     await this.saveCostingSheets(costingSheets);
 
     console.log('Costing Sheet created with name:', newCostingSheet.createdByName);
-    console.log('Include Terms & Conditions:', newCostingSheet.includeStaticFile); // ✅ LOG
+    console.log('Include Terms & Conditions:', newCostingSheet.includeTermsAndConditions);
+    console.log('Terms & Conditions Text:', newCostingSheet.termsAndConditionsText ? 'Present' : 'Empty');
     return newCostingSheet;
   }
 
   /**
-   * ✅ UPDATE COSTING SHEET - WITH includeStaticFile (Terms & Conditions) SUPPORT
+   * ✅ UPDATE COSTING SHEET - WITH TEXT-BASED TERMS & CONDITIONS
    */
   async updateCostingSheet(id, updateData, userId, userRole) {
     const costingSheets = await this.loadCostingSheets();
@@ -290,7 +291,14 @@ class CostingSheetService {
     if (updateData.items) costingSheet.items = updateData.items;
     if (updateData.additionalNotes !== undefined) costingSheet.additionalNotes = updateData.additionalNotes;
     if (updateData.status) costingSheet.status = updateData.status;
-    if (updateData.includeStaticFile !== undefined) costingSheet.includeStaticFile = updateData.includeStaticFile; // ✅ UPDATE THE FLAG
+    
+    // ✅ UPDATE: Handle text-based Terms & Conditions
+    if (updateData.includeTermsAndConditions !== undefined) {
+      costingSheet.includeTermsAndConditions = updateData.includeTermsAndConditions;
+    }
+    if (updateData.termsAndConditionsText !== undefined) {
+      costingSheet.termsAndConditionsText = updateData.termsAndConditionsText;
+    }
 
     const detectedLanguage = updateData.forceLanguage || this.detectCostingSheetLanguage(costingSheet);
     costingSheet.language = detectedLanguage;
@@ -309,13 +317,8 @@ class CostingSheetService {
   }
 
   /**
-   * ✅ GENERATE COSTING SHEET PDF WITH TERMS & CONDITIONS SUPPORT
-   * ✅ UPDATED: Custom filename pattern CS0001_Client_DD-MM-YYYY.pdf
-   * 
-   * Merge order:
-   * 1. Generated Costing Sheet PDF (always first)
-   * 2. User-uploaded attachment PDF (if provided)
-   * 3. Terms & Conditions static PDF (if includeStaticFile is true)
+   * ✅ GENERATE COSTING SHEET PDF WITH TEXT-BASED TERMS & CONDITIONS
+   * The PDF generator will receive the termsAndConditionsText and add it as a page
    */
   async generateCostingSheetPDF(id, userId, userRole, attachmentPdf = null) {
     // Get costing sheet data
@@ -325,7 +328,8 @@ class CostingSheetService {
     console.log('║       GENERATING COSTING SHEET PDF                       ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
     console.log('📄 CS Number:', costingSheet.csNumber);
-    console.log('📎 Include Terms & Conditions:', costingSheet.includeStaticFile);
+    console.log('📎 Include Terms & Conditions:', costingSheet.includeTermsAndConditions);
+    console.log('📎 Terms Text Length:', costingSheet.termsAndConditionsText?.length || 0);
     console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
     console.log('════════════════════════════════════════════════════════════');
 
@@ -342,14 +346,12 @@ class CostingSheetService {
       }
     }
 
-    // ✅ Create filename pattern: CS0001_Client_DD-MM-YYYY.pdf
+    // Create filename pattern: CS0001_Client_DD-MM-YYYY.pdf
     const sanitizeFilename = (str) => {
       if (!str) return 'Unknown';
-      // Remove special characters, keep alphanumeric, Arabic characters, and spaces
       return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
     };
     
-    // ✅ Format date as DD-MM-YYYY
     const formatDate = (dateStr) => {
       if (!dateStr) {
         const today = new Date().toISOString().split('T')[0];
@@ -367,13 +369,17 @@ class CostingSheetService {
 
     console.log('📝 Custom filename:', customFilename);
 
-    // Generate the costing sheet PDF with custom filename
-    const pdfResult = await costingSheetPdfGenerator.generateCostingSheetPDF(costingSheet, customFilename);
+    // ✅ Pass termsAndConditionsText to PDF generator
+    const pdfResult = await costingSheetPdfGenerator.generateCostingSheetPDF(
+      costingSheet, 
+      customFilename,
+      costingSheet.termsAndConditionsText // Pass the text
+    );
 
-    // ✅ Prepare list of PDFs to merge (in order)
+    // Prepare list of PDFs to merge (user attachment only)
     const pdfsToMerge = [];
     
-    // 1. Add user-uploaded attachment if provided
+    // Add user-uploaded attachment if provided
     if (attachmentPdf) {
       const isValid = await costingSheetPdfGenerator.isValidPDF(attachmentPdf);
       if (isValid) {
@@ -381,21 +387,6 @@ class CostingSheetService {
         console.log('✅ Added user attachment PDF to merge list');
       } else {
         console.warn('⚠️  Invalid user attachment PDF, skipping');
-      }
-    }
-    
-    // 2. ✅ Add Terms & Conditions static PDF if includeStaticFile is true
-    if (costingSheet.includeStaticFile === true) {
-      try {
-        if (fsSync.existsSync(STATIC_PDF_PATH)) {
-          const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
-          pdfsToMerge.push(staticPdfBytes);
-          console.log('✅ Added Terms & Conditions PDF to merge list');
-        } else {
-          console.warn('⚠️  Terms & Conditions PDF not found at:', STATIC_PDF_PATH);
-        }
-      } catch (error) {
-        console.error('❌ Error reading Terms & Conditions PDF:', error.message);
       }
     }
 
@@ -561,7 +552,6 @@ class CostingSheetService {
 
   /**
    * DELETE COSTING SHEET
-   * ✅ UPDATED: Now notifies File Management service
    */
   async deleteCostingSheet(id) {
     const costingSheets = await this.loadCostingSheets();
@@ -571,9 +561,9 @@ class CostingSheetService {
 
     const costingSheet = costingSheets[costingSheetIndex];
     
-    // ✅ Delete from File Management if PDF exists
+    // Delete from File Management if PDF exists
     if (costingSheet.pdfFilename) {
-      const fileManagementService = require('./File-management.service'); // Import here to avoid circular dependency
+      const fileManagementService = require('./File-management.service');
       try {
         await fileManagementService.deleteFileByFilename(costingSheet.pdfFilename);
       } catch (error) {
@@ -664,179 +654,176 @@ class CostingSheetService {
       message: `Counter reset to 0 and ${deletedCount} Costing Sheet(s) deleted`
     };
   }
-/**
- * ✅ Send costing sheet PDF by email
- * ✅ UPDATED: Email attachment filename with DD-MM-YYYY format
- */
-async sendCostingSheetByEmail(csId, userId, userRole, recipientEmail) {
-  try {
-    console.log('\n📧 === SEND COSTING SHEET EMAIL DEBUG ===');
-    console.log('CS ID:', csId);
-    console.log('User ID:', userId);
-    console.log('Recipient:', recipientEmail);
-    
-    if (!EMAIL_USER || !EMAIL_PASS) {
-      console.error('❌ Email credentials missing!');
-      throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
-    }
 
-    const costingSheet = await this.getCostingSheetById(csId, userId, userRole);
-    console.log('✅ Costing Sheet found:', costingSheet.csNumber);
-
-    if (!costingSheet.pdfFilename) {
-      throw new Error('PDF not generated yet. Please generate PDF first.');
-    }
-
-    const pdfPath = path.join(__dirname, '../../data/costing-sheets/pdfs', costingSheet.pdfFilename);
-
-    if (!fsSync.existsSync(pdfPath)) {
-      throw new Error('PDF file not found');
-    }
-    console.log('✅ PDF file found');
-
-    const users = await this.loadUsers();
-    const creator = users.find(u => u.id === costingSheet.createdBy);
-    
-    const senderName = creator && creator.name ? creator.name : 'Omega System';
-    const creatorEmail = creator && creator.email ? creator.email : null;
-    
-    console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
-
-    console.log('📧 Creating email transporter...');
-    
-    const transporter = nodemailer.createTransport({
-      host: EMAIL_HOST,
-      port: EMAIL_PORT,
-      secure: EMAIL_PORT === 465,
-      auth: {
-        user: EMAIL_USER,
-        pass: EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false
+  /**
+   * Send costing sheet PDF by email
+   */
+  async sendCostingSheetByEmail(csId, userId, userRole, recipientEmail) {
+    try {
+      console.log('\n📧 === SEND COSTING SHEET EMAIL DEBUG ===');
+      console.log('CS ID:', csId);
+      console.log('User ID:', userId);
+      console.log('Recipient:', recipientEmail);
+      
+      if (!EMAIL_USER || !EMAIL_PASS) {
+        console.error('❌ Email credentials missing!');
+        throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
       }
-    });
 
-    console.log('🔄 Verifying SMTP connection...');
-    await transporter.verify();
-    console.log('✅ SMTP connection verified');
+      const costingSheet = await this.getCostingSheetById(csId, userId, userRole);
+      console.log('✅ Costing Sheet found:', costingSheet.csNumber);
 
-    const subject = `Costing Sheet ${costingSheet.csNumber}`;
-    const text = `Please find attached the Costing Sheet ${costingSheet.csNumber}.\n\nClient: ${costingSheet.client || 'N/A'}\nProject: ${costingSheet.project || 'N/A'}\nDate: ${costingSheet.date}\nProfit: ${costingSheet.profitPercentage}%\n\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
-    
-    const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0;">
-          <h2 style="margin: 0; font-size: 24px;">Costing Sheet ${costingSheet.csNumber}</h2>
-        </div>
-        <div style="background: #f8fafc; padding: 20px; border-radius: 0 0 10px 10px;">
-          <p style="color: #475569; font-size: 16px; margin-bottom: 20px;">Please find attached the costing sheet document.</p>
-          <table style="border-collapse: collapse; width: 100%; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <tr style="background: #f8fafc;">
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">CS Number:</td>
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #1565C0; font-weight: 600;">${costingSheet.csNumber}</td>
-            </tr>
-            <tr style="background: #f8fafc;">
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Date:</td>
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #475569;">${costingSheet.date}</td>
-            </tr>
-            <tr style="background: #f8fafc;">
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Profit %:</td>
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #059669; font-weight: 600;">${costingSheet.profitPercentage}%</td>
-            </tr>
-            <tr style="background: #f8fafc;">
-              <td style="padding: 12px 16px; font-weight: bold; color: #334155;">Sent By:</td>
-              <td style="padding: 12px 16px; color: #475569;">${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}</td>
-            </tr>
-          </table>
-          <div style="margin-top: 20px; padding: 16px; background: #e0f2fe; border-left: 4px solid #1565C0; border-radius: 6px;">
-            <p style="margin: 0; color: #0c4a6e; font-size: 14px;">
-              <strong>Note:</strong> This is an automated email from Omega System.
-            </p>
+      if (!costingSheet.pdfFilename) {
+        throw new Error('PDF not generated yet. Please generate PDF first.');
+      }
+
+      const pdfPath = path.join(__dirname, '../../data/costing-sheets/pdfs', costingSheet.pdfFilename);
+
+      if (!fsSync.existsSync(pdfPath)) {
+        throw new Error('PDF file not found');
+      }
+      console.log('✅ PDF file found');
+
+      const users = await this.loadUsers();
+      const creator = users.find(u => u.id === costingSheet.createdBy);
+      
+      const senderName = creator && creator.name ? creator.name : 'Omega System';
+      const creatorEmail = creator && creator.email ? creator.email : null;
+      
+      console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
+
+      console.log('📧 Creating email transporter...');
+      
+      const transporter = nodemailer.createTransport({
+        host: EMAIL_HOST,
+        port: EMAIL_PORT,
+        secure: EMAIL_PORT === 465,
+        auth: {
+          user: EMAIL_USER,
+          pass: EMAIL_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+
+      console.log('🔄 Verifying SMTP connection...');
+      await transporter.verify();
+      console.log('✅ SMTP connection verified');
+
+      const subject = `Costing Sheet ${costingSheet.csNumber}`;
+      const text = `Please find attached the Costing Sheet ${costingSheet.csNumber}.\n\nClient: ${costingSheet.client || 'N/A'}\nProject: ${costingSheet.project || 'N/A'}\nDate: ${costingSheet.date}\nProfit: ${costingSheet.profitPercentage}%\n\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
+      
+      const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0;">
+            <h2 style="margin: 0; font-size: 24px;">Costing Sheet ${costingSheet.csNumber}</h2>
+          </div>
+          <div style="background: #f8fafc; padding: 20px; border-radius: 0 0 10px 10px;">
+            <p style="color: #475569; font-size: 16px; margin-bottom: 20px;">Please find attached the costing sheet document.</p>
+            <table style="border-collapse: collapse; width: 100%; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">CS Number:</td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #1565C0; font-weight: 600;">${costingSheet.csNumber}</td>
+              </tr>
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Date:</td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #475569;">${costingSheet.date}</td>
+              </tr>
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Profit %:</td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #059669; font-weight: 600;">${costingSheet.profitPercentage}%</td>
+              </tr>
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; font-weight: bold; color: #334155;">Sent By:</td>
+                <td style="padding: 12px 16px; color: #475569;">${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}</td>
+              </tr>
+            </table>
+            <div style="margin-top: 20px; padding: 16px; background: #e0f2fe; border-left: 4px solid #1565C0; border-radius: 6px;">
+              <p style="margin: 0; color: #0c4a6e; font-size: 14px;">
+                <strong>Note:</strong> This is an automated email from Omega System.
+              </p>
+            </div>
           </div>
         </div>
-      </div>
-    `;
+      `;
 
-    console.log('📧 Sending email...');
-    
-    // ✅ Use the custom filename with DD-MM-YYYY format for the email attachment
-    const sanitizeFilename = (str) => {
-      if (!str) return 'Unknown';
-      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
-    };
-    
-    // ✅ Format date as DD-MM-YYYY
-    const formatDate = (dateStr) => {
-      if (!dateStr) {
-        const today = new Date().toISOString().split('T')[0];
-        const [year, month, day] = today.split('-');
+      console.log('📧 Sending email...');
+      
+      const sanitizeFilename = (str) => {
+        if (!str) return 'Unknown';
+        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+      };
+      
+      const formatDate = (dateStr) => {
+        if (!dateStr) {
+          const today = new Date().toISOString().split('T')[0];
+          const [year, month, day] = today.split('-');
+          return `${day}-${month}-${year}`;
+        }
+        const [year, month, day] = dateStr.split('-');
         return `${day}-${month}-${year}`;
+      };
+      
+      const csNumber = costingSheet.csNumber || 'CS0000';
+      const clientName = sanitizeFilename(costingSheet.client);
+      const dateFormatted = formatDate(costingSheet.date);
+      const emailAttachmentName = `${csNumber}_${clientName}_${dateFormatted}.pdf`;
+
+      const mailOptions = {
+        from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
+        to: recipientEmail,
+        subject: subject,
+        text: text,
+        html: html,
+        attachments: [
+          {
+            filename: emailAttachmentName,
+            path: pdfPath,
+          },
+        ],
+      };
+
+      if (creatorEmail) {
+        mailOptions.replyTo = creatorEmail;
+        console.log('✅ Reply-to set:', creatorEmail);
       }
-      const [year, month, day] = dateStr.split('-');
-      return `${day}-${month}-${year}`;
-    };
-    
-    const csNumber = costingSheet.csNumber || 'CS0000';
-    const clientName = sanitizeFilename(costingSheet.client);
-    const dateFormatted = formatDate(costingSheet.date);
-    const emailAttachmentName = `${csNumber}_${clientName}_${dateFormatted}.pdf`;
 
-    const mailOptions = {
-      from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
-      to: recipientEmail,
-      subject: subject,
-      text: text,
-      html: html,
-      attachments: [
-        {
-          filename: emailAttachmentName,
-          path: pdfPath,
-        },
-      ],
-    };
+      const info = await transporter.sendMail(mailOptions);
 
-    if (creatorEmail) {
-      mailOptions.replyTo = creatorEmail;
-      console.log('✅ Reply-to set:', creatorEmail);
+      console.log('✅ Email sent successfully!');
+      console.log('  - Message ID:', info.messageId);
+      console.log('  - From:', EMAIL_USER);
+      console.log('  - To:', recipientEmail);
+      console.log('  - Sender Name:', senderName);
+      console.log('  - Attachment:', emailAttachmentName);
+      if (creatorEmail) {
+        console.log('  - Reply-To:', creatorEmail);
+      }
+      console.log('========================\n');
+
+      return {
+        message: 'Email sent successfully',
+        messageId: info.messageId,
+        sentFrom: EMAIL_USER,
+        sentBy: senderName,
+        replyTo: creatorEmail || null
+      };
+    } catch (error) {
+      console.error('❌ Email sending error:', error);
+      
+      let errorMessage = error.message;
+      if (error.code === 'EAUTH') {
+        errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';
+      } else if (error.code === 'ESOCKET') {
+        errorMessage = 'Cannot connect to email server. Please check your EMAIL_HOST and EMAIL_PORT settings.';
+      } else if (error.message.includes('Missing credentials')) {
+        errorMessage = 'Email credentials are not configured. Please set EMAIL_USER and EMAIL_APP_PASSWORD in your .env file.';
+      }
+      
+      throw new Error(`Failed to send email: ${errorMessage}`);
     }
-
-    const info = await transporter.sendMail(mailOptions);
-
-    console.log('✅ Email sent successfully!');
-    console.log('  - Message ID:', info.messageId);
-    console.log('  - From:', EMAIL_USER);
-    console.log('  - To:', recipientEmail);
-    console.log('  - Sender Name:', senderName);
-    console.log('  - Attachment:', emailAttachmentName);
-    if (creatorEmail) {
-      console.log('  - Reply-To:', creatorEmail);
-    }
-    console.log('========================\n');
-
-    return {
-      message: 'Email sent successfully',
-      messageId: info.messageId,
-      sentFrom: EMAIL_USER,
-      sentBy: senderName,
-      replyTo: creatorEmail || null
-    };
-  } catch (error) {
-    console.error('❌ Email sending error:', error);
-    
-    let errorMessage = error.message;
-    if (error.code === 'EAUTH') {
-      errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';
-    } else if (error.code === 'ESOCKET') {
-      errorMessage = 'Cannot connect to email server. Please check your EMAIL_HOST and EMAIL_PORT settings.';
-    } else if (error.message.includes('Missing credentials')) {
-      errorMessage = 'Email credentials are not configured. Please set EMAIL_USER and EMAIL_APP_PASSWORD in your .env file.';
-    }
-    
-    throw new Error(`Failed to send email: ${errorMessage}`);
   }
 }
-}
-
 
 module.exports = new CostingSheetService();

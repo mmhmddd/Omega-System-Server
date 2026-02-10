@@ -1,4 +1,5 @@
-// src/routes/price-quote.routes.js - UPDATED WITH CUSTOM DOWNLOAD FILENAME PATTERN
+// src/routes/price-quote.routes.js - UPDATED WITH TERMS & CONDITIONS TEXT FIELD
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -30,7 +31,7 @@ router.use(checkRouteAccess('priceQuotes'));
  * @route   POST /api/price-quotes
  * @desc    Create a new price quote
  * @access  Private (Admin, Employee with permission, Super Admin)
- * ✅ UPDATED: Now accepts includeStaticFile parameter
+ * ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText parameters
  */
 router.post('/', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -48,8 +49,13 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       taxRate,
       items,
       customNotes,
-      includeStaticFile // ✅ NEW FIELD
+      includeTermsAndConditions, // ✅ NEW FIELD
+      termsAndConditionsText // ✅ NEW FIELD
     } = req.body;
+
+    console.log('📝 Creating Price Quote with Terms & Conditions:');
+    console.log('  - includeTermsAndConditions:', includeTermsAndConditions);
+    console.log('  - termsAndConditionsText length:', termsAndConditionsText ? termsAndConditionsText.length : 0);
 
     // Validate required fields
     if (!clientName || !date || !clientPhone) {
@@ -104,6 +110,9 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       });
     }
 
+    // ✅ Convert includeTermsAndConditions to boolean
+    const includeTermsAndConditionsBool = includeTermsAndConditions === true || includeTermsAndConditions === 'true';
+
     const quoteData = {
       clientName,
       clientPhone,
@@ -118,8 +127,13 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes,
-      includeStaticFile: includeStaticFile === true || includeStaticFile === 'true' // ✅ NEW FIELD
+      includeTermsAndConditions: includeTermsAndConditionsBool, // ✅ NEW FIELD
+      termsAndConditionsText: includeTermsAndConditionsBool ? termsAndConditionsText : null // ✅ NEW FIELD
     };
+
+    console.log('🔍 Final quoteData:');
+    console.log('  - includeTermsAndConditions:', quoteData.includeTermsAndConditions);
+    console.log('  - termsAndConditionsText:', quoteData.termsAndConditionsText ? 'YES' : 'NO');
 
     const quote = await priceQuoteService.createQuote(
       quoteData,
@@ -298,7 +312,7 @@ router.get('/:id/pdf', async (req, res, next) => {
  * @route   PUT /api/price-quotes/:id
  * @desc    Update price quote
  * @access  Private (Owner or Super Admin)
- * ✅ UPDATED: Now accepts includeStaticFile parameter
+ * ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText parameters
  */
 router.put('/:id', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -325,8 +339,13 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       taxRate,
       items,
       customNotes,
-      includeStaticFile // ✅ NEW FIELD
+      includeTermsAndConditions, // ✅ NEW FIELD
+      termsAndConditionsText // ✅ NEW FIELD
     } = req.body;
+
+    console.log('📝 Updating Price Quote with Terms & Conditions:');
+    console.log('  - includeTermsAndConditions:', includeTermsAndConditions);
+    console.log('  - termsAndConditionsText length:', termsAndConditionsText ? termsAndConditionsText.length : 0);
 
     let parsedItems = items;
     if (items && typeof items === 'string') {
@@ -362,6 +381,12 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
 
     const includeTaxBool = includeTax === 'true' || includeTax === true;
 
+    // ✅ Convert includeTermsAndConditions to boolean if provided
+    let includeTermsAndConditionsBool;
+    if (includeTermsAndConditions !== undefined) {
+      includeTermsAndConditionsBool = includeTermsAndConditions === true || includeTermsAndConditions === 'true';
+    }
+
     const updateData = {
       clientName,
       clientPhone,
@@ -376,10 +401,13 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes,
-      includeStaticFile: includeStaticFile !== undefined 
-        ? (includeStaticFile === true || includeStaticFile === 'true')
-        : undefined // ✅ NEW FIELD
+      includeTermsAndConditions: includeTermsAndConditionsBool, // ✅ NEW FIELD
+      termsAndConditionsText: includeTermsAndConditionsBool ? termsAndConditionsText : undefined // ✅ NEW FIELD
     };
+
+    console.log('🔍 Final updateData:');
+    console.log('  - includeTermsAndConditions:', updateData.includeTermsAndConditions);
+    console.log('  - termsAndConditionsText:', updateData.termsAndConditionsText ? 'YES' : 'NO');
 
     const updatedQuote = await priceQuoteService.updateQuote(req.params.id, updateData, req.file);
 

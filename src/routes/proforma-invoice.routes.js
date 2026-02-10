@@ -1,4 +1,5 @@
-// src/routes/proforma-invoice.routes.js - FIXED WITH PROPER ACCESS CONTROL
+// src/routes/proforma-invoice.routes.js - UPDATED WITH TERMS AND CONDITIONS SUPPORT
+
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -25,17 +26,13 @@ const upload = multer({
 // ✅ All routes require authentication
 router.use(protect);
 
-/**
- * ✅ FIXED: Check route access instead of hardcoded role
- * Employees with 'proformaInvoice' in routeAccess can access
- */
 const proformaInvoiceAccess = checkRouteAccess('proformaInvoice');
 
 /**
  * @route   POST /api/proforma-invoices
  * @desc    Create a new proforma invoice
  * @access  Private (Admin, Employee with permission, Super Admin)
- * ✅ UPDATED: Now accepts includeStaticFile parameter
+ * ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText
  */
 router.post('/', proformaInvoiceAccess, upload.single('attachment'), async (req, res, next) => {
   try {
@@ -53,7 +50,8 @@ router.post('/', proformaInvoiceAccess, upload.single('attachment'), async (req,
       taxRate,
       items,
       customNotes,
-      includeStaticFile // ✅ NEW FIELD
+      includeTermsAndConditions,  // ✅ NEW FIELD
+      termsAndConditionsText      // ✅ NEW FIELD
     } = req.body;
 
     // Validate required fields
@@ -123,7 +121,8 @@ router.post('/', proformaInvoiceAccess, upload.single('attachment'), async (req,
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes,
-      includeStaticFile: includeStaticFile === true || includeStaticFile === 'true' // ✅ NEW FIELD
+      includeTermsAndConditions: includeTermsAndConditions === true || includeTermsAndConditions === 'true',  // ✅ NEW
+      termsAndConditionsText: termsAndConditionsText || null  // ✅ NEW
     };
 
     const invoice = await proformaInvoiceService.createInvoice(
@@ -146,7 +145,6 @@ router.post('/', proformaInvoiceAccess, upload.single('attachment'), async (req,
  * @route   GET /api/proforma-invoices
  * @desc    Get all proforma invoices
  * @access  Private (Super Admin sees all, Admin/Employee see only their own)
- * ✅ FIXED: Employees filtered by createdBy
  */
 router.get('/', proformaInvoiceAccess, async (req, res, next) => {
   try {
@@ -154,11 +152,9 @@ router.get('/', proformaInvoiceAccess, async (req, res, next) => {
 
     let filterCreatedBy = createdBy;
 
-    // ✅ Super admin can see all or filter by specific user
     if (req.user.role === 'super_admin') {
       filterCreatedBy = createdBy;
     } 
-    // ✅ Admin and Employee can only see their own
     else if (req.user.role === 'admin' || req.user.role === 'employee') {
       filterCreatedBy = req.user.id;
       console.log(`✅ User ${req.user.id} (${req.user.role}) - filtering proforma invoices by createdBy`);
@@ -242,14 +238,13 @@ router.get('/my-latest', proformaInvoiceAccess, async (req, res, next) => {
 
 /**
  * @route   GET /api/proforma-invoices/:id/pdf
- * @desc    Download PDF of proforma invoice - uses actual stored filename
+ * @desc    Download PDF of proforma invoice
  * @access  Private (Owner or Super Admin)
  */
 router.get('/:id/pdf', proformaInvoiceAccess, async (req, res, next) => {
   try {
     const invoice = await proformaInvoiceService.getInvoiceById(req.params.id);
 
-    // ✅ Employees can only download their own invoices
     if (req.user.role === 'employee' && invoice.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -279,7 +274,6 @@ router.get('/:id/pdf', proformaInvoiceAccess, async (req, res, next) => {
       });
     }
 
-    // ✅ Extract the actual filename from the stored pdfPath
     const path = require('path');
     const downloadFilename = path.basename(invoice.pdfPath);
 
@@ -301,13 +295,12 @@ router.get('/:id/pdf', proformaInvoiceAccess, async (req, res, next) => {
  * @route   PUT /api/proforma-invoices/:id
  * @desc    Update proforma invoice
  * @access  Private (Owner or Super Admin)
- * ✅ UPDATED: Now accepts includeStaticFile parameter
+ * ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText
  */
 router.put('/:id', proformaInvoiceAccess, upload.single('attachment'), async (req, res, next) => {
   try {
     const invoice = await proformaInvoiceService.getInvoiceById(req.params.id);
 
-    // ✅ Employees can only update their own invoices
     if (req.user.role === 'employee' && invoice.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -336,7 +329,8 @@ router.put('/:id', proformaInvoiceAccess, upload.single('attachment'), async (re
       taxRate,
       items,
       customNotes,
-      includeStaticFile // ✅ NEW FIELD
+      includeTermsAndConditions,  // ✅ NEW FIELD
+      termsAndConditionsText      // ✅ NEW FIELD
     } = req.body;
 
     let parsedItems = items;
@@ -387,9 +381,12 @@ router.put('/:id', proformaInvoiceAccess, upload.single('attachment'), async (re
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes,
-      includeStaticFile: includeStaticFile !== undefined 
-        ? (includeStaticFile === true || includeStaticFile === 'true')
-        : undefined // ✅ NEW FIELD
+      includeTermsAndConditions: includeTermsAndConditions !== undefined   // ✅ NEW
+        ? (includeTermsAndConditions === true || includeTermsAndConditions === 'true')
+        : undefined,
+      termsAndConditionsText: termsAndConditionsText !== undefined   // ✅ NEW
+        ? termsAndConditionsText
+        : undefined
     };
 
     const updatedInvoice = await proformaInvoiceService.updateInvoice(req.params.id, updateData, req.file);
@@ -455,7 +452,6 @@ router.post('/:id/send-email', proformaInvoiceAccess, async (req, res, next) => 
       });
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -464,10 +460,8 @@ router.post('/:id/send-email', proformaInvoiceAccess, async (req, res, next) => 
       });
     }
 
-    // Check permission
     const invoice = await proformaInvoiceService.getInvoiceById(req.params.id);
     
-    // ✅ Employees can only email their own invoices
     if (req.user.role === 'employee' && invoice.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,

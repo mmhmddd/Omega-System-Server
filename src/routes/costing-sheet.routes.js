@@ -1,5 +1,5 @@
 // ============================================================
-// COSTING SHEET ROUTES - FIXED WITH PROPER ACCESS CONTROL
+// COSTING SHEET ROUTES - FIXED TERMS & CONDITIONS HANDLING
 // src/routes/costing-sheet.routes.js
 // ============================================================
 const express = require('express');
@@ -35,7 +35,7 @@ router.use(protect);
 const costingSheetAccess = checkRouteAccess('costingSheet');
 
 /**
- * ✅ CREATE COSTING SHEET - WITH includeStaticFile SUPPORT
+ * ✅ CREATE COSTING SHEET - WITH TEXT-BASED TERMS & CONDITIONS
  * POST /api/costing-sheets
  */
 router.post('/', costingSheetAccess, async (req, res, next) => {
@@ -59,6 +59,10 @@ router.post('/', costingSheetAccess, async (req, res, next) => {
       }
     }
 
+    // ✅ FIXED: Properly handle boolean conversion for includeTermsAndConditions
+    const includeTermsAndConditions = req.body.includeTermsAndConditions === true || 
+                                      req.body.includeTermsAndConditions === 'true';
+
     const costingSheetData = {
       date: req.body.date,
       client: req.body.client,
@@ -67,8 +71,14 @@ router.post('/', costingSheetAccess, async (req, res, next) => {
       notes: req.body.notes,
       items: items,
       additionalNotes: req.body.additionalNotes,
-      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true' // ✅ NEW FIELD
+      // ✅ FIXED: Properly include Terms & Conditions
+      includeTermsAndConditions: includeTermsAndConditions,
+      termsAndConditionsText: req.body.termsAndConditionsText || ''
     };
+
+    console.log('📝 Creating Costing Sheet with Terms & Conditions:');
+    console.log('  - includeTermsAndConditions:', costingSheetData.includeTermsAndConditions);
+    console.log('  - termsAndConditionsText length:', costingSheetData.termsAndConditionsText.length);
 
     const costingSheet = await costingSheetService.createCostingSheet(
       costingSheetData,
@@ -113,7 +123,6 @@ router.get('/', costingSheetAccess, async (req, res, next) => {
       limit: parseInt(limit) || 10
     };
 
-    // ✅ CRITICAL: Employees only see their own costing sheets
     if (req.user.role === 'employee') {
       filters.createdBy = req.user.id;
       console.log(`✅ Employee ${req.user.id} - filtering costing sheets by createdBy`);
@@ -180,7 +189,6 @@ router.get('/:id', costingSheetAccess, async (req, res, next) => {
       req.user.role
     );
 
-    // ✅ Employees can only view their own costing sheets
     if (req.user.role === 'employee' && costingSheet.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -198,18 +206,16 @@ router.get('/:id', costingSheetAccess, async (req, res, next) => {
 });
 
 /**
- * ✅ UPDATE COSTING SHEET - WITH includeStaticFile SUPPORT
+ * ✅ UPDATE COSTING SHEET - WITH TEXT-BASED TERMS & CONDITIONS
  */
 router.put('/:id', costingSheetAccess, async (req, res, next) => {
   try {
-    // Check if costing sheet exists and user has permission
     const existingSheet = await costingSheetService.getCostingSheetById(
       req.params.id,
       req.user.id,
       req.user.role
     );
 
-    // ✅ Employees can only update their own costing sheets
     if (req.user.role === 'employee' && existingSheet.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -217,7 +223,6 @@ router.put('/:id', costingSheetAccess, async (req, res, next) => {
       });
     }
 
-    // ✅ Parse items - handle both JSON string and object
     let items = undefined;
     if (req.body.items) {
       if (typeof req.body.items === 'string') {
@@ -240,6 +245,7 @@ router.put('/:id', costingSheetAccess, async (req, res, next) => {
       }
     }
 
+    // ✅ FIXED: Properly handle Terms & Conditions in update
     const updateData = {
       date: req.body.date,
       client: req.body.client,
@@ -249,10 +255,17 @@ router.put('/:id', costingSheetAccess, async (req, res, next) => {
       items: items,
       additionalNotes: req.body.additionalNotes,
       status: req.body.status,
-      includeStaticFile: req.body.includeStaticFile !== undefined 
-        ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
-        : undefined // ✅ NEW FIELD
+      includeTermsAndConditions: req.body.includeTermsAndConditions !== undefined 
+        ? (req.body.includeTermsAndConditions === true || req.body.includeTermsAndConditions === 'true')
+        : undefined,
+      termsAndConditionsText: req.body.termsAndConditionsText !== undefined
+        ? req.body.termsAndConditionsText
+        : undefined
     };
+
+    console.log('📝 Updating Costing Sheet with Terms & Conditions:');
+    console.log('  - includeTermsAndConditions:', updateData.includeTermsAndConditions);
+    console.log('  - termsAndConditionsText length:', updateData.termsAndConditionsText?.length || 0);
 
     const costingSheet = await costingSheetService.updateCostingSheet(
       req.params.id,
@@ -272,20 +285,16 @@ router.put('/:id', costingSheetAccess, async (req, res, next) => {
 });
 
 /**
- * ✅ DELETE COSTING SHEET - UPDATED
- * Super Admin: Can delete any costing sheet
- * Admin/Employee: Can delete only their own costing sheets
+ * ✅ DELETE COSTING SHEET
  */
 router.delete('/:id', costingSheetAccess, async (req, res, next) => {
   try {
-    // First, get the costing sheet to check ownership
     const costingSheet = await costingSheetService.getCostingSheetById(
       req.params.id,
       req.user.id,
       req.user.role
     );
 
-    // Super admin can delete any costing sheet
     if (req.user.role === 'super_admin') {
       await costingSheetService.deleteCostingSheet(req.params.id);
       return res.status(200).json({
@@ -294,7 +303,6 @@ router.delete('/:id', costingSheetAccess, async (req, res, next) => {
       });
     }
 
-    // Admin and employee can only delete their own costing sheets
     if (req.user.role === 'admin' || req.user.role === 'employee') {
       if (costingSheet.createdBy !== req.user.id) {
         return res.status(403).json({
@@ -309,7 +317,6 @@ router.delete('/:id', costingSheetAccess, async (req, res, next) => {
       });
     }
 
-    // Other roles cannot delete
     return res.status(403).json({
       success: false,
       message: 'You do not have permission to delete costing sheets'
@@ -320,10 +327,8 @@ router.delete('/:id', costingSheetAccess, async (req, res, next) => {
 });
 
 /**
- * ✅ GENERATE COSTING SHEET PDF (WITH OPTIONAL ATTACHMENT AND TERMS & CONDITIONS)
+ * ✅ GENERATE COSTING SHEET PDF (WITH ATTACHMENT AND TERMS & CONDITIONS)
  * POST /api/costing-sheets/:id/generate-pdf
- * 
- * The includeStaticFile logic is handled in the service layer
  */
 router.post('/:id/generate-pdf', costingSheetAccess, upload.single('attachment'), async (req, res, next) => {
   try {
@@ -333,7 +338,6 @@ router.post('/:id/generate-pdf', costingSheetAccess, upload.single('attachment')
       req.user.role
     );
 
-    // ✅ Employees can only generate PDFs for their own costing sheets
     if (req.user.role === 'employee' && costingSheet.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -342,6 +346,13 @@ router.post('/:id/generate-pdf', costingSheetAccess, upload.single('attachment')
     }
 
     const attachmentPdf = req.file ? req.file.buffer : null;
+
+    // ✅ FIXED: Log Terms & Conditions status before PDF generation
+    console.log('📄 Generating PDF with Terms & Conditions:');
+    console.log('  - CS ID:', req.params.id);
+    console.log('  - includeTermsAndConditions:', costingSheet.includeTermsAndConditions);
+    console.log('  - termsAndConditionsText length:', costingSheet.termsAndConditionsText?.length || 0);
+    console.log('  - Has attachment:', !!attachmentPdf);
 
     const result = await costingSheetService.generateCostingSheetPDF(
       req.params.id,
@@ -384,8 +395,6 @@ router.post('/:id/generate-pdf', costingSheetAccess, upload.single('attachment')
 
 /**
  * ✅ DOWNLOAD COSTING SHEET PDF
- * GET /api/costing-sheets/:id/download-pdf
- * ✅ UPDATED: Custom filename pattern CS0001_Client_DD-MM-YYYY.pdf
  */
 router.get('/:id/download-pdf', costingSheetAccess, async (req, res, next) => {
   try {
@@ -395,7 +404,6 @@ router.get('/:id/download-pdf', costingSheetAccess, async (req, res, next) => {
       req.user.role
     );
 
-    // ✅ Employees can only download their own costing sheets
     if (req.user.role === 'employee' && costingSheet.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,
@@ -420,13 +428,11 @@ router.get('/:id/download-pdf', costingSheetAccess, async (req, res, next) => {
       });
     }
 
-    // ✅ Generate custom filename pattern: CS0001_Client_DD-MM-YYYY.pdf
     const sanitizeFilename = (str) => {
       if (!str) return 'Unknown';
       return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
     };
     
-    // ✅ Format date as DD-MM-YYYY
     const formatDate = (dateStr) => {
       if (!dateStr) {
         const today = new Date().toISOString().split('T')[0];
@@ -452,7 +458,6 @@ router.get('/:id/download-pdf', costingSheetAccess, async (req, res, next) => {
 
 /**
  * ✅ SEND COSTING SHEET VIA EMAIL
- * POST /api/costing-sheets/:id/send-email
  */
 router.post('/:id/send-email', costingSheetAccess, async (req, res, next) => {
   try {
@@ -465,7 +470,6 @@ router.post('/:id/send-email', costingSheetAccess, async (req, res, next) => {
       });
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -480,7 +484,6 @@ router.post('/:id/send-email', costingSheetAccess, async (req, res, next) => {
       req.user.role
     );
 
-    // ✅ Employees can only email their own costing sheets
     if (req.user.role === 'employee' && costingSheet.createdBy !== req.user.id) {
       return res.status(403).json({
         success: false,

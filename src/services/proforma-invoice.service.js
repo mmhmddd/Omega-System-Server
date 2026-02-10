@@ -1,4 +1,4 @@
-// src/services/proforma-invoice.service.js - CORRECTED FILENAME GENERATION WITH DATE
+// src/services/proforma-invoice.service.js - UPDATED WITH TERMS AND CONDITIONS TEXT
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -25,8 +25,6 @@ const EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '587');
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
-// ✅ Path to static terms and conditions PDF
-const STATIC_TERMS_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 class ProformaInvoiceService {
   async loadUsers() {
@@ -269,6 +267,31 @@ class ProformaInvoiceService {
     }
   }
 
+  // ✅ NEW: Get default terms and conditions based on language
+  getDefaultTermsAndConditions(language) {
+    if (language === 'arabic') {
+      return `الشروط والأحكام:
+
+١. الأسعار المذكورة صالحة للمدة المحددة في هذه الفاتورة الأولية.
+٢. يجب تأكيد الطلب كتابياً قبل بدء التنفيذ.
+٣. الدفع: ٥٠٪ مقدم و٥٠٪ عند التسليم.
+٤. مدة التنفيذ تبدأ من تاريخ استلام الدفعة المقدمة.
+٥. الأسعار لا تشمل رسوم الشحن والتوصيل ما لم ينص على خلاف ذلك.
+٦. شركة أوميغا للصناعات الهندسية غير مسؤولة عن التأخير الناتج عن ظروف خارجة عن إرادتها.
+٧. أي تعديلات على المواصفات بعد تأكيد الطلب قد تؤدي إلى تغيير في السعر ووقت التنفيذ.`;
+    } else {
+      return `Terms and Conditions:
+
+1. Prices mentioned are valid for the period specified in this proforma invoice.
+2. Order must be confirmed in writing before execution begins.
+3. Payment: 50% advance and 50% upon delivery.
+4. Execution period starts from the date of receiving the advance payment.
+5. Prices do not include shipping and delivery fees unless otherwise stated.
+6. OMEGA Engineering Industries Co. is not responsible for delays resulting from circumstances beyond its control.
+7. Any modifications to specifications after order confirmation may result in changes to price and execution time.`;
+    }
+  }
+
   buildHeaderHTML(invoiceData, isArabic) {
     const logoBase64 = fsSync.existsSync(LOGO_PATH)
       ? fsSync.readFileSync(LOGO_PATH, 'base64')
@@ -301,13 +324,11 @@ class ProformaInvoiceService {
     `;
   }
 
-  // ✅ Helper function to sanitize filenames
   sanitizeFilename(str) {
     if (!str) return 'Unknown';
     return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
   }
 
-  // ✅ Helper function to format date as DD-MM-YYYY
   formatDateForFilename(dateStr) {
     if (!dateStr) {
       const today = new Date();
@@ -316,7 +337,6 @@ class ProformaInvoiceService {
       const year = today.getFullYear();
       return `${day}-${month}-${year}`;
     }
-    // Convert YYYY-MM-DD to DD-MM-YYYY
     const parts = dateStr.split('-');
     if (parts.length === 3) {
       const [year, month, day] = parts;
@@ -325,7 +345,8 @@ class ProformaInvoiceService {
     return dateStr;
   }
 
-  async generatePDF(invoiceData, attachmentPath = null, includeStaticFile = false) {
+  // ✅ UPDATED: Generate PDF with Terms and Conditions text
+  async generatePDF(invoiceData, attachmentPath = null) {
     let browser;
     try {
       const isArabic = invoiceData.language === 'arabic';
@@ -334,7 +355,8 @@ class ProformaInvoiceService {
       console.log('🔵 Generating PDF for invoice:', invoiceData.invoiceNumber);
       console.log('🔵 Language parameter:', invoiceData.language);
       console.log('🔵 Is Arabic:', isArabic);
-      console.log('🔵 Include static file:', includeStaticFile);
+      console.log('🔵 Include T&C:', invoiceData.includeTermsAndConditions);
+      console.log('🔵 T&C Text:', invoiceData.termsAndConditionsText ? 'Present' : 'Not present');
 
       const mainContent = this.buildMainContent(invoiceData, totals, isArabic);
 
@@ -349,29 +371,6 @@ class ProformaInvoiceService {
             </div>
           `;
         });
-      }
-
-      // ✅ Add static terms PDF as images if includeStaticFile is true
-      let staticTermsHTML = '';
-      if (includeStaticFile === true) {
-        try {
-          if (fsSync.existsSync(STATIC_TERMS_PDF_PATH)) {
-            console.log('✅ Adding static terms and conditions PDF...');
-            const staticPages = await this.convertPdfPagesToImages(STATIC_TERMS_PDF_PATH);
-            staticPages.forEach((base64, index) => {
-              staticTermsHTML += `
-                <div style="page-break-before: always; height: 100vh; display: flex; align-items: center; justify-content: center; background: white; padding: 10px; box-sizing: border-box;">
-                  <img src="data:image/png;base64,${base64}" style="max-width:100%; max-height:100%; object-fit: contain;" alt="Terms page ${index + 1}" />
-                </div>
-              `;
-            });
-            console.log(`✅ Added ${staticPages.length} page(s) from static terms PDF`);
-          } else {
-            console.warn('⚠️ Static terms PDF file not found at:', STATIC_TERMS_PDF_PATH);
-          }
-        } catch (error) {
-          console.error('❌ Error reading static terms PDF:', error.message);
-        }
       }
 
       const fullHTML = `
@@ -425,7 +424,6 @@ class ProformaInvoiceService {
 <body>
   ${mainContent}
   ${attachmentHTML}
-  ${staticTermsHTML}
 </body>
 </html>
       `;
@@ -447,7 +445,6 @@ class ProformaInvoiceService {
       await page.evaluate(() => document.fonts.ready);
       await page.waitForNetworkIdle({ timeout: 15000 }).catch(() => {});
 
-      // ✅ CORRECTED: Generate filename with pattern: PI0001_ClientName_DD-MM-YYYY.pdf
       const invoiceNumber = invoiceData.invoiceNumber || 'PI0000';
       const clientName = this.sanitizeFilename(invoiceData.clientName);
       const dateFormatted = this.formatDateForFilename(invoiceData.date);
@@ -455,8 +452,6 @@ class ProformaInvoiceService {
       const pdfPath = path.join(PDF_DIR, filename);
 
       console.log('🔵 Generated filename:', filename);
-      console.log('🔵 Date from invoice:', invoiceData.date);
-      console.log('🔵 Formatted date:', dateFormatted);
       console.log('🔵 Full path:', pdfPath);
 
       await page.pdf({
@@ -503,10 +498,9 @@ class ProformaInvoiceService {
       ? `<h2 class="project-name">${escapeHtml(data.projectName)}</h2>` 
       : '';
 
-    // Build company section based on language
+    // Build company section
     let companySection = '';
     if (isArabic) {
-      // Arabic: Show Arabic on right, English on left
       companySection = `
   <section class="company">
     <div class="row">
@@ -526,7 +520,6 @@ class ProformaInvoiceService {
   </section>
       `;
     } else {
-      // English: Show English on left, Arabic on right
       companySection = `
   <section class="company">
     <div class="row">
@@ -559,6 +552,7 @@ class ProformaInvoiceService {
   ${hasItems ? this.buildItemsTable(data.items, isArabic) : ''}
   ${hasItems ? this.buildTotalsSection(totals, data, isArabic) : ''}
   ${this.buildNotesSection(data.customNotes, isArabic)}
+  ${this.buildTermsAndConditionsSection(data, isArabic)}
 </div>
     `;
   }
@@ -644,7 +638,7 @@ class ProformaInvoiceService {
 
   buildNotesSection(notes, isArabic) {
     if (!notes) return '';
-    const title = isArabic ? 'ملاحظات وشروط:' : 'Notes & Terms:';
+    const title = isArabic ? 'ملاحظات إضافية:' : 'Additional Notes:';
     return `
     <section class="notes-section">
       <h3 class="notes-title">${title}</h3>
@@ -653,13 +647,29 @@ class ProformaInvoiceService {
     `;
   }
 
+  // ✅ NEW: Build Terms and Conditions Section
+  buildTermsAndConditionsSection(data, isArabic) {
+    if (!data.includeTermsAndConditions || !data.termsAndConditionsText) {
+      return '';
+    }
+
+    const title = isArabic ? 'الشروط والأحكام:' : 'Terms & Conditions:';
+    
+    return `
+    <section class="notes-section" style="margin-top: 30px; background: #f8fafc; border: 2px solid #0b4fa2;">
+      <h3 class="notes-title" style="font-size: 17px; font-weight: 700;">${title}</h3>
+      <div style="white-space: pre-wrap; line-height: 1.8; color: #334155;">${data.termsAndConditionsText}</div>
+    </section>
+    `;
+  }
+
+  // ✅ UPDATED: Create Invoice with T&C
   async createInvoice(invoiceData, currentUser, attachmentFile = null) {
     console.log('\n=== CREATE INVOICE DEBUG ===');
     console.log('currentUser.id:', currentUser.id);
     console.log('currentUser.name:', currentUser.name);
-    console.log('invoiceData.projectName:', invoiceData.projectName);
-    console.log('invoiceData.includeStaticFile:', invoiceData.includeStaticFile);
-    console.log('invoiceData.date:', invoiceData.date);
+    console.log('invoiceData.includeTermsAndConditions:', invoiceData.includeTermsAndConditions);
+    console.log('invoiceData.termsAndConditionsText:', invoiceData.termsAndConditionsText ? 'Present' : 'Not present');
     
     const invoices = await this.loadInvoices();
     const invoiceNumber = await this.generateInvoiceNumber();
@@ -684,7 +694,8 @@ class ProformaInvoiceService {
       taxRate: invoiceData.includeTax ? (invoiceData.taxRate || 0) : 0,
       items: invoiceData.items || [],
       customNotes: invoiceData.customNotes || null,
-      includeStaticFile: invoiceData.includeStaticFile || false,
+      includeTermsAndConditions: !!invoiceData.includeTermsAndConditions,
+      termsAndConditionsText: invoiceData.termsAndConditionsText || null,
       createdBy: currentUser.id,
       createdByName: createdByName || currentUser.name || 'Unknown User', 
       createdAt: new Date().toISOString(),
@@ -702,18 +713,18 @@ class ProformaInvoiceService {
       newInvoice.attachmentPath = attachmentPath;
     }
 
-    const pdfPath = await this.generatePDF(newInvoice, attachmentPath, newInvoice.includeStaticFile);
+    const pdfPath = await this.generatePDF(newInvoice, attachmentPath);
     newInvoice.pdfPath = pdfPath;
 
     invoices.push(newInvoice);
     await this.saveInvoices(invoices);
 
-    console.log('Invoice created with name:', newInvoice.createdByName);
-    console.log('Invoice created with projectName:', newInvoice.projectName);
-    console.log('Invoice created with includeStaticFile:', newInvoice.includeStaticFile);
-    console.log('Invoice PDF path:', newInvoice.pdfPath);
+    console.log('Invoice created with T&C:', newInvoice.includeTermsAndConditions);
     return newInvoice;
   }
+
+  // ... (Continue with remaining methods - they stay mostly the same)
+  // I'll provide the key update methods in the next section
 
   async getAllInvoices(filters = {}) {
     let invoices = await this.loadInvoices();
@@ -788,6 +799,7 @@ class ProformaInvoiceService {
     };
   }
 
+  // ✅ UPDATED: Update Invoice with T&C
   async updateInvoice(id, updateData, attachmentFile = null) {
     const invoices = await this.loadInvoices();
     const invoiceIndex = invoices.findIndex(inv => inv.id === id);
@@ -811,7 +823,14 @@ class ProformaInvoiceService {
     if (updateData.taxRate !== undefined) invoice.taxRate = updateData.taxRate;
     if (updateData.items !== undefined) invoice.items = updateData.items;
     if (updateData.customNotes !== undefined) invoice.customNotes = updateData.customNotes;
-    if (updateData.includeStaticFile !== undefined) invoice.includeStaticFile = updateData.includeStaticFile;
+    
+    // ✅ NEW: Update T&C fields
+    if (updateData.includeTermsAndConditions !== undefined) {
+      invoice.includeTermsAndConditions = !!updateData.includeTermsAndConditions;
+    }
+    if (updateData.termsAndConditionsText !== undefined) {
+      invoice.termsAndConditionsText = updateData.termsAndConditionsText;
+    }
 
     const totals = this.calculateTotals(invoice.items, invoice.includeTax, invoice.taxRate);
     invoice.subtotal = totals.subtotal;
@@ -829,16 +848,14 @@ class ProformaInvoiceService {
       invoice.attachmentPath = attachmentPath;
     }
 
-    console.log('Updating invoice with projectName:', invoice.projectName);
-    console.log('Updating invoice with includeStaticFile:', invoice.includeStaticFile);
+    console.log('Updating invoice with T&C:', invoice.includeTermsAndConditions);
     
-    // ✅ Delete old PDF before generating new one
     if (invoice.pdfPath && fsSync.existsSync(invoice.pdfPath)) {
       await fs.unlink(invoice.pdfPath).catch(() => {});
       console.log('🗑️ Deleted old PDF:', invoice.pdfPath);
     }
     
-    const pdfPath = await this.generatePDF(invoice, attachmentPath, invoice.includeStaticFile);
+    const pdfPath = await this.generatePDF(invoice, attachmentPath);
     invoice.pdfPath = pdfPath;
 
     invoices[invoiceIndex] = invoice;
@@ -875,9 +892,6 @@ class ProformaInvoiceService {
     return { message: 'Invoice deleted successfully' };
   }
 
-  /**
-   * ✅ Send invoice PDF by email with custom filename
-   */
   async sendInvoiceByEmail(invoiceId, userId, userRole, recipientEmail) {
     try {
       console.log('\n📧 === SEND EMAIL DEBUG (INVOICE) ===');
@@ -967,7 +981,6 @@ class ProformaInvoiceService {
         </div>
       `;
 
-      // ✅ Use the actual filename from the stored path
       const emailAttachmentName = path.basename(invoice.pdfPath);
 
       console.log('📧 Sending email...');

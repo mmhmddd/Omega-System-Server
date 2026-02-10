@@ -1,5 +1,5 @@
 // ============================================================
-// PDF GENERATOR COSTING SHEET - WITH UPDATED ARABIC NAME AND CUSTOM FILENAME
+// PDF GENERATOR COSTING SHEET - WITH TERMS & CONDITIONS PAGE
 // src/utils/pdf-generator-costing-sheet.util.js
 // ============================================================
 const fsSync = require('fs');
@@ -51,7 +51,7 @@ class CostingSheetPDFGenerator {
   getLabels(lang) {
     const labels = {
       ar: {
-        title: 'كشف تكاليف',  // ✅ CHANGED from "ورقة تكلفة"
+        title: 'كشف تكاليف',
         companyNameAr: 'شركة أوميغا للصناعات الهندسية',
         companyNameEn: 'OMEGA ENGINEERING INDUSTRIES',
         tagline: 'تصميم – تصنيع – تركيب',
@@ -59,8 +59,8 @@ class CostingSheetPDFGenerator {
         country: 'JORDAN',
         tel: 'Tel: +96264161060 Fax: +96264162060',
         website: 'https://www.omega-jordan.com',
-        sheetInfo: 'معلومات كشف التكاليف',  // ✅ CHANGED from "معلومات ورقة التكلفة"
-        csNumber: 'رقم كشف التكاليف',  // ✅ CHANGED from "رقم ورقة التكلفة"
+        sheetInfo: 'معلومات كشف التكاليف',
+        csNumber: 'رقم كشف التكاليف',
         date: 'التاريخ',
         client: 'العميل',
         project: 'المشروع',
@@ -83,7 +83,8 @@ class CostingSheetPDFGenerator {
         reviewedBy: 'راجعه',
         approvedBy: 'اعتمده',
         docCode: 'OMEGA-CS-01',
-        issueDate: 'DATE OF ISSUE'
+        issueDate: 'DATE OF ISSUE',
+        termsAndConditions: 'الشروط والأحكام'
       },
       en: {
         title: 'Costing Sheet',
@@ -118,7 +119,8 @@ class CostingSheetPDFGenerator {
         reviewedBy: 'Reviewed By',
         approvedBy: 'Approved By',
         docCode: 'OMEGA-CS-01',
-        issueDate: 'DATE OF ISSUE'
+        issueDate: 'DATE OF ISSUE',
+        termsAndConditions: 'Terms and Conditions'
       }
     };
 
@@ -700,7 +702,260 @@ body {
   `;
 }
 
-  async generateCostingSheetPDF(costingSheet, customFilename = null) {
+  /**
+   * ✅ NEW: Generate Terms & Conditions HTML Page
+   */
+  generateTermsHTML(termsText, language = 'ar') {
+    const labels = this.getLabels(language);
+    const isRTL = language === 'ar';
+    
+    // Escape HTML special characters
+    const escapeHtml = (text) => {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    // Convert line breaks to HTML
+    const formattedText = escapeHtml(termsText).replace(/\n/g, '<br>');
+
+    return `
+<!DOCTYPE html>
+<html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
+<head>
+<meta charset="UTF-8">
+<title>${labels.termsAndConditions} - OMEGA</title>
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  background: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+@page {
+  size: A4;
+  margin: 35mm 20mm 25mm 20mm;
+}
+
+.page-content {
+  width: 100%;
+  background: #fff;
+}
+
+.company-info {
+  padding: 10px 0;
+  margin-bottom: 10px;
+  direction: ltr;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.company-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  direction: ltr;
+}
+
+.company-left, .company-right {
+  width: 48%;
+}
+
+.company-left {
+  text-align: left;
+  direction: ltr;
+}
+
+.company-right {
+  text-align: right;
+  direction: rtl;
+}
+
+.company-left p, .company-right p {
+  margin: 3px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #333;
+}
+
+.separator-line {
+  width: 100%;
+  height: 2px;
+  background-color: #1F6B3D;
+  margin: 15px 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.title {
+  text-align: center;
+  margin: 15px 0;
+  font-size: 22px;
+  color: #1F6B3D;
+  font-weight: bold;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.terms-content {
+  padding: 20px 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #333;
+  text-align: ${isRTL ? 'right' : 'left'};
+  white-space: pre-wrap;
+}
+
+@media print {
+  body {
+    background: none;
+    padding: 0;
+    margin: 0;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="page-content">
+
+  <!-- Company Info Header -->
+  <div class="company-info">
+    <div class="company-row">
+      <div class="company-left">
+        <p><strong>${labels.companyNameEn}</strong></p>
+        <p>${labels.taglineEn}</p>
+        <p>${labels.country}</p>
+        <p>${labels.tel}</p>
+        <p>${labels.website}</p>
+      </div>
+      <div class="company-right">
+        <p><strong>${labels.companyNameAr}</strong></p>
+        <p>${labels.tagline}</p>
+        <p>${labels.country}</p>
+        <p>${labels.tel}</p>
+        <p>${labels.website}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Title -->
+  <h1 class="title">${labels.termsAndConditions}</h1>
+
+  <!-- Terms Content -->
+  <div class="terms-content">${formattedText}</div>
+
+</div>
+
+</body>
+</html>
+    `;
+  }
+
+  /**
+   * ✅ NEW: Add Terms & Conditions page to existing PDF
+   */
+  async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
+    let browser;
+    
+    try {
+      // Generate Terms HTML
+      const termsHTML = this.generateTermsHTML(termsText, language);
+      
+      // Create temporary Terms PDF
+      const tempTermsPath = existingPdfPath.replace('.pdf', '_terms_temp.pdf');
+      
+      browser = await puppeteer.launch({
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu'
+        ]
+      });
+
+      const page = await browser.newPage();
+      await page.setContent(termsHTML, { 
+        waitUntil: 'networkidle0',
+        timeout: 30000 
+      });
+
+      await page.pdf({
+        path: tempTermsPath,
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '0mm',
+          right: '0mm',
+          bottom: '0mm',
+          left: '0mm'
+        },
+        preferCSSPageSize: true
+      });
+
+      await browser.close();
+      browser = null;
+
+      // Merge the Terms PDF with the existing PDF
+      console.log('📄 Merging Terms & Conditions page with main PDF...');
+      
+      const existingPdfBytes = fsSync.readFileSync(existingPdfPath);
+      const termsPdfBytes = fsSync.readFileSync(tempTermsPath);
+      
+      const existingPdf = await PDFDocument.load(existingPdfBytes);
+      const termsPdf = await PDFDocument.load(termsPdfBytes);
+      
+      // Create merged PDF
+      const mergedPdf = await PDFDocument.create();
+      
+      // Copy all pages from existing PDF
+      const existingPages = await mergedPdf.copyPages(
+        existingPdf,
+        existingPdf.getPageIndices()
+      );
+      existingPages.forEach(page => mergedPdf.addPage(page));
+      
+      // Copy all pages from Terms PDF
+      const termsPages = await mergedPdf.copyPages(
+        termsPdf,
+        termsPdf.getPageIndices()
+      );
+      termsPages.forEach(page => mergedPdf.addPage(page));
+      
+      // Save merged PDF
+      const mergedPdfBytes = await mergedPdf.save();
+      fsSync.writeFileSync(existingPdfPath, mergedPdfBytes);
+      
+      // Delete temporary Terms PDF
+      try {
+        fsSync.unlinkSync(tempTermsPath);
+        console.log('✅ Terms & Conditions page added successfully');
+      } catch (err) {
+        console.log('Could not delete temp Terms PDF:', err.message);
+      }
+      
+    } catch (error) {
+      if (browser) {
+        await browser.close();
+      }
+      console.error('❌ Error adding Terms & Conditions page:', error);
+      throw error;
+    }
+  }
+
+  async generateCostingSheetPDF(costingSheet, customFilename = null, termsAndConditionsText = null) {
     const language = this.detectLanguage(costingSheet);
 
     return new Promise(async (resolve, reject) => {
@@ -717,6 +972,8 @@ body {
           ? `${customFilename}.pdf`
           : `${costingSheet.csNumber || 'costing-sheet'}_${Date.now()}.pdf`;
         const filepath = path.join(pdfDir, filename);
+        
+        // Generate main costing sheet HTML
         const html = this.generateHTML(costingSheet);
 
         browser = await puppeteer.launch({
@@ -749,6 +1006,13 @@ body {
         });
 
         await browser.close();
+        browser = null;
+
+        // ✅ If Terms & Conditions text is provided, add it as a new page
+        if (termsAndConditionsText && termsAndConditionsText.trim()) {
+          console.log('📄 Adding Terms & Conditions page to PDF...');
+          await this.addTermsAndConditionsPage(filepath, termsAndConditionsText, language);
+        }
 
         resolve({ 
           filename, 

@@ -1,4 +1,4 @@
-// src/services/price-quote.service.js - UPDATED WITH CUSTOM FILENAME PATTERN
+// src/services/price-quote.service.js - ✅ COMPLETE FIX FOR TERMS AND CONDITIONS TEXT
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -18,9 +18,6 @@ const AR_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/AR-Uploads');
 const EN_UPLOADS_DIR = path.join(__dirname, '../../data/quotations/EN-Uploads');
 const LOGO_PATH = path.join(__dirname, '../../assets/images/OmegaLogo.png');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
-
-// ✅ Path to static terms and conditions PDF
-const STATIC_TERMS_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 // ✅ Email configuration
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
@@ -308,7 +305,8 @@ class PriceQuoteService {
     `;
   }
 
-  async generatePDF(quoteData, attachmentPath = null, includeStaticFile = false) {
+  // ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText parameters
+  async generatePDF(quoteData, attachmentPath = null, includeTermsAndConditions = false, termsAndConditionsText = null) {
     let browser;
     try {
       const isArabic = quoteData.language === 'arabic';
@@ -316,12 +314,16 @@ class PriceQuoteService {
 
       const mainContent = this.buildMainContent(quoteData, totals, isArabic);
 
-      console.log('🔵 Generating PDF for quote:', quoteData.quoteNumber);
-      console.log('🔵 Include static file:', includeStaticFile);
+      console.log('🔵 ===== PDF GENERATION DEBUG =====');
+      console.log('🔵 Quote Number:', quoteData.quoteNumber);
+      console.log('🔵 Include Terms:', includeTermsAndConditions);
+      console.log('🔵 Terms Text Length:', termsAndConditionsText ? termsAndConditionsText.length : 0);
+      console.log('🔵 ===================================');
 
       // ✅ Build attachment HTML (user-uploaded PDF)
       let attachmentHTML = '';
       if (attachmentPath && fsSync.existsSync(attachmentPath)) {
+        console.log('📎 Adding user attachment PDF...');
         const attachmentPages = await this.convertPdfPagesToImages(attachmentPath);
         attachmentPages.forEach((base64, index) => {
           attachmentHTML += `
@@ -330,29 +332,46 @@ class PriceQuoteService {
             </div>
           `;
         });
+        console.log(`✅ Added ${attachmentPages.length} attachment page(s)`);
       }
 
-      // ✅ Add static terms PDF as images if includeStaticFile is true
-      let staticTermsHTML = '';
-      if (includeStaticFile === true) {
-        try {
-          if (fsSync.existsSync(STATIC_TERMS_PDF_PATH)) {
-            console.log('✅ Adding static terms and conditions PDF...');
-            const staticPages = await this.convertPdfPagesToImages(STATIC_TERMS_PDF_PATH);
-            staticPages.forEach((base64, index) => {
-              staticTermsHTML += `
-                <div style="page-break-before: always; height: 100vh; display: flex; align-items: center; justify-content: center; background: white; padding: 10px; box-sizing: border-box;">
-                  <img src="data:image/png;base64,${base64}" style="max-width:100%; max-height:100%; object-fit: contain;" alt="Terms page ${index + 1}" />
-                </div>
-              `;
-            });
-            console.log(`✅ Added ${staticPages.length} page(s) from static terms PDF`);
-          } else {
-            console.warn('⚠️ Static terms PDF file not found at:', STATIC_TERMS_PDF_PATH);
-          }
-        } catch (error) {
-          console.error('❌ Error reading static terms PDF:', error.message);
-        }
+      // ✅ NEW: Add Terms and Conditions TEXT as formatted HTML page
+      let termsHTML = '';
+      if (includeTermsAndConditions === true && termsAndConditionsText && termsAndConditionsText.trim() !== '') {
+        console.log('📝 ===== ADDING TERMS AND CONDITIONS =====');
+        console.log('📝 Terms text length:', termsAndConditionsText.length);
+        console.log('📝 First 100 chars:', termsAndConditionsText.substring(0, 100));
+        
+        // Escape HTML and preserve line breaks
+        const escapeHtml = (text) => {
+          if (!text) return '';
+          return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+        };
+
+        const escapedTermsText = escapeHtml(termsAndConditionsText);
+        
+        termsHTML = `
+          <div style="page-break-before: always; padding: 40px 50px; background: white; min-height: 100vh; box-sizing: border-box; font-family: ${isArabic ? "'Cairo', Arial, sans-serif" : "'Roboto', Arial, sans-serif"}; direction: ${isArabic ? 'rtl' : 'ltr'};">
+            <h1 style="text-align: center; color: #0b4fa2; font-size: 28px; font-weight: 700; margin-bottom: 30px; border-bottom: 3px solid #0b4fa2; padding-bottom: 15px;">
+              ${isArabic ? 'الشروط والأحكام' : 'Terms and Conditions'}
+            </h1>
+            <div style="white-space: pre-wrap; line-height: 1.8; font-size: 14px; color: #333; text-align: ${isArabic ? 'right' : 'left'};">
+${escapedTermsText}
+            </div>
+          </div>
+        `;
+        
+        console.log('✅ Terms and Conditions HTML page created');
+        console.log('📝 ==========================================');
+      } else {
+        console.log('⚠️ Terms and Conditions NOT added:');
+        console.log('   - includeTermsAndConditions:', includeTermsAndConditions);
+        console.log('   - termsAndConditionsText:', termsAndConditionsText ? 'EXISTS' : 'NULL/EMPTY');
       }
 
       const fullHTML = `
@@ -406,7 +425,7 @@ class PriceQuoteService {
 <body>
   ${mainContent}
   ${attachmentHTML}
-  ${staticTermsHTML}
+  ${termsHTML}
 </body>
 </html>
       `;
@@ -493,12 +512,6 @@ class PriceQuoteService {
     const projectNameHtml = hasProjectName 
       ? `<h2 class="project-name">${escapeHtml(data.projectName)}</h2>` 
       : '';
-
-    console.log('=== PDF PROJECT NAME DEBUG ===');
-    console.log('Raw projectName:', data.projectName);
-    console.log('Has projectName:', hasProjectName);
-    console.log('Escaped projectName:', hasProjectName ? escapeHtml(data.projectName) : 'N/A');
-    console.log('==============================');
 
     return `
 <div class="main-content">
@@ -621,19 +634,20 @@ class PriceQuoteService {
     `;
   }
 
+  // ✅ UPDATED: Now includes includeTermsAndConditions and termsAndConditionsText
   async createQuote(quoteData, currentUser, attachmentFile = null) {
     console.log('\n=== CREATE QUOTE DEBUG ===');
     console.log('currentUser.id:', currentUser.id);
     console.log('currentUser.name:', currentUser.name);
     console.log('quoteData.projectName:', quoteData.projectName);
-    console.log('quoteData.includeStaticFile:', quoteData.includeStaticFile);
+    console.log('quoteData.includeTermsAndConditions:', quoteData.includeTermsAndConditions);
+    console.log('quoteData.termsAndConditionsText length:', quoteData.termsAndConditionsText ? quoteData.termsAndConditionsText.length : 0);
     
     const quotes = await this.loadQuotes();
     const quoteNumber = await this.generateQuoteNumber();
 
     const createdByName = await this.getUserNameById(currentUser.id);
     console.log('getUserNameById returned:', createdByName);
-    console.log('==========================\n');
 
     const newQuote = {
       id: generateId('QUOTE'),
@@ -651,7 +665,8 @@ class PriceQuoteService {
       taxRate: quoteData.includeTax ? (quoteData.taxRate || 0) : 0,
       items: quoteData.items || [],
       customNotes: quoteData.customNotes || null,
-      includeStaticFile: quoteData.includeStaticFile || false,
+      includeTermsAndConditions: !!quoteData.includeTermsAndConditions, // ✅ NEW FIELD
+      termsAndConditionsText: quoteData.termsAndConditionsText || null, // ✅ NEW FIELD
       createdBy: currentUser.id,
       createdByName: createdByName || currentUser.name || 'Unknown User', 
       createdAt: new Date().toISOString(),
@@ -669,15 +684,21 @@ class PriceQuoteService {
       newQuote.attachmentPath = attachmentPath;
     }
 
-    const pdfPath = await this.generatePDF(newQuote, attachmentPath, newQuote.includeStaticFile);
+    // ✅ UPDATED: Pass terms parameters to PDF generation
+    const pdfPath = await this.generatePDF(
+      newQuote, 
+      attachmentPath, 
+      newQuote.includeTermsAndConditions, 
+      newQuote.termsAndConditionsText
+    );
     newQuote.pdfPath = pdfPath;
 
     quotes.push(newQuote);
     await this.saveQuotes(quotes);
 
-    console.log('Quote created with name:', newQuote.createdByName);
-    console.log('Quote created with projectName:', newQuote.projectName);
-    console.log('Quote created with includeStaticFile:', newQuote.includeStaticFile);
+    console.log('Quote created with includeTermsAndConditions:', newQuote.includeTermsAndConditions);
+    console.log('Quote created with termsAndConditionsText:', newQuote.termsAndConditionsText ? 'YES' : 'NO');
+    console.log('==========================\n');
     return newQuote;
   }
 
@@ -754,6 +775,7 @@ class PriceQuoteService {
     };
   }
 
+  // ✅ UPDATED: Now includes includeTermsAndConditions and termsAndConditionsText
   async updateQuote(id, updateData, attachmentFile = null) {
     const quotes = await this.loadQuotes();
     const quoteIndex = quotes.findIndex(q => q.id === id);
@@ -777,7 +799,14 @@ class PriceQuoteService {
     if (updateData.taxRate !== undefined) quote.taxRate = updateData.taxRate;
     if (updateData.items !== undefined) quote.items = updateData.items;
     if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
-    if (updateData.includeStaticFile !== undefined) quote.includeStaticFile = updateData.includeStaticFile;
+    
+    // ✅ NEW FIELDS
+    if (updateData.includeTermsAndConditions !== undefined) {
+      quote.includeTermsAndConditions = !!updateData.includeTermsAndConditions;
+    }
+    if (updateData.termsAndConditionsText !== undefined) {
+      quote.termsAndConditionsText = updateData.termsAndConditionsText;
+    }
 
     const totals = this.calculateTotals(quote.items, quote.includeTax, quote.taxRate);
     quote.subtotal = totals.subtotal;
@@ -795,10 +824,16 @@ class PriceQuoteService {
       quote.attachmentPath = attachmentPath;
     }
 
-    console.log('Updating quote with projectName:', quote.projectName);
-    console.log('Updating quote with includeStaticFile:', quote.includeStaticFile);
+    console.log('Updating quote with includeTermsAndConditions:', quote.includeTermsAndConditions);
+    console.log('Updating quote with termsAndConditionsText:', quote.termsAndConditionsText ? 'YES' : 'NO');
     
-    const pdfPath = await this.generatePDF(quote, attachmentPath, quote.includeStaticFile);
+    // ✅ UPDATED: Pass terms parameters to PDF generation
+    const pdfPath = await this.generatePDF(
+      quote, 
+      attachmentPath, 
+      quote.includeTermsAndConditions, 
+      quote.termsAndConditionsText
+    );
     quote.pdfPath = pdfPath;
 
     quotes[quoteIndex] = quote;
