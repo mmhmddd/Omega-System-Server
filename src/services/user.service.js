@@ -86,8 +86,6 @@ const AVAILABLE_ROUTES = [
 
 const VALID_ROUTE_KEYS = AVAILABLE_ROUTES.map(r => r.key);
 
-console.log('✅ Valid employee route keys:', VALID_ROUTE_KEYS);
-console.log('📋 Total allowed routes for employees:', VALID_ROUTE_KEYS.length);
 
 class UserService {
   /**

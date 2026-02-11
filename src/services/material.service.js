@@ -20,13 +20,7 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
 
-// ✅ Log configuration on startup (without exposing password)
-console.log('📧 Material Email Configuration:');
-console.log('  - Host:', EMAIL_HOST);
-console.log('  - Port:', EMAIL_PORT);
-console.log('  - User:', EMAIL_USER ? '✅ Configured' : '❌ Missing');
-console.log('  - Password:', EMAIL_PASS ? '✅ Configured' : '❌ Missing');
-console.log('  - From:', EMAIL_FROM);
+
 
 class MaterialService {
   async loadUsers() {
