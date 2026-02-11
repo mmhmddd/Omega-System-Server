@@ -60,7 +60,7 @@ router.get('/stats', async (req, res, next) => {
 });
 
 /**
- * CREATE PURCHASE ORDER - Now accepts includeStaticFile
+ * CREATE PURCHASE ORDER
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -77,7 +77,9 @@ router.post('/', async (req, res, next) => {
       taxRate: req.body.taxRate,
       items: req.body.items || [],
       notes: req.body.notes,
-      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true'
+      // ✅ NEW: Text-based Terms & Conditions
+      includeTermsAndConditions: req.body.includeTermsAndConditions === true || req.body.includeTermsAndConditions === 'true',
+      termsAndConditionsText: req.body.termsAndConditionsText || '',
     };
 
     const po = await purchaseService.createPO(
@@ -159,7 +161,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * UPDATE PURCHASE ORDER - Now accepts includeStaticFile
+ * UPDATE PURCHASE ORDER
  */
 router.put('/:id', async (req, res, next) => {
   try {
@@ -177,8 +179,12 @@ router.put('/:id', async (req, res, next) => {
       items: req.body.items,
       notes: req.body.notes,
       status: req.body.status,
-      includeStaticFile: req.body.includeStaticFile !== undefined 
-        ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
+      // ✅ UPDATE: Text-based Terms & Conditions
+      includeTermsAndConditions: req.body.includeTermsAndConditions !== undefined 
+        ? (req.body.includeTermsAndConditions === true || req.body.includeTermsAndConditions === 'true')
+        : undefined,
+      termsAndConditionsText: req.body.termsAndConditionsText !== undefined
+        ? req.body.termsAndConditionsText
         : undefined
     };
 

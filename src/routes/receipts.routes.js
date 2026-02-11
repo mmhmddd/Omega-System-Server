@@ -34,7 +34,9 @@ router.post('/', async (req, res, next) => {
     if (req.body.items && Array.isArray(req.body.items)) {
       parsedItems = req.body.items;
     }
-    
+        // ✅ Handle Terms & Conditions
+    const includeTermsAndConditions = req.body.includeTermsAndConditions === true || req.body.includeTermsAndConditions === 'true';
+
     const receiptData = {
       to: req.body.to,
       date: req.body.date,
@@ -47,7 +49,9 @@ router.post('/', async (req, res, next) => {
       additionalText: req.body.additionalText,
       items: parsedItems,
       notes: req.body.notes,
-      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true'
+      // ✅ Text-based Terms & Conditions
+      includeTermsAndConditions: includeTermsAndConditions,
+      termsAndConditionsText: req.body.termsAndConditionsText || ''
     };
 
     const receipt = await receiptService.createReceipt(
@@ -199,8 +203,12 @@ router.put('/:id', async (req, res, next) => {
       additionalText: req.body.additionalText,
       items: parsedItems,
       notes: req.body.notes,
-      includeStaticFile: req.body.includeStaticFile !== undefined 
-        ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
+      // ✅ Handle Terms & Conditions in update
+      includeTermsAndConditions: req.body.includeTermsAndConditions !== undefined 
+        ? (req.body.includeTermsAndConditions === true || req.body.includeTermsAndConditions === 'true')
+        : undefined,
+      termsAndConditionsText: req.body.termsAndConditionsText !== undefined
+        ? req.body.termsAndConditionsText
         : undefined
     };
 

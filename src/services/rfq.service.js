@@ -1,5 +1,4 @@
-// src/services/rfq.service.js - UPDATED WITH EMAIL SENDING AND CUSTOM FILENAME
-
+// src/services/rfq.service.js - UPDATED WITH TEXT-BASED TERMS AND CONDITIONS
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -10,22 +9,20 @@ const rfqPdfGenerator = require('../utils/pdf-generator-rfq.util');
 const RFQS_FILE = path.join(__dirname, '../../data/rfqs/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
-const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
-// ✅ Email configuration with proper credential checks
+// ✅ Email configuration
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
 const EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '587');
 const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
 
-// ✅ Log configuration on startup (without exposing password)
 console.log('📧 RFQ Email Configuration:');
-console.log('  - Host:', EMAIL_HOST);
-console.log('  - Port:', EMAIL_PORT);
-console.log('  - User:', EMAIL_USER ? '✅ Configured' : '❌ Missing');
-console.log('  - Password:', EMAIL_PASS ? '✅ Configured' : '❌ Missing');
-console.log('  - From:', EMAIL_FROM);
+console.log(' - Host:', EMAIL_HOST);
+console.log(' - Port:', EMAIL_PORT);
+console.log(' - User:', EMAIL_USER ? '✅ Configured' : '❌ Missing');
+console.log(' - Password:', EMAIL_PASS ? '✅ Configured' : '❌ Missing');
+console.log(' - From:', EMAIL_FROM);
 
 class RFQService {
   async loadRFQs() {
@@ -68,7 +65,7 @@ class RFQService {
           throw error;
         }
       }
-      
+
       counters.RFQ = counter;
       await atomicWrite(COUNTER_FILE, JSON.stringify(counters, null, 2));
     } catch (error) {
@@ -80,7 +77,7 @@ class RFQService {
     try {
       const data = await fs.readFile(USERS_FILE, 'utf8');
       const users = JSON.parse(data);
-      
+
       const user = users.find(u => u.id === userId);
       
       if (user) {
@@ -94,9 +91,6 @@ class RFQService {
     }
   }
 
-  /**
-   * ✅ NEW: Load users from JSON file
-   */
   async loadUsers() {
     try {
       const data = await fs.readFile(USERS_FILE, 'utf8');
@@ -120,7 +114,7 @@ class RFQService {
     const oldCounter = await this.loadCounter();
     const rfqs = await this.loadRFQs();
     const deletedCount = rfqs.length;
-    
+
     await this.saveCounter(0);
     await this.saveRFQs([]);
 
@@ -170,19 +164,22 @@ class RFQService {
     return arabicCount > (totalFields / 2) ? 'ar' : 'en';
   }
 
+  /**
+   * ✅ CREATE RFQ - WITH TEXT-BASED TERMS & CONDITIONS
+   */
   async createRFQ(rfqData, userId, userRole) {
     console.log('\n=== CREATE RFQ DEBUG ===');
-    console.log('includeStaticFile:', rfqData.includeStaticFile);
-    
+    console.log('Include Terms & Conditions:', rfqData.includeTermsAndConditions);
+    console.log('Terms & Conditions Text Length:', rfqData.termsAndConditionsText?.length || 0);
+
     const rfqs = await this.loadRFQs();
-    
     const counter = await this.loadCounter();
     const newCounter = counter + 1;
-    
+
     const paddedCounter = String(newCounter).padStart(4, '0');
     const id = `RFQ-${paddedCounter}`;
     const rfqNumber = this.generateRFQNumber(newCounter);
-    
+
     await this.saveCounter(newCounter);
 
     const today = new Date().toISOString().split('T')[0];
@@ -209,7 +206,9 @@ class RFQService {
       urgent: rfqData.urgent || false,
       items: rfqData.items || [],
       notes: rfqData.notes || '',
-      includeStaticFile: rfqData.includeStaticFile || false,
+      // ✅ NEW: Store Terms & Conditions as text instead of file flag
+      includeTermsAndConditions: rfqData.includeTermsAndConditions || false,
+      termsAndConditionsText: rfqData.termsAndConditionsText || '',
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
@@ -222,7 +221,8 @@ class RFQService {
     rfqs.push(newRFQ);
     await this.saveRFQs(rfqs);
 
-    console.log('RFQ created with includeStaticFile:', newRFQ.includeStaticFile);
+    console.log('RFQ created with Terms & Conditions:', newRFQ.includeTermsAndConditions);
+    console.log('Terms & Conditions Text:', newRFQ.termsAndConditionsText ? 'Present' : 'Empty');
     return newRFQ;
   }
 
@@ -325,6 +325,9 @@ class RFQService {
     return rfq;
   }
 
+  /**
+   * ✅ UPDATE RFQ - WITH TEXT-BASED TERMS & CONDITIONS
+   */
   async updateRFQ(id, updateData, userId, userRole) {
     const rfqs = await this.loadRFQs();
     const rfqIndex = rfqs.findIndex(r => r.id === id);
@@ -351,7 +354,14 @@ class RFQService {
     if (updateData.items) rfq.items = updateData.items;
     if (updateData.notes !== undefined) rfq.notes = updateData.notes;
     if (updateData.status) rfq.status = updateData.status;
-    if (updateData.includeStaticFile !== undefined) rfq.includeStaticFile = updateData.includeStaticFile;
+
+    // ✅ UPDATE: Handle text-based Terms & Conditions
+    if (updateData.includeTermsAndConditions !== undefined) {
+      rfq.includeTermsAndConditions = updateData.includeTermsAndConditions;
+    }
+    if (updateData.termsAndConditionsText !== undefined) {
+      rfq.termsAndConditionsText = updateData.termsAndConditionsText;
+    }
 
     const detectedLanguage = updateData.forceLanguage || this.detectRFQLanguage(rfq);
     rfq.language = detectedLanguage;
@@ -375,8 +385,7 @@ class RFQService {
     if (rfqIndex === -1) throw new Error('RFQ not found');
 
     const rfq = rfqs[rfqIndex];
-    
-    // Delete from File Management
+
     if (rfq.pdfFilename) {
       const fileManagementService = require('./File-management.service');
       try {
@@ -386,7 +395,6 @@ class RFQService {
         console.log('⚠️ RFQ: File Management deletion warning:', error.message);
       }
       
-      // Delete physical PDF file
       const pdfPath = path.join(__dirname, '../../data/rfqs/pdfs', rfq.pdfFilename);
       if (fsSync.existsSync(pdfPath)) {
         try {
@@ -438,25 +446,29 @@ class RFQService {
   }
 
   /**
-   * ✅ GENERATE RFQ PDF WITH CUSTOM FILENAME PATTERN: RFQ0001_Requester_DD-MM-YYYY.pdf
+   * ✅ GENERATE RFQ PDF WITH TEXT-BASED TERMS & CONDITIONS
    */
   async generateRFQPDF(id, userId, userRole, attachmentPdf = null) {
     const rfq = await this.getRFQById(id, userId, userRole);
-    
+
     if (!rfq.requester || rfq.requester.trim() === '') {
       rfq.requester = await this.getUserName(userId);
     }
-    
-    console.log('🔵 Generating PDF for RFQ:', rfq.rfqNumber);
-    console.log('🔵 Include static file:', rfq.includeStaticFile);
-    
-    // ✅ Create custom filename: RFQ0001_Requester_DD-MM-YYYY
+
+    console.log('╔══════════════════════════════════════════════════════════╗');
+    console.log('║       GENERATING RFQ PDF                                 ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    console.log('📄 RFQ Number:', rfq.rfqNumber);
+    console.log('📎 Include Terms & Conditions:', rfq.includeTermsAndConditions);
+    console.log('📎 Terms Text Length:', rfq.termsAndConditionsText?.length || 0);
+    console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
+    console.log('════════════════════════════════════════════════════════════');
+
     const sanitizeFilename = (str) => {
       if (!str) return 'Unknown';
       return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
     };
-    
-    // ✅ Format date as DD-MM-YYYY
+
     const formatDate = (dateStr) => {
       if (!dateStr) {
         const today = new Date().toISOString().split('T')[0];
@@ -466,18 +478,23 @@ class RFQService {
       const [year, month, day] = dateStr.split('-');
       return `${day}-${month}-${year}`;
     };
-    
+
     const rfqNumber = rfq.rfqNumber || 'RFQ0000';
     const requesterName = sanitizeFilename(rfq.requester);
     const dateFormatted = formatDate(rfq.date);
     const customFilename = `${rfqNumber}_${requesterName}_${dateFormatted}`;
 
     console.log('📝 Custom filename:', customFilename);
-    
-    const pdfResult = await rfqPdfGenerator.generateRFQPDF(rfq, customFilename);
-    
+
+    // ✅ Pass termsAndConditionsText to PDF generator
+    const pdfResult = await rfqPdfGenerator.generateRFQPDF(
+      rfq, 
+      customFilename,
+      rfq.termsAndConditionsText // Pass the text
+    );
+
     const pdfsToMerge = [];
-    
+
     if (attachmentPdf) {
       const isValid = await rfqPdfGenerator.isValidPDF(attachmentPdf);
       if (isValid) {
@@ -487,24 +504,7 @@ class RFQService {
         console.warn('⚠️ Invalid user attachment PDF, skipping');
       }
     }
-    
-    let staticPdfPath = null;
-    if (rfq.includeStaticFile === true) {
-      try {
-        const fsSync = require('fs');
-        if (fsSync.existsSync(STATIC_PDF_PATH)) {
-          const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
-          pdfsToMerge.push(staticPdfBytes);
-          staticPdfPath = STATIC_PDF_PATH;
-          console.log('✅ Added static PDF to merge list');
-        } else {
-          console.warn('⚠️ Static PDF file not found at:', STATIC_PDF_PATH);
-        }
-      } catch (error) {
-        console.error('❌ Error reading static PDF:', error.message);
-      }
-    }
-    
+
     let finalPdfResult = pdfResult;
     try {
       if (pdfsToMerge.length > 0) {
@@ -553,10 +553,10 @@ class RFQService {
       console.error('❌ PDF merge/header failed:', mergeError.message);
       finalPdfResult.mergeError = mergeError.message;
     }
-    
+
     const rfqs = await this.loadRFQs();
     const rfqIndex = rfqs.findIndex(r => r.id === id);
-    
+
     if (rfqIndex !== -1) {
       rfqs[rfqIndex].pdfFilename = finalPdfResult.filename;
       rfqs[rfqIndex].pdfLanguage = finalPdfResult.language;
@@ -567,32 +567,29 @@ class RFQService {
       }
       await this.saveRFQs(rfqs);
     }
-    
+
+    console.log('════════════════════════════════════════════════════════════');
+    console.log('✅ PDF generation complete!');
+    console.log('════════════════════════════════════════════════════════════\n');
+
     return {
       rfq,
       pdf: finalPdfResult
     };
   }
 
-  /**
-   * ✅ Send RFQ PDF by email with custom filename DD-MM-YYYY format
-   */
   async sendRFQByEmail(rfqId, userId, userRole, recipientEmail) {
     try {
       console.log('\n📧 === SEND RFQ EMAIL DEBUG ===');
       console.log('RFQ ID:', rfqId);
       console.log('User ID:', userId);
       console.log('Recipient:', recipientEmail);
-      
-      // ✅ Check credentials first
+
       if (!EMAIL_USER || !EMAIL_PASS) {
         console.error('❌ Email credentials missing!');
-        console.error('EMAIL_USER:', EMAIL_USER ? '✅ Set' : '❌ Not set');
-        console.error('EMAIL_PASS:', EMAIL_PASS ? '✅ Set' : '❌ Not set');
         throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
       }
 
-      // Get RFQ
       const rfq = await this.getRFQById(rfqId, userId, userRole);
       console.log('✅ RFQ found:', rfq.rfqNumber);
 
@@ -607,7 +604,6 @@ class RFQService {
       }
       console.log('✅ PDF file found');
 
-      // Get creator's information
       const users = await this.loadUsers();
       const creator = users.find(u => u.id === rfq.createdBy);
       
@@ -616,11 +612,7 @@ class RFQService {
       
       console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
 
-      // ✅ Create transporter with system credentials
       console.log('📧 Creating email transporter...');
-      console.log('  - Host:', EMAIL_HOST);
-      console.log('  - Port:', EMAIL_PORT);
-      console.log('  - User:', EMAIL_USER);
       
       const transporter = nodemailer.createTransport({
         host: EMAIL_HOST,
@@ -635,12 +627,10 @@ class RFQService {
         }
       });
 
-      // ✅ Verify connection
       console.log('🔄 Verifying SMTP connection...');
       await transporter.verify();
       console.log('✅ SMTP connection verified');
 
-      // Email subject and body
       const subject = `Request for Quotation ${rfq.rfqNumber}`;
       const text = `Please find attached the Request for Quotation ${rfq.rfqNumber}.\n\nSupplier: ${rfq.supplier || 'N/A'}\nDate: ${rfq.date}\nDepartment: ${rfq.production || 'N/A'}\n${rfq.urgent ? 'URGENT REQUEST\n' : ''}\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
       
@@ -675,13 +665,11 @@ class RFQService {
         </div>
       `;
 
-      // ✅ Create custom email attachment filename: RFQ0001_Requester_DD-MM-YYYY.pdf
       const sanitizeFilename = (str) => {
         if (!str) return 'Unknown';
         return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
       };
       
-      // ✅ Format date as DD-MM-YYYY
       const formatDate = (dateStr) => {
         if (!dateStr) {
           const today = new Date().toISOString().split('T')[0];
@@ -697,8 +685,8 @@ class RFQService {
       const dateFormatted = formatDate(rfq.date);
       const emailAttachmentName = `${rfqNumber}_${requesterName}_${dateFormatted}.pdf`;
 
-      // ✅ Send email using system credentials, but show creator info in body
       console.log('📧 Sending email...');
+      
       const mailOptions = {
         from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
         to: recipientEmail,
@@ -713,7 +701,6 @@ class RFQService {
         ],
       };
 
-      // Add reply-to if creator has email
       if (creatorEmail) {
         mailOptions.replyTo = creatorEmail;
         console.log('✅ Reply-to set:', creatorEmail);
@@ -741,13 +728,7 @@ class RFQService {
       };
     } catch (error) {
       console.error('❌ Email sending error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        command: error.command
-      });
       
-      // Provide helpful error messages
       let errorMessage = error.message;
       if (error.code === 'EAUTH') {
         errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';

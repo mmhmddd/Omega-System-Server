@@ -1,4 +1,7 @@
-// src/routes/materials.routes.js - WITH CUSTOM FILENAME PATTERN FOR DOWNLOAD
+// ============================================================
+// FIXED MATERIAL ROUTES - REMOVE STATIC FILE OPTION
+// src/routes/materials.routes.js
+// ============================================================
 
 const express = require('express');
 const router = express.Router();
@@ -27,7 +30,7 @@ router.use(protect);
 router.use(checkRouteAccess('materialRequests'));
 
 /**
- * CREATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
+ * ✅ CREATE MATERIAL REQUEST - REMOVED includeStaticFile, ONLY T&C TEXT
  */
 router.post('/', async (req, res, next) => {
   try {
@@ -58,7 +61,9 @@ router.post('/', async (req, res, next) => {
       requestReason: req.body.requestReason,
       items: items,
       additionalNotes: req.body.additionalNotes,
-      includeStaticFile: req.body.includeStaticFile === true || req.body.includeStaticFile === 'true'
+      includeTermsAndConditions: req.body.includeTermsAndConditions === true || req.body.includeTermsAndConditions === 'true',
+      termsAndConditionsText: req.body.termsAndConditionsText || ''
+      // ✅ REMOVED: includeStaticFile - no longer needed
     };
 
     const material = await materialService.createMaterialRequest(
@@ -175,7 +180,7 @@ router.get('/:id', async (req, res, next) => {
 });
 
 /**
- * UPDATE MATERIAL REQUEST - WITH includeStaticFile SUPPORT
+ * ✅ UPDATE MATERIAL REQUEST - REMOVED includeStaticFile
  */
 router.put('/:id', async (req, res, next) => {
   try {
@@ -210,10 +215,14 @@ router.put('/:id', async (req, res, next) => {
       requestReason: req.body.requestReason,
       items: items,
       additionalNotes: req.body.additionalNotes,
-      status: req.body.status,
-      includeStaticFile: req.body.includeStaticFile !== undefined 
-        ? (req.body.includeStaticFile === true || req.body.includeStaticFile === 'true')
-        : undefined
+      includeTermsAndConditions: req.body.includeTermsAndConditions !== undefined
+        ? (req.body.includeTermsAndConditions === true || req.body.includeTermsAndConditions === 'true')
+        : undefined,
+      termsAndConditionsText: req.body.termsAndConditionsText !== undefined
+        ? req.body.termsAndConditionsText
+        : undefined,
+      status: req.body.status
+      // ✅ REMOVED: includeStaticFile - no longer needed
     };
 
     const material = await materialService.updateMaterialRequest(
@@ -276,7 +285,8 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 /**
- * GENERATE MATERIAL REQUEST PDF (WITH OPTIONAL ATTACHMENT AND TERMS & CONDITIONS)
+ * GENERATE MATERIAL REQUEST PDF (WITH OPTIONAL ATTACHMENT)
+ * T&C text is included automatically if enabled in material data
  */
 router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -322,8 +332,7 @@ router.post('/:id/generate-pdf', upload.single('attachment'), async (req, res, n
 });
 
 /**
- * ✅ DOWNLOAD MATERIAL REQUEST PDF - WITH CUSTOM FILENAME PATTERN MR0001_ProjectName_DD-MM-YYYY.pdf
- * GET /api/materials/:id/download-pdf
+ * DOWNLOAD MATERIAL REQUEST PDF
  */
 router.get('/:id/download-pdf', async (req, res, next) => {
   try {
@@ -350,13 +359,11 @@ router.get('/:id/download-pdf', async (req, res, next) => {
       });
     }
 
-    // ✅ Create custom download filename: MR0001_ProjectName_DD-MM-YYYY.pdf
     const sanitizeFilename = (str) => {
       if (!str) return 'Unknown';
       return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
     };
     
-    // ✅ Format date as DD-MM-YYYY
     const formatDate = (dateStr) => {
       if (!dateStr) {
         const today = new Date().toISOString().split('T')[0];
@@ -368,7 +375,7 @@ router.get('/:id/download-pdf', async (req, res, next) => {
     };
     
     const mrNumber = material.mrNumber || 'MR0000';
-    const projectName = sanitizeFilename(material.project); // ✅ Changed from section to project
+    const projectName = sanitizeFilename(material.project);
     const dateFormatted = formatDate(material.date);
     const downloadFilename = `${mrNumber}_${projectName}_${dateFormatted}.pdf`;
 
@@ -381,8 +388,7 @@ router.get('/:id/download-pdf', async (req, res, next) => {
 });
 
 /**
- * ✅ SEND MATERIAL REQUEST VIA EMAIL
- * POST /api/materials/:id/send-email
+ * SEND MATERIAL REQUEST VIA EMAIL
  */
 router.post('/:id/send-email', async (req, res, next) => {
   try {
@@ -395,7 +401,6 @@ router.post('/:id/send-email', async (req, res, next) => {
       });
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({

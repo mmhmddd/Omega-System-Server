@@ -1,4 +1,7 @@
-// src/services/material.service.js - WITH FILE MANAGEMENT INTEGRATION AND CUSTOM FILENAME
+// ============================================================
+// FIXED MATERIAL SERVICE - WITH TERMS & CONDITIONS TEXT PASSING
+// src/services/material.service.js
+// ============================================================
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -182,12 +185,15 @@ class MaterialService {
     }));
   }
 
-  async createMaterialRequest(materialData, userId, userRole) {
-    console.log('\n=== CREATE MATERIAL REQUEST DEBUG ===');
-    console.log('userId:', userId);
-    console.log('userId type:', typeof userId);
-    console.log('userRole:', userRole);
-    console.log('Include Terms & Conditions PDF:', materialData.includeStaticFile);
+async createMaterialRequest(materialData, userId, userRole) {
+    console.log('\n╔══════════════════════════════════════════════════════════╗');
+    console.log('║       CREATE MATERIAL REQUEST                            ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    console.log('📝 User ID:', userId);
+    console.log('📝 User Role:', userRole);
+    console.log('📝 Include T&C:', materialData.includeTermsAndConditions);
+    console.log('📝 T&C Text Length:', materialData.termsAndConditionsText?.length || 0);
+    console.log('════════════════════════════════════════════════════════════');
     
     const materials = await this.loadMaterialRequests();
     
@@ -203,12 +209,9 @@ class MaterialService {
     const today = new Date().toISOString().split('T')[0];
     const detectedLanguage = materialData.forceLanguage || this.detectMaterialLanguage(materialData);
 
-    console.log('Calling getUserNameById with:', userId);
+    console.log('📝 Fetching creator name for user ID:', userId);
     const createdByName = await this.getUserNameById(userId);
-    console.log('getUserNameById returned:', createdByName);
-    console.log('createdByName is null?', createdByName === null);
-    console.log('createdByName is undefined?', createdByName === undefined);
-    console.log('============================\n');
+    console.log('📝 Creator name:', createdByName || 'Unknown User');
 
     const newMaterialRequest = {
       id,
@@ -220,7 +223,9 @@ class MaterialService {
       requestReason: materialData.requestReason || '',
       items: materialData.items || [],
       additionalNotes: materialData.additionalNotes || '',
-      includeStaticFile: materialData.includeStaticFile || false,
+      includeTermsAndConditions: materialData.includeTermsAndConditions || false,
+      termsAndConditionsText: materialData.termsAndConditionsText || '',
+      // ✅ REMOVED: includeStaticFile - no longer needed
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
@@ -233,12 +238,23 @@ class MaterialService {
     materials.push(newMaterialRequest);
     await this.saveMaterialRequests(materials);
 
-    console.log('Material Request created with name:', newMaterialRequest.createdByName);
-    console.log('Include Terms & Conditions:', newMaterialRequest.includeStaticFile);
+    console.log('✅ Material Request created:', mrNumber);
+    console.log('   Creator:', newMaterialRequest.createdByName);
+    console.log('   T&C Enabled:', newMaterialRequest.includeTermsAndConditions);
+    console.log('════════════════════════════════════════════════════════════\n');
+    
     return newMaterialRequest;
   }
 
-  async updateMaterialRequest(id, updateData, userId, userRole) {
+async updateMaterialRequest(id, updateData, userId, userRole) {
+    console.log('\n╔══════════════════════════════════════════════════════════╗');
+    console.log('║       UPDATE MATERIAL REQUEST                            ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    console.log('📝 Material ID:', id);
+    console.log('📝 Update T&C:', updateData.includeTermsAndConditions);
+    console.log('📝 T&C Text Length:', updateData.termsAndConditionsText?.length || 0);
+    console.log('════════════════════════════════════════════════════════════');
+    
     const materials = await this.loadMaterialRequests();
     const materialIndex = materials.findIndex(m => m.id === id);
 
@@ -262,8 +278,17 @@ class MaterialService {
     if (updateData.items) material.items = updateData.items;
     if (updateData.additionalNotes !== undefined) material.additionalNotes = updateData.additionalNotes;
     if (updateData.status) material.status = updateData.status;
-    if (updateData.includeStaticFile !== undefined) material.includeStaticFile = updateData.includeStaticFile;
-
+    
+    // ✅ UPDATE T&C FIELDS
+    if (updateData.includeTermsAndConditions !== undefined) {
+      material.includeTermsAndConditions = updateData.includeTermsAndConditions;
+    }
+    if (updateData.termsAndConditionsText !== undefined) {
+      material.termsAndConditionsText = updateData.termsAndConditionsText;
+    }
+    
+    // ✅ REMOVED: includeStaticFile update - no longer needed
+    
     const detectedLanguage = updateData.forceLanguage || this.detectMaterialLanguage(material);
     material.language = detectedLanguage;
     material.updatedAt = new Date().toISOString();
@@ -273,6 +298,10 @@ class MaterialService {
 
     const createdByName = await this.getUserNameById(material.createdBy);
 
+    console.log('✅ Material Request updated:', material.mrNumber);
+    console.log('   T&C Enabled:', material.includeTermsAndConditions);
+    console.log('════════════════════════════════════════════════════════════\n');
+
     return {
       ...material,
       createdByName: createdByName || material.createdByName || 'Unknown User'
@@ -280,17 +309,19 @@ class MaterialService {
   }
 
   /**
-   * ✅ GENERATE MATERIAL PDF WITH CUSTOM FILENAME PATTERN: MR0001_ProjectName_DD-MM-YYYY.pdf
+   * ✅ FIXED: Generate Material PDF with TERMS & CONDITIONS TEXT PARAMETER
    */
-  async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
+async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
     const material = await this.getMaterialRequestById(id, userId, userRole);
 
     console.log('╔══════════════════════════════════════════════════════════╗');
     console.log('║       GENERATING MATERIAL REQUEST PDF                    ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
     console.log('📄 MR Number:', material.mrNumber);
-    console.log('📎 Include Terms & Conditions:', material.includeStaticFile);
-    console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
+    console.log('📄 Include T&C (checkbox):', material.includeTermsAndConditions);
+    console.log('📄 T&C Text Available:', !!material.termsAndConditionsText);
+    console.log('📄 T&C Text Length:', material.termsAndConditionsText?.length || 0);
+    console.log('📄 User Attachment:', attachmentPdf ? 'Yes' : 'No');
     console.log('════════════════════════════════════════════════════════════');
 
     if (material.pdfFilename) {
@@ -305,14 +336,12 @@ class MaterialService {
       }
     }
 
-    // ✅ Create filename pattern: MR0001_ProjectName_DD-MM-YYYY.pdf
+    // Create filename pattern: MR0001_ProjectName_DD-MM-YYYY.pdf
     const sanitizeFilename = (str) => {
       if (!str) return 'Unknown';
-      // Remove special characters, keep alphanumeric, Arabic characters, and spaces
       return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
     };
     
-    // ✅ Format date as DD-MM-YYYY
     const formatDate = (dateStr) => {
       if (!dateStr) {
         const today = new Date().toISOString().split('T')[0];
@@ -324,14 +353,41 @@ class MaterialService {
     };
     
     const mrNumber = material.mrNumber || 'MR0000';
-    const projectName = sanitizeFilename(material.project); // ✅ Changed from section to project
+    const projectName = sanitizeFilename(material.project);
     const dateFormatted = formatDate(material.date);
     const customFilename = `${mrNumber}_${projectName}_${dateFormatted}`;
 
     console.log('📝 Custom filename:', customFilename);
 
-    const pdfResult = await materialPdfGenerator.generateMaterialPDF(material, customFilename);
+    // ✅ CRITICAL FIX: Process T&C text properly
+    console.log('\n╔══════════════════════════════════════════════════════════╗');
+    console.log('║       PROCESSING TERMS & CONDITIONS DATA                 ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    
+    const termsTextToPass = (material.includeTermsAndConditions === true && material.termsAndConditionsText && material.termsAndConditionsText.trim()) 
+      ? material.termsAndConditionsText.trim()
+      : null;
 
+    console.log('📄 Checkbox enabled:', material.includeTermsAndConditions === true);
+    console.log('📄 Text exists:', !!material.termsAndConditionsText);
+    console.log('📄 Text not empty:', material.termsAndConditionsText && material.termsAndConditionsText.trim() !== '');
+    console.log('📄 Will add T&C page:', !!termsTextToPass);
+    
+    if (termsTextToPass) {
+      console.log('📄 T&C Text Length:', termsTextToPass.length);
+      console.log('📄 T&C Preview:', termsTextToPass.substring(0, 150) + '...');
+    } else {
+      console.log('⚠️  T&C page will NOT be added');
+    }
+    console.log('════════════════════════════════════════════════════════════\n');
+
+    const pdfResult = await materialPdfGenerator.generateMaterialPDF(
+      material, 
+      customFilename,
+      termsTextToPass  // ✅ Pass T&C text to generator
+    );
+
+    // ✅ REMOVED: Static PDF file merge logic - no longer needed
     const pdfsToMerge = [];
     
     if (attachmentPdf) {
@@ -343,25 +399,11 @@ class MaterialService {
         console.warn('⚠️ Invalid user attachment PDF, skipping');
       }
     }
-    
-    if (material.includeStaticFile === true) {
-      try {
-        if (fsSync.existsSync(STATIC_PDF_PATH)) {
-          const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
-          pdfsToMerge.push(staticPdfBytes);
-          console.log('✅ Added Terms & Conditions PDF to merge list');
-        } else {
-          console.warn('⚠️ Terms & Conditions PDF not found at:', STATIC_PDF_PATH);
-        }
-      } catch (error) {
-        console.error('❌ Error reading Terms & Conditions PDF:', error.message);
-      }
-    }
 
     let finalPdfResult = pdfResult;
     try {
       if (pdfsToMerge.length > 0) {
-        console.log(`🔄 Merging ${pdfsToMerge.length} additional PDF(s) with Material Request...`);
+        console.log(`🔄 Merging ${pdfsToMerge.length} user attachment PDF(s)...`);
         
         let currentPath = pdfResult.filepath;
         
@@ -389,7 +431,7 @@ class MaterialService {
         console.log('✅ PDF merge completed successfully');
         console.log('   Total pages:', finalPdfResult.pageCount.total);
       } else {
-        console.log('ℹ️  No additional PDFs to merge, adding headers/footers only...');
+        console.log('ℹ️  No attachments to merge, adding headers/footers only...');
         const headerResult = await materialPdfGenerator.mergePDFs(
           pdfResult.filepath,
           null,
@@ -426,6 +468,8 @@ class MaterialService {
 
     console.log('════════════════════════════════════════════════════════════');
     console.log('✅ PDF generation complete!');
+    console.log('   Filename:', finalPdfResult.filename);
+    console.log('   Has T&C Page:', !!pdfResult.hasTermsAndConditions);
     console.log('════════════════════════════════════════════════════════════\n');
 
     return {
@@ -507,9 +551,6 @@ class MaterialService {
     };
   }
 
-  /**
-   * ✅ DELETE MATERIAL REQUEST - WITH FILE MANAGEMENT INTEGRATION (like price-quote)
-   */
   async deleteMaterialRequest(id) {
     const materials = await this.loadMaterialRequests();
     const materialIndex = materials.findIndex(m => m.id === id);
@@ -518,7 +559,7 @@ class MaterialService {
 
     const material = materials[materialIndex];
     
-    // ✅ DELETE FROM FILE MANAGEMENT (like price-quote)
+    // ✅ DELETE FROM FILE MANAGEMENT
     if (material.pdfFilename) {
       const fileManagementService = require('./File-management.service');
       try {
@@ -606,171 +647,139 @@ class MaterialService {
     };
   }
 
-  /**
- * ✅ Send material request PDF by email - WITH CUSTOM FILENAME DD-MM-YYYY and Project Name
- */
-async sendMaterialByEmail(materialId, userId, userRole, recipientEmail) {
-  try {
-    console.log('\n📧 === SEND MATERIAL EMAIL DEBUG ===');
-    console.log('Material ID:', materialId);
-    console.log('User ID:', userId);
-    console.log('Recipient:', recipientEmail);
-    
-    if (!EMAIL_USER || !EMAIL_PASS) {
-      console.error('❌ Email credentials missing!');
-      throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
-    }
-
-    const material = await this.getMaterialRequestById(materialId, userId, userRole);
-    console.log('✅ Material Request found:', material.mrNumber);
-
-    if (!material.pdfFilename) {
-      throw new Error('PDF not generated yet. Please generate PDF first.');
-    }
-
-    const pdfPath = path.join(__dirname, '../../data/materials-requests/pdfs', material.pdfFilename);
-
-    if (!fsSync.existsSync(pdfPath)) {
-      throw new Error('PDF file not found');
-    }
-    console.log('✅ PDF file found');
-
-    const users = await this.loadUsers();
-    const creator = users.find(u => u.id === material.createdBy);
-    
-    const senderName = creator && creator.name ? creator.name : 'Omega System';
-    const creatorEmail = creator && creator.email ? creator.email : null;
-    
-    console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
-
-    console.log('📧 Creating email transporter...');
-    
-    const transporter = nodemailer.createTransport({
-      host: EMAIL_HOST,
-      port: EMAIL_PORT,
-      secure: EMAIL_PORT === 465,
-      auth: {
-        user: EMAIL_USER,
-        pass: EMAIL_PASS,
-      },
-      tls: {
-        rejectUnauthorized: false
+  async sendMaterialByEmail(materialId, userId, userRole, recipientEmail) {
+    try {
+      console.log('\n📧 === SEND MATERIAL EMAIL ===');
+      console.log('Material ID:', materialId);
+      console.log('Recipient:', recipientEmail);
+      
+      if (!EMAIL_USER || !EMAIL_PASS) {
+        console.error('❌ Email credentials missing!');
+        throw new Error('Email configuration error: Missing SMTP credentials.');
       }
-    });
 
-    console.log('🔄 Verifying SMTP connection...');
-    await transporter.verify();
-    console.log('✅ SMTP connection verified');
+      const material = await this.getMaterialRequestById(materialId, userId, userRole);
+      console.log('✅ Material Request found:', material.mrNumber);
 
-    const subject = `Material Request ${material.mrNumber}`;
-    const text = `Please find attached the Material Request ${material.mrNumber}.\n\nSection: ${material.section || 'N/A'}\nProject: ${material.project || 'N/A'}\nDate: ${material.date}\nPriority: ${material.requestPriority || 'N/A'}\n\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
-    const html = `
-      <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
-        <div style="background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0;">
-          <h2 style="margin: 0; font-size: 24px;">Material Request ${material.mrNumber}</h2>
-        </div>
-        <div style="background: #f8fafc; padding: 20px; border-radius: 0 0 10px 10px;">
-          <p style="color: #475569; font-size: 16px; margin-bottom: 20px;">Please find attached the material request document.</p>
-          <table style="border-collapse: collapse; width: 100%; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-            <tr style="background: #f8fafc;">
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">MR Number:</td>
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #1565C0; font-weight: 600;">${material.mrNumber}</td>
-            </tr>
-            <tr style="background: #f8fafc;">
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Date:</td>
-              <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #475569;">${material.date}</td>
-            </tr>
-            <tr style="background: #f8fafc;">
-              <td style="padding: 12px 16px; font-weight: bold; color: #334155;">Sent By:</td>
-              <td style="padding: 12px 16px; color: #475569;">${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}</td>
-            </tr>
-          </table>
-          <div style="margin-top: 20px; padding: 16px; background: #e0f2fe; border-left: 4px solid #1565C0; border-radius: 6px;">
-            <p style="margin: 0; color: #0c4a6e; font-size: 14px;">
-              <strong>Note:</strong> This is an automated email from Omega System.
-            </p>
+      if (!material.pdfFilename) {
+        throw new Error('PDF not generated yet. Please generate PDF first.');
+      }
+
+      const pdfPath = path.join(__dirname, '../../data/materials-requests/pdfs', material.pdfFilename);
+
+      if (!fsSync.existsSync(pdfPath)) {
+        throw new Error('PDF file not found');
+      }
+
+      const users = await this.loadUsers();
+      const creator = users.find(u => u.id === material.createdBy);
+      
+      const senderName = creator && creator.name ? creator.name : 'Omega System';
+      const creatorEmail = creator && creator.email ? creator.email : null;
+
+      const transporter = nodemailer.createTransport({
+        host: EMAIL_HOST,
+        port: EMAIL_PORT,
+        secure: EMAIL_PORT === 465,
+        auth: {
+          user: EMAIL_USER,
+          pass: EMAIL_PASS,
+        },
+        tls: {
+          rejectUnauthorized: false
+        }
+      });
+
+      await transporter.verify();
+      console.log('✅ SMTP connection verified');
+
+      const subject = `Material Request ${material.mrNumber}`;
+      const text = `Please find attached the Material Request ${material.mrNumber}.\n\nSection: ${material.section || 'N/A'}\nProject: ${material.project || 'N/A'}\nDate: ${material.date}\n\nSent by: ${senderName}`;
+      const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
+          <div style="background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0;">
+            <h2 style="margin: 0;">Material Request ${material.mrNumber}</h2>
+          </div>
+          <div style="background: #f8fafc; padding: 20px; border-radius: 0 0 10px 10px;">
+            <p style="color: #475569;">Please find attached the material request document.</p>
+            <table style="border-collapse: collapse; width: 100%; background: white; border-radius: 8px; overflow: hidden;">
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; font-weight: bold;">MR Number:</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; color: #1565C0;">${material.mrNumber}</td>
+              </tr>
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px; font-weight: bold;">Sent By:</td>
+                <td style="padding: 12px;">${senderName}</td>
+              </tr>
+            </table>
           </div>
         </div>
-      </div>
-    `;
+      `;
 
-    // ✅ Create custom email attachment filename: MR0001_ProjectName_DD-MM-YYYY.pdf
-    const sanitizeFilename = (str) => {
-      if (!str) return 'Unknown';
-      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
-    };
-    
-    // ✅ Format date as DD-MM-YYYY
-    const formatDate = (dateStr) => {
-      if (!dateStr) {
-        const today = new Date().toISOString().split('T')[0];
-        const [year, month, day] = today.split('-');
+      const sanitizeFilename = (str) => {
+        if (!str) return 'Unknown';
+        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+      };
+      
+      const formatDate = (dateStr) => {
+        if (!dateStr) {
+          const today = new Date().toISOString().split('T')[0];
+          const [year, month, day] = today.split('-');
+          return `${day}-${month}-${year}`;
+        }
+        const [year, month, day] = dateStr.split('-');
         return `${day}-${month}-${year}`;
+      };
+      
+      const mrNumber = material.mrNumber || 'MR0000';
+      const projectName = sanitizeFilename(material.project);
+      const dateFormatted = formatDate(material.date);
+      const emailAttachmentName = `${mrNumber}_${projectName}_${dateFormatted}.pdf`;
+
+      const mailOptions = {
+        from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
+        to: recipientEmail,
+        subject: subject,
+        text: text,
+        html: html,
+        attachments: [
+          {
+            filename: emailAttachmentName,
+            path: pdfPath,
+          },
+        ],
+      };
+
+      if (creatorEmail) {
+        mailOptions.replyTo = creatorEmail;
       }
-      const [year, month, day] = dateStr.split('-');
-      return `${day}-${month}-${year}`;
-    };
-    
-    const mrNumber = material.mrNumber || 'MR0000';
-    const projectName = sanitizeFilename(material.project); // ✅ Changed from section to project
-    const dateFormatted = formatDate(material.date);
-    const emailAttachmentName = `${mrNumber}_${projectName}_${dateFormatted}.pdf`;
 
-    console.log('📧 Sending email...');
-    const mailOptions = {
-      from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
-      to: recipientEmail,
-      subject: subject,
-      text: text,
-      html: html,
-      attachments: [
-        {
-          filename: emailAttachmentName,
-          path: pdfPath,
-        },
-      ],
-    };
+      const info = await transporter.sendMail(mailOptions);
 
-    if (creatorEmail) {
-      mailOptions.replyTo = creatorEmail;
-      console.log('✅ Reply-to set:', creatorEmail);
+      console.log('✅ Email sent successfully!');
+      console.log('   Message ID:', info.messageId);
+      console.log('========================\n');
+
+      return {
+        message: 'Email sent successfully',
+        messageId: info.messageId,
+        sentFrom: EMAIL_USER,
+        sentBy: senderName,
+        replyTo: creatorEmail || null
+      };
+    } catch (error) {
+      console.error('❌ Email sending error:', error);
+      
+      let errorMessage = error.message;
+      if (error.code === 'EAUTH') {
+        errorMessage = 'Email authentication failed. Please check your credentials.';
+      } else if (error.code === 'ESOCKET') {
+        errorMessage = 'Cannot connect to email server.';
+      }
+      
+      throw new Error(`Failed to send email: ${errorMessage}`);
     }
-
-    const info = await transporter.sendMail(mailOptions);
-
-    console.log('✅ Email sent successfully!');
-    console.log('  - Message ID:', info.messageId);
-    console.log('  - From:', EMAIL_USER);
-    console.log('  - To:', recipientEmail);
-    console.log('  - Sender Name:', senderName);
-    console.log('  - Attachment:', emailAttachmentName);
-    if (creatorEmail) {
-      console.log('  - Reply-To:', creatorEmail);
-    }
-    console.log('========================\n');
-
-    return {
-      message: 'Email sent successfully',
-      messageId: info.messageId,
-      sentFrom: EMAIL_USER,
-      sentBy: senderName,
-      replyTo: creatorEmail || null
-    };
-  } catch (error) {
-    console.error('❌ Email sending error:', error);
-    
-    let errorMessage = error.message;
-    if (error.code === 'EAUTH') {
-      errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';
-    } else if (error.code === 'ESOCKET') {
-      errorMessage = 'Cannot connect to email server. Please check your EMAIL_HOST and EMAIL_PORT settings.';
-    } else if (error.message.includes('Missing credentials')) {
-      errorMessage = 'Email credentials are not configured. Please set EMAIL_USER and EMAIL_APP_PASSWORD in your .env file.';
-    }
-    
-    throw new Error(`Failed to send email: ${errorMessage}`);
   }
-}
 }
 
 module.exports = new MaterialService();

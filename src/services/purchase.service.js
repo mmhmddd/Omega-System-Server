@@ -254,83 +254,143 @@ class PurchaseService {
     }));
   }
 
-  /**
-   * ✅ Create a new Purchase Order - WITH includeStaticFile (Terms & Conditions) SUPPORT
-   */
-  async createPO(poData, userId, userRole) {
-    console.log('\n=== CREATE PO ===');
-    console.log('User ID:', userId);
-    console.log('User Role:', userRole);
-    console.log('Include Terms & Conditions PDF:', poData.includeStaticFile);
-    
-    const pos = await this.loadPOs();
-    
-    const counter = await this.loadCounter();
-    const newCounter = counter + 1;
-    
-    const paddedCounter = String(newCounter).padStart(5, '0');
-    const id = `PO-${paddedCounter}`;
-    const poNumber = this.generatePONumber(newCounter);
-    
-    await this.saveCounter(newCounter);
+/**
+ * ✅ Create a new Purchase Order - WITH TEXT-BASED Terms & Conditions
+ */
+async createPO(poData, userId, userRole) {
+  console.log('\n=== CREATE PO ===');
+  console.log('User ID:', userId);
+  console.log('User Role:', userRole);
+  console.log('Include Terms & Conditions:', poData.includeTermsAndConditions);
+  console.log('T&C Text Length:', poData.termsAndConditionsText?.length || 0);
+  
+  const pos = await this.loadPOs();
+  
+  const counter = await this.loadCounter();
+  const newCounter = counter + 1;
+  
+  const paddedCounter = String(newCounter).padStart(5, '0');
+  const id = `PO-${paddedCounter}`;
+  const poNumber = this.generatePONumber(newCounter);
+  
+  await this.saveCounter(newCounter);
 
-    const today = new Date().toISOString().split('T')[0];
-    const detectedLanguage = poData.forceLanguage || this.detectPOLanguage(poData);
+  const today = new Date().toISOString().split('T')[0];
+  const detectedLanguage = poData.forceLanguage || this.detectPOLanguage(poData);
 
-    let createdByName = await this.getUserNameById(userId);
+  let createdByName = await this.getUserNameById(userId);
+  
+  if (!createdByName) {
+    console.log('⚠️ getUserNameById returned null, trying alternative lookup...');
+    const users = await this.loadUsers();
+    const user = users.find(u => 
+      u.id === userId || 
+      String(u.id).trim() === String(userId).trim()
+    );
     
-    if (!createdByName) {
-      console.log('⚠️ getUserNameById returned null, trying alternative lookup...');
-      const users = await this.loadUsers();
-      const user = users.find(u => 
-        u.id === userId || 
-        String(u.id).trim() === String(userId).trim()
-      );
-      
-      if (user) {
-        createdByName = user.name;
-        console.log('✓ Found via alternative lookup:', createdByName);
-      } else {
-        createdByName = 'Unknown User';
-        console.log('✗ User not found in alternative lookup');
-      }
+    if (user) {
+      createdByName = user.name;
+      console.log('✓ Found via alternative lookup:', createdByName);
+    } else {
+      createdByName = 'Unknown User';
+      console.log('✗ User not found in alternative lookup');
     }
-
-    const newPO = {
-      id,
-      poNumber,
-      date: poData.date || today,
-      supplier: poData.supplier || '',
-      supplierAddress: poData.supplierAddress || '',
-      supplierPhone: poData.supplierPhone || '',
-      receiver: poData.receiver || '',
-      receiverCity: poData.receiverCity || '',
-      receiverAddress: poData.receiverAddress || '',
-      receiverPhone: poData.receiverPhone || '',
-      tableHeaderText: poData.tableHeaderText || '',
-      taxRate: poData.taxRate || 0,
-      items: poData.items || [],
-      notes: poData.notes || '',
-      includeStaticFile: poData.includeStaticFile || false,
-      language: detectedLanguage,
-      status: 'pending',
-      createdBy: userId,
-      createdByName: createdByName,
-      createdByRole: userRole,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-
-    pos.push(newPO);
-    await this.savePOs(pos);
-
-    console.log('✓ PO created successfully');
-    console.log('Creator name:', newPO.createdByName);
-    console.log('Include Terms & Conditions:', newPO.includeStaticFile);
-    console.log('=================\n');
-    
-    return newPO;
   }
+
+  const newPO = {
+    id,
+    poNumber,
+    date: poData.date || today,
+    supplier: poData.supplier || '',
+    supplierAddress: poData.supplierAddress || '',
+    supplierPhone: poData.supplierPhone || '',
+    receiver: poData.receiver || '',
+    receiverCity: poData.receiverCity || '',
+    receiverAddress: poData.receiverAddress || '',
+    receiverPhone: poData.receiverPhone || '',
+    tableHeaderText: poData.tableHeaderText || '',
+    taxRate: poData.taxRate || 0,
+    items: poData.items || [],
+    notes: poData.notes || '',
+    // ✅ NEW: Text-based Terms & Conditions
+    includeTermsAndConditions: poData.includeTermsAndConditions || false,
+    termsAndConditionsText: poData.termsAndConditionsText || '',
+    language: detectedLanguage,
+    status: 'pending',
+    createdBy: userId,
+    createdByName: createdByName,
+    createdByRole: userRole,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  pos.push(newPO);
+  await this.savePOs(pos);
+
+  console.log('✓ PO created successfully');
+  console.log('Creator name:', newPO.createdByName);
+  console.log('Include Terms & Conditions:', newPO.includeTermsAndConditions);
+  console.log('=================\n');
+  
+  return newPO;
+}
+
+/**
+ * ✅ Update PO - WITH TEXT-BASED Terms & Conditions
+ */
+async updatePO(id, updateData, userId, userRole) {
+  const pos = await this.loadPOs();
+  const poIndex = pos.findIndex(p => p.id === id);
+
+  if (poIndex === -1) {
+    throw new Error('Purchase Order not found');
+  }
+
+  const po = pos[poIndex];
+
+  if (userRole === 'employee' || userRole === 'admin') {
+    if (po.createdBy !== userId) {
+      throw new Error('Access denied: You can only edit your own Purchase Orders');
+    }
+  }
+
+  if (updateData.date) po.date = updateData.date;
+  if (updateData.supplier !== undefined) po.supplier = updateData.supplier;
+  if (updateData.supplierAddress !== undefined) po.supplierAddress = updateData.supplierAddress;
+  if (updateData.supplierPhone !== undefined) po.supplierPhone = updateData.supplierPhone;
+  if (updateData.receiver !== undefined) po.receiver = updateData.receiver;
+  if (updateData.receiverCity !== undefined) po.receiverCity = updateData.receiverCity;
+  if (updateData.receiverAddress !== undefined) po.receiverAddress = updateData.receiverAddress;
+  if (updateData.receiverPhone !== undefined) po.receiverPhone = updateData.receiverPhone;
+  if (updateData.tableHeaderText !== undefined) po.tableHeaderText = updateData.tableHeaderText;
+  if (updateData.taxRate !== undefined) po.taxRate = updateData.taxRate;
+  if (updateData.items) po.items = updateData.items;
+  if (updateData.notes !== undefined) po.notes = updateData.notes;
+  if (updateData.status) po.status = updateData.status;
+  
+  // ✅ UPDATE: Text-based Terms & Conditions
+  if (updateData.includeTermsAndConditions !== undefined) {
+    po.includeTermsAndConditions = updateData.includeTermsAndConditions;
+  }
+  if (updateData.termsAndConditionsText !== undefined) {
+    po.termsAndConditionsText = updateData.termsAndConditionsText;
+  }
+
+  const detectedLanguage = updateData.forceLanguage || this.detectPOLanguage(po);
+  po.language = detectedLanguage;
+
+  po.updatedAt = new Date().toISOString();
+
+  pos[poIndex] = po;
+  await this.savePOs(pos);
+
+  const createdByName = await this.getUserNameById(po.createdBy);
+
+  return {
+    ...po,
+    createdByName: createdByName || po.createdByName || 'Unknown User'
+  };
+}
 
   /**
    * Get all POs with filtering and pagination
@@ -423,55 +483,7 @@ class PurchaseService {
     };
   }
 
-  /**
-   * ✅ Update PO - WITH includeStaticFile (Terms & Conditions) SUPPORT
-   */
-  async updatePO(id, updateData, userId, userRole) {
-    const pos = await this.loadPOs();
-    const poIndex = pos.findIndex(p => p.id === id);
 
-    if (poIndex === -1) {
-      throw new Error('Purchase Order not found');
-    }
-
-    const po = pos[poIndex];
-
-    if (userRole === 'employee' || userRole === 'admin') {
-      if (po.createdBy !== userId) {
-        throw new Error('Access denied: You can only edit your own Purchase Orders');
-      }
-    }
-
-    if (updateData.date) po.date = updateData.date;
-    if (updateData.supplier !== undefined) po.supplier = updateData.supplier;
-    if (updateData.supplierAddress !== undefined) po.supplierAddress = updateData.supplierAddress;
-    if (updateData.supplierPhone !== undefined) po.supplierPhone = updateData.supplierPhone;
-    if (updateData.receiver !== undefined) po.receiver = updateData.receiver;
-    if (updateData.receiverCity !== undefined) po.receiverCity = updateData.receiverCity;
-    if (updateData.receiverAddress !== undefined) po.receiverAddress = updateData.receiverAddress;
-    if (updateData.receiverPhone !== undefined) po.receiverPhone = updateData.receiverPhone;
-    if (updateData.tableHeaderText !== undefined) po.tableHeaderText = updateData.tableHeaderText;
-    if (updateData.taxRate !== undefined) po.taxRate = updateData.taxRate;
-    if (updateData.items) po.items = updateData.items;
-    if (updateData.notes !== undefined) po.notes = updateData.notes;
-    if (updateData.status) po.status = updateData.status;
-    if (updateData.includeStaticFile !== undefined) po.includeStaticFile = updateData.includeStaticFile;
-
-    const detectedLanguage = updateData.forceLanguage || this.detectPOLanguage(po);
-    po.language = detectedLanguage;
-
-    po.updatedAt = new Date().toISOString();
-
-    pos[poIndex] = po;
-    await this.savePOs(pos);
-
-    const createdByName = await this.getUserNameById(po.createdBy);
-
-    return {
-      ...po,
-      createdByName: createdByName || po.createdByName || 'Unknown User'
-    };
-  }
 
   /**
    * ✅ Delete PO - WITH FILE MANAGEMENT INTEGRATION
@@ -544,162 +556,153 @@ class PurchaseService {
 
     return stats;
   }
-  /**
-   * ✅ Generate PO PDF with custom filename pattern: PO00001_Receiver_DD-MM-YYYY.pdf
-   * 
-   * Merge order:
-   * 1. Generated PO PDF (always first)
-   * 2. User-uploaded attachment PDF (if provided)
-   * 3. Terms & Conditions static PDF (if includeStaticFile is true)
-   */
-  async generatePOPDF(id, userId, userRole, attachmentPdf = null) {
-    const po = await this.getPOById(id, userId, userRole);
-    
-    console.log('╔══════════════════════════════════════════════════════════╗');
-    console.log('║          GENERATING PURCHASE ORDER PDF                   ║');
-    console.log('╚══════════════════════════════════════════════════════════╝');
-    console.log('📄 PO Number:', po.poNumber);
-    console.log('📎 Include Terms & Conditions:', po.includeStaticFile);
-    console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
-    console.log('════════════════════════════════════════════════════════════');
-    
-    // ✅ Create custom filename: PO00001_Receiver_DD-MM-YYYY
-    const sanitizeFilename = (str) => {
-      if (!str) return 'Unknown';
-      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
-    };
-    
-    // ✅ Format date as DD-MM-YYYY
-    const formatDate = (dateStr) => {
-      if (!dateStr) {
-        const today = new Date().toISOString().split('T')[0];
-        const [year, month, day] = today.split('-');
-        return `${day}-${month}-${year}`;
-      }
-      const [year, month, day] = dateStr.split('-');
+/**
+ * ✅ UPDATED: Generate PO PDF with TEXT-BASED Terms & Conditions
+ * 
+ * Merge order:
+ * 1. Generated PO PDF (always first)
+ * 2. Terms & Conditions text page (if includeTermsAndConditions is true)
+ * 3. User-uploaded attachment PDF (if provided)
+ */
+async generatePOPDF(id, userId, userRole, attachmentPdf = null) {
+  const po = await this.getPOById(id, userId, userRole);
+  
+  console.log('╔══════════════════════════════════════════════════════════╗');
+  console.log('║          GENERATING PURCHASE ORDER PDF                   ║');
+  console.log('╚══════════════════════════════════════════════════════════╝');
+  console.log('📄 PO Number:', po.poNumber);
+  console.log('📄 Include T&C (checkbox):', po.includeTermsAndConditions);
+  console.log('📄 T&C Text Length:', po.termsAndConditionsText?.length || 0);
+  console.log('📄 User Attachment:', attachmentPdf ? 'Yes' : 'No');
+  console.log('════════════════════════════════════════════════════════════');
+  
+  // Create custom filename: PO00001_Receiver_DD-MM-YYYY
+  const sanitizeFilename = (str) => {
+    if (!str) return 'Unknown';
+    return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
+  };
+  
+  const formatDate = (dateStr) => {
+    if (!dateStr) {
+      const today = new Date().toISOString().split('T')[0];
+      const [year, month, day] = today.split('-');
       return `${day}-${month}-${year}`;
-    };
-    
-    const poNumber = po.poNumber || 'PO00000';
-    const receiverName = sanitizeFilename(po.receiver);
-    const dateFormatted = formatDate(po.date);
-    const customFilename = `${poNumber}_${receiverName}_${dateFormatted}`;
+    }
+    const [year, month, day] = dateStr.split('-');
+    return `${day}-${month}-${year}`;
+  };
+  
+  const poNumber = po.poNumber || 'PO00000';
+  const receiverName = sanitizeFilename(po.receiver);
+  const dateFormatted = formatDate(po.date);
+  const customFilename = `${poNumber}_${receiverName}_${dateFormatted}`;
 
-    console.log('📝 Custom filename:', customFilename);
-    
-    // Generate the main PO PDF with custom filename
-    const pdfResult = await poPdfGenerator.generatePOPDF(po, customFilename);
-    
-    // ✅ Prepare list of PDFs to merge (in order)
-    const pdfsToMerge = [];
-    
-    // 1. Add user-uploaded attachment if provided
-    if (attachmentPdf) {
-      const isValid = await poPdfGenerator.isValidPDF(attachmentPdf);
-      if (isValid) {
-        pdfsToMerge.push(attachmentPdf);
-        console.log('✅ Added user attachment PDF to merge list');
-      } else {
-        console.warn('⚠️  Invalid user attachment PDF, skipping');
-      }
+  console.log('📝 Custom filename:', customFilename);
+  
+  // Generate the main PO PDF
+  const pdfResult = await poPdfGenerator.generatePOPDF(po, customFilename);
+  
+  // ✅ STEP 1: Add Terms & Conditions page if enabled
+  if (po.includeTermsAndConditions && po.termsAndConditionsText && po.termsAndConditionsText.trim()) {
+    console.log('📄 Adding Terms & Conditions page to PO PDF...');
+    await poPdfGenerator.addTermsAndConditionsPage(
+      pdfResult.filepath, 
+      po.termsAndConditionsText, 
+      pdfResult.language
+    );
+    console.log('✅ Terms & Conditions page added successfully');
+  }
+  
+  // ✅ STEP 2: Prepare user attachment for merging
+  const pdfsToMerge = [];
+  
+  if (attachmentPdf) {
+    const isValid = await poPdfGenerator.isValidPDF(attachmentPdf);
+    if (isValid) {
+      pdfsToMerge.push(attachmentPdf);
+      console.log('✅ Added user attachment PDF to merge list');
+    } else {
+      console.warn('⚠️  Invalid user attachment PDF, skipping');
     }
-    
-    // 2. ✅ Add Terms & Conditions static PDF if includeStaticFile is true
-    if (po.includeStaticFile === true) {
-      try {
-        const fsSync = require('fs');
-        if (fsSync.existsSync(STATIC_PDF_PATH)) {
-          const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
-          pdfsToMerge.push(staticPdfBytes);
-          console.log('✅ Added Terms & Conditions PDF to merge list');
-        } else {
-          console.warn('⚠️  Terms & Conditions PDF not found at:', STATIC_PDF_PATH);
-        }
-      } catch (error) {
-        console.error('❌ Error reading Terms & Conditions PDF:', error.message);
-      }
-    }
-    
-    // Merge all PDFs
-    let finalPdfResult = pdfResult;
-    try {
-      if (pdfsToMerge.length > 0) {
-        console.log(`🔄 Merging ${pdfsToMerge.length} additional PDF(s) with PO...`);
-        
-        let currentPath = pdfResult.filepath;
-        
-        // Merge each PDF sequentially
-        for (let i = 0; i < pdfsToMerge.length; i++) {
-          console.log(`   Merging PDF ${i + 1} of ${pdfsToMerge.length}...`);
-          const mergeResult = await poPdfGenerator.mergePDFs(
-            currentPath,
-            pdfsToMerge[i],
-            null,
-            pdfResult.language
-          );
-          currentPath = mergeResult.filepath;
-          
-          // Update final result on last merge
-          if (i === pdfsToMerge.length - 1) {
-            finalPdfResult = {
-              ...pdfResult,
-              filename: mergeResult.filename,
-              filepath: mergeResult.filepath,
-              merged: true,
-              pageCount: mergeResult.pageCount
-            };
-          }
-        }
-        
-        console.log('✅ PDF merge completed successfully');
-        console.log('   Total pages:', finalPdfResult.pageCount.total);
-      } else {
-        // No PDFs to merge, just add headers/footers
-        console.log('ℹ️  No additional PDFs to merge, adding headers/footers only...');
-        const headerResult = await poPdfGenerator.mergePDFs(
-          pdfResult.filepath,
-          null,
+  }
+  
+  // Merge all PDFs
+  let finalPdfResult = pdfResult;
+  try {
+    if (pdfsToMerge.length > 0) {
+      console.log(`🔄 Merging ${pdfsToMerge.length} additional PDF(s) with PO...`);
+      
+      let currentPath = pdfResult.filepath;
+      
+      for (let i = 0; i < pdfsToMerge.length; i++) {
+        console.log(`   Merging PDF ${i + 1} of ${pdfsToMerge.length}...`);
+        const mergeResult = await poPdfGenerator.mergePDFs(
+          currentPath,
+          pdfsToMerge[i],
           null,
           pdfResult.language
         );
+        currentPath = mergeResult.filepath;
         
-        finalPdfResult = {
-          ...pdfResult,
-          filename: headerResult.filename,
-          filepath: headerResult.filepath,
-          merged: false,
-          pageCount: headerResult.pageCount
-        };
+        if (i === pdfsToMerge.length - 1) {
+          finalPdfResult = {
+            ...pdfResult,
+            filename: mergeResult.filename,
+            filepath: mergeResult.filepath,
+            merged: true,
+            pageCount: mergeResult.pageCount
+          };
+        }
       }
-    } catch (mergeError) {
-      console.error('❌ PDF merge/header failed:', mergeError.message);
-      finalPdfResult.mergeError = mergeError.message;
+      
+      console.log('✅ PDF merge completed successfully');
+      console.log('   Total pages:', finalPdfResult.pageCount.total);
+    } else {
+      console.log('ℹ️  No attachments to merge, adding headers/footers only...');
+      const headerResult = await poPdfGenerator.mergePDFs(
+        pdfResult.filepath,
+        null,
+        null,
+        pdfResult.language
+      );
+      
+      finalPdfResult = {
+        ...pdfResult,
+        filename: headerResult.filename,
+        filepath: headerResult.filepath,
+        merged: false,
+        pageCount: headerResult.pageCount
+      };
     }
-    
-    // Update PO record with PDF metadata
-    const pos = await this.loadPOs();
-    const poIndex = pos.findIndex(p => p.id === id);
-    
-    if (poIndex !== -1) {
-      pos[poIndex].pdfFilename = finalPdfResult.filename;
-      pos[poIndex].pdfLanguage = finalPdfResult.language;
-      pos[poIndex].pdfGeneratedAt = new Date().toISOString();
-      pos[poIndex].pdfMerged = finalPdfResult.merged || false;
-      if (finalPdfResult.pageCount) {
-        pos[poIndex].pdfPageCount = finalPdfResult.pageCount;
-      }
-      await this.savePOs(pos);
-    }
-    
-    console.log('════════════════════════════════════════════════════════════');
-    console.log('✅ PDF generation complete!');
-    console.log('════════════════════════════════════════════════════════════\n');
-    
-    return {
-      po,
-      pdf: finalPdfResult
-    };
+  } catch (mergeError) {
+    console.error('❌ PDF merge/header failed:', mergeError.message);
+    finalPdfResult.mergeError = mergeError.message;
   }
+  
+  // Update PO record with PDF metadata
+  const pos = await this.loadPOs();
+  const poIndex = pos.findIndex(p => p.id === id);
+  
+  if (poIndex !== -1) {
+    pos[poIndex].pdfFilename = finalPdfResult.filename;
+    pos[poIndex].pdfLanguage = finalPdfResult.language;
+    pos[poIndex].pdfGeneratedAt = new Date().toISOString();
+    pos[poIndex].pdfMerged = finalPdfResult.merged || false;
+    if (finalPdfResult.pageCount) {
+      pos[poIndex].pdfPageCount = finalPdfResult.pageCount;
+    }
+    await this.savePOs(pos);
+  }
+  
+  console.log('════════════════════════════════════════════════════════════');
+  console.log('✅ PDF generation complete!');
+  console.log('════════════════════════════════════════════════════════════\n');
+  
+  return {
+    po,
+    pdf: finalPdfResult
+  };
+}
 
   /**
    * ✅ Send Purchase Order PDF by email with custom filename DD-MM-YYYY format

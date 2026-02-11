@@ -5,6 +5,46 @@ const puppeteer = require('puppeteer');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
 class PDFGenerator {
+  DEFAULT_TERMS_AR = `الشروط والأحكام
+
+تُعتبر جميع المواد والبنود والخدمات غير المذكورة صراحةً في هذا المستند مستثناة. كما أن أي خدمات أو أعمال تقع خارج نطاق عمل المورد غير مشمولة. ضريبة القيمة المضافة وأي رسوم حكومية أو تصاريح أو موافقات رسمية غير مشمولة ما لم يُذكر خلاف ذلك صراحةً. كما أن الأعمال المدنية وأعمال الرفع والمناولة وفك وإعادة تركيب العوائق الموجودة في الموقع أو أي أعمال مشابهة غير مشمولة ما لم يتم ذكرها بشكل واضح.
+
+أي أعمال إضافية أو تغييرات أو تعديلات أو متطلبات غير مذكورة في هذا المستند تخضع لتكاليف إضافية وتعديل في مدة التنفيذ حسب الحالة. كما أن رسوم الدراسات واعتماد التصاميم والموافقات الرسمية والتصاريح وختم المخططات والحسابات الهندسية أو أي متطلبات فنية مشابهة غير مشمولة ما لم يُذكر خلاف ذلك صراحةً.
+
+الأسعار مبنية على أساس تنفيذ الطلب بالكامل كما هو محدد، وفي حال تنفيذ جزء من الطلب يحق للمورد تعديل الأسعار وفقًا لذلك.
+
+تكون شروط الدفع على النحو التالي:
+• ( )% دفعة مقدمة عند تأكيد الطلب  
+• ( )% أثناء التنفيذ / عند التوريد  
+• ( )% عند الانتهاء والتسليم النهائي  
+
+يسري هذا المستند لمدة ( ) يوم تقويمي / يوم عمل من تاريخ الإصدار ما لم يُذكر خلاف ذلك.
+
+تعتمد مدة التنفيذ والتوريد على تأكيد الطلب واستلام الموافقات اللازمة وجاهزية الموقع.  
+مدة التنفيذ التقديرية: ( ) يوم / أسبوع / شهر من تاريخ تأكيد الطلب.`;
+
+
+
+  DEFAULT_TERMS_EN = `Terms and Conditions
+
+All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier’s scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
+
+Any additional work, variations, modifications, or requirements not specified in this document shall be subject to additional cost and corresponding time adjustments, as applicable. Fees related to studies, design approvals, authority approvals, permits, stamping, engineering calculations, or any similar technical requirements are not included unless explicitly stated.
+
+Prices are based on the execution of the complete order as specified. In the event of partial order execution, the Supplier reserves the right to revise and amend the prices accordingly.
+
+Payment terms shall be as follows:
+• ( )% advance payment upon order confirmation  
+• ( )% during project execution / upon delivery  
+• ( )% upon completion and final handover  
+
+This document is valid for ( ) calendar / working days from the date of issuance unless otherwise stated.
+
+Execution and delivery timelines are subject to order confirmation, receipt of required approvals, and readiness of the project/site conditions.  
+Estimated execution period: ( ) days / weeks / months from the date of order confirmation.`;
+
+
+
   isArabic(text) {
     if (!text) return false;
     const arabicPattern = /[\u0600-\u06FF]/;
@@ -61,7 +101,8 @@ class PDFGenerator {
         docCode: 'OMEGA-RIC-01',
         dateOfIssue: 'DATE OF ISSUE',
         additionalInfo: 'يرجى استلام ما تم إدراجه أدناه',
-        additionalNotes: 'ملاحظات إضافية'
+        additionalNotes: 'ملاحظات إضافية',
+        termsAndConditions: 'الشروط والأحكام' // ✅ ADD THIS LINE
       },
       en: {
         title: 'Delivery Notice',
@@ -88,7 +129,8 @@ class PDFGenerator {
         docCode: 'OMEGA-RIC-01',
         dateOfIssue: 'DATE OF ISSUE',
         additionalInfo: 'Please receive the items listed below:',
-        additionalNotes: 'Additional Notes'
+        additionalNotes: 'Additional Notes',
+        termsAndConditions: 'Terms and Conditions' // ✅ ADD THIS LINE
       }
     };
 
@@ -583,11 +625,277 @@ body {
 </html>
     `;
   }
+/**
+   * ✅ NEW: Generate Terms & Conditions HTML Page
+   */
+  generateTermsHTML(termsText, language = 'ar') {
+    const labels = this.getLabels(language);
+    const isRTL = language === 'ar';
+    
+    // Escape HTML special characters
+    const escapeHtml = (text) => {
+      return text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
 
+    // Convert line breaks to HTML
+    const formattedText = escapeHtml(termsText).replace(/\n/g, '<br>');
+
+    return `
+<!DOCTYPE html>
+<html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
+<head>
+<meta charset="UTF-8">
+<title>الشروط والأحكام - OMEGA</title>
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  background: #fff;
+  margin: 0;
+  padding: 0;
+}
+
+@page {
+  size: A4;
+  margin: 35mm 20mm 25mm 20mm;
+}
+
+.page-content {
+  width: 100%;
+  background: #fff;
+}
+
+.company-info {
+  padding: 5px 0 10px 0;
+  margin-bottom: 10px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.company-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 30px;
+}
+
+.company-col {
+  width: 48%;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.company-col-right {
+  text-align: right;
+  direction: rtl;
+}
+
+.company-col-left {
+  text-align: left;
+  direction: ltr;
+}
+
+.company-col p {
+  margin: 4px 0;
+}
+
+.blue-separator {
+  width: 100%;
+  height: 3px;
+  background-color: #0b4fa2;
+  margin: 10px 0 20px 0;
+}
+
+.title {
+  text-align: center;
+  margin: 0 0 25px 0;
+  font-size: 24px;
+  color: #0b4fa2;
+  font-weight: bold;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.terms-content {
+  padding: 20px 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #333;
+  text-align: ${isRTL ? 'right' : 'left'};
+  white-space: pre-wrap;
+}
+
+@media print {
+  body {
+    background: none;
+    padding: 0;
+    margin: 0;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div class="page-content">
+
+  <!-- Company Info Header -->
+  <div class="company-info">
+    <div class="company-row">
+      ${isRTL ? `
+      <div class="company-col company-col-right">
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>المملكة الأردنية الهاشمية</p>
+        <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+      </div>
+      <div class="company-col company-col-left">
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>Design – Manufacture – Installation</p>
+        <p>Jordan</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
+      </div>
+      ` : `
+      <div class="company-col company-col-left">
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>Design – Manufacture – Installation</p>
+        <p>Jordan</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
+      </div>
+      <div class="company-col company-col-right">
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>المملكة الأردنية الهاشمية</p>
+        <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+      </div>
+      `}
+    </div>
+  </div>
+
+  <!-- Blue Separator -->
+  <div class="blue-separator"></div>
+
+  <!-- Title -->
+  <h1 class="title">${isRTL ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>
+
+  <!-- Terms Content -->
+  <div class="terms-content">${formattedText}</div>
+
+</div>
+
+</body>
+</html>
+    `;
+  }
+
+  /**
+   * ✅ NEW: Add Terms & Conditions page to existing PDF
+   */
+  async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
+    let browser;
+    
+    try {
+      // Generate Terms HTML
+      const termsHTML = this.generateTermsHTML(termsText, language);
+      
+      // Create temporary Terms PDF
+      const tempTermsPath = existingPdfPath.replace('.pdf', '_terms_temp.pdf');
+      
+      browser = await puppeteer.launch({
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu'
+        ]
+      });
+
+      const page = await browser.newPage();
+      await page.setContent(termsHTML, { 
+        waitUntil: 'networkidle0',
+        timeout: 30000 
+      });
+
+      await page.pdf({
+        path: tempTermsPath,
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '0mm',
+          right: '0mm',
+          bottom: '0mm',
+          left: '0mm'
+        },
+        preferCSSPageSize: true
+      });
+
+      await browser.close();
+      browser = null;
+
+      // Merge the Terms PDF with the existing PDF
+      console.log('📄 Merging Terms & Conditions page with main PDF...');
+      
+      const existingPdfBytes = fs.readFileSync(existingPdfPath);
+      const termsPdfBytes = fs.readFileSync(tempTermsPath);
+      
+      const existingPdf = await PDFDocument.load(existingPdfBytes);
+      const termsPdf = await PDFDocument.load(termsPdfBytes);
+      
+      // Create merged PDF
+      const mergedPdf = await PDFDocument.create();
+      
+      // Copy all pages from existing PDF
+      const existingPages = await mergedPdf.copyPages(
+        existingPdf,
+        existingPdf.getPageIndices()
+      );
+      existingPages.forEach(page => mergedPdf.addPage(page));
+      
+      // Copy all pages from Terms PDF
+      const termsPages = await mergedPdf.copyPages(
+        termsPdf,
+        termsPdf.getPageIndices()
+      );
+      termsPages.forEach(page => mergedPdf.addPage(page));
+      
+      // Save merged PDF
+      const mergedPdfBytes = await mergedPdf.save();
+      fs.writeFileSync(existingPdfPath, mergedPdfBytes);
+      
+      // Delete temporary Terms PDF
+      try {
+        fs.unlinkSync(tempTermsPath);
+        console.log('✅ Terms & Conditions page added successfully');
+      } catch (err) {
+        console.log('Could not delete temp Terms PDF:', err.message);
+      }
+      
+    } catch (error) {
+      if (browser) {
+        await browser.close();
+      }
+      console.error('❌ Error adding Terms & Conditions page:', error);
+      throw error;
+    }
+  }
   /**
    * ✅ UPDATED: Generate receipt PDF with custom filename parameter
    */
-  async generateReceiptPDF(receipt, customFilename = null) {
+  /**
+   * ✅ UPDATED: Generate receipt PDF with custom filename and T&C
+   */
+  async generateReceiptPDF(receipt, customFilename = null, termsAndConditionsText = null) {
     const language = this.detectLanguage(receipt);
 
     return new Promise(async (resolve, reject) => {
@@ -599,7 +907,6 @@ body {
           fs.mkdirSync(pdfDir, { recursive: true });
         }
 
-        // ✅ Use custom filename if provided, otherwise use default
         const filename = customFilename || `${receipt.receiptNumber || 'receipt'}_${Date.now()}.pdf`;
         const filepath = path.join(pdfDir, filename);
         const html = this.generateHTML(receipt);
@@ -634,6 +941,13 @@ body {
         });
 
         await browser.close();
+        browser = null;
+
+        // ✅ If Terms & Conditions text is provided, add it as a new page
+        if (termsAndConditionsText && termsAndConditionsText.trim()) {
+          console.log('📄 Adding Terms & Conditions page to PDF...');
+          await this.addTermsAndConditionsPage(filepath, termsAndConditionsText, language);
+        }
 
         console.log('✅ PDF generated with filename:', filename);
 

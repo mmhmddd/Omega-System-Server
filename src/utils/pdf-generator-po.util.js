@@ -5,6 +5,45 @@ const puppeteer = require('puppeteer');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
 class POPDFGenerator {
+  DEFAULT_TERMS_AR = `الشروط والأحكام
+
+تُعتبر جميع المواد والبنود والخدمات غير المذكورة صراحةً في هذا المستند مستثناة. كما أن أي خدمات أو أعمال تقع خارج نطاق عمل المورد غير مشمولة. ضريبة القيمة المضافة وأي رسوم حكومية أو تصاريح أو موافقات رسمية غير مشمولة ما لم يُذكر خلاف ذلك صراحةً. كما أن الأعمال المدنية وأعمال الرفع والمناولة وفك وإعادة تركيب العوائق الموجودة في الموقع أو أي أعمال مشابهة غير مشمولة ما لم يتم ذكرها بشكل واضح.
+
+أي أعمال إضافية أو تغييرات أو تعديلات أو متطلبات غير مذكورة في هذا المستند تخضع لتكاليف إضافية وتعديل في مدة التنفيذ حسب الحالة. كما أن رسوم الدراسات واعتماد التصاميم والموافقات الرسمية والتصاريح وختم المخططات والحسابات الهندسية أو أي متطلبات فنية مشابهة غير مشمولة ما لم يُذكر خلاف ذلك صراحةً.
+
+الأسعار مبنية على أساس تنفيذ الطلب بالكامل كما هو محدد، وفي حال تنفيذ جزء من الطلب يحق للمورد تعديل الأسعار وفقًا لذلك.
+
+تكون شروط الدفع على النحو التالي:
+• ( )% دفعة مقدمة عند تأكيد الطلب  
+• ( )% أثناء التنفيذ / عند التوريد  
+• ( )% عند الانتهاء والتسليم النهائي  
+
+يسري هذا المستند لمدة ( ) يوم تقويمي / يوم عمل من تاريخ الإصدار ما لم يُذكر خلاف ذلك.
+
+تعتمد مدة التنفيذ والتوريد على تأكيد الطلب واستلام الموافقات اللازمة وجاهزية الموقع.  
+مدة التنفيذ التقديرية: ( ) يوم / أسبوع / شهر من تاريخ تأكيد الطلب.`;
+
+
+
+  DEFAULT_TERMS_EN = `Terms and Conditions
+
+All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier’s scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
+
+Any additional work, variations, modifications, or requirements not specified in this document shall be subject to additional cost and corresponding time adjustments, as applicable. Fees related to studies, design approvals, authority approvals, permits, stamping, engineering calculations, or any similar technical requirements are not included unless explicitly stated.
+
+Prices are based on the execution of the complete order as specified. In the event of partial order execution, the Supplier reserves the right to revise and amend the prices accordingly.
+
+Payment terms shall be as follows:
+• ( )% advance payment upon order confirmation  
+• ( )% during project execution / upon delivery  
+• ( )% upon completion and final handover  
+
+This document is valid for ( ) calendar / working days from the date of issuance unless otherwise stated.
+
+Execution and delivery timelines are subject to order confirmation, receipt of required approvals, and readiness of the project/site conditions.  
+Estimated execution period: ( ) days / weeks / months from the date of order confirmation.`;
+
+
   isArabic(text) {
     if (!text) return false;
     const arabicPattern = /[\u0600-\u06FF]/;
@@ -125,7 +164,8 @@ class POPDFGenerator {
         productionManager: 'مدير الإنتاج',
         accountant: 'المحاسب',
         docCode: 'OMEGA-PUR-05',
-        issueDate: 'DATE OF ISSUE'
+        issueDate: 'DATE OF ISSUE',
+        termsAndConditions: 'الشروط والأحكام' // ✅ ADD THIS LINE
       },
       en: {
         title: 'Purchase Order',
@@ -179,7 +219,8 @@ class POPDFGenerator {
         productionManager: 'Production Manager',
         accountant: 'Accountant',
         docCode: 'OMEGA-PUR-05',
-        issueDate: 'DATE OF ISSUE'
+        issueDate: 'DATE OF ISSUE',
+        termsAndConditions: 'Terms and Conditions' // ✅ ADD THIS LINE
       }
     };
 
@@ -971,75 +1012,377 @@ body {
     `;
   }
 
-  // ✅ UPDATED: Accept customFilename parameter
-  async generatePOPDF(po, customFilename = null) {
-    const language = this.detectLanguage(po);
+  // Add these methods to the POPDFGenerator class in pdf-generator-po.util.js
 
-    return new Promise(async (resolve, reject) => {
-      let browser;
-      
-      try {
-        const pdfDir = path.join(__dirname, '../../data/purchases/pdfs');
-        if (!fs.existsSync(pdfDir)) {
-          fs.mkdirSync(pdfDir, { recursive: true });
-        }
+/**
+ * ✅ Generate Terms & Conditions HTML Page for Purchase Orders
+ */
+generateTermsHTML(termsText, language = 'ar') {
+  console.log('🔨 Generating Purchase Order Terms HTML...');
+  console.log('   Language:', language);
+  console.log('   Text length:', termsText?.length || 0);
+  
+  const labels = this.getLabels(language);
+  const isRTL = language === 'ar';
+  
+  // Escape HTML special characters
+  const escapeHtml = (text) => {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+  
+  // Convert line breaks to HTML
+  const formattedText = escapeHtml(termsText).replace(/\n/g, '<br>');
+  
+  return `
+<!DOCTYPE html>
+<html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
+<head>
+<meta charset="UTF-8">
+<title>${language === 'ar' ? 'الشروط والأحكام' : 'Terms and Conditions'} - OMEGA</title>
+<style>
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+}
 
-        // ✅ Use custom filename if provided, otherwise use default pattern
-        const filename = customFilename 
-          ? `${customFilename}.pdf`
-          : `${po.poNumber || 'po'}_${Date.now()}.pdf`;
-        const filepath = path.join(pdfDir, filename);
-        const html = this.generateHTML(po);
+body {
+  background: #fff;
+  margin: 0;
+  padding: 0;
+}
 
-        browser = await puppeteer.launch({
-          headless: 'new',
-          args: [
-            '--no-sandbox',
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-gpu'
-          ]
-        });
+@page {
+  size: A4;
+  margin: 35mm 20mm 25mm 20mm;
+}
 
-        const page = await browser.newPage();
-        await page.setContent(html, { 
-          waitUntil: 'networkidle0',
-          timeout: 30000 
-        });
+.page-content {
+  width: 100%;
+  background: #fff;
+}
 
-        await page.pdf({
-          path: filepath,
-          format: 'A4',
-          printBackground: true,
-          margin: {
-            top: '0mm',
-            right: '0mm',
-            bottom: '0mm',
-            left: '0mm'
-          },
-          preferCSSPageSize: true
-        });
+.company-info {
+  padding: 10px 0;
+  margin-bottom: 10px;
+  direction: ltr;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
 
-        await browser.close();
+.company-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  direction: ltr;
+}
 
-        resolve({ 
-          filename, 
-          filepath, 
-          language,
-          success: true 
-        });
-      } catch (error) {
-        if (browser) {
-          await browser.close();
-        }
-        reject({
-          success: false,
-          error: error.message,
-          stack: error.stack
-        });
-      }
-    });
+.company-left, .company-right {
+  width: 48%;
+}
+
+.company-left {
+  text-align: left;
+  direction: ltr;
+}
+
+.company-right {
+  text-align: right;
+  direction: rtl;
+}
+
+.company-left p, .company-right p {
+  margin: 3px 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #333;
+}
+
+.separator-line {
+  width: 100%;
+  height: 2px;
+  background-color: #2B4C8C;
+  margin: 15px 0;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.title {
+  text-align: center;
+  margin: 15px 0 20px 0;
+  font-size: 22px;
+  color: #2B4C8C;
+  font-weight: bold;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.terms-content {
+  padding: 20px 0;
+  font-size: 12px;
+  line-height: 1.8;
+  color: #333;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  text-align: ${isRTL ? 'right' : 'left'};
+}
+
+@media print {
+  body {
+    background: none;
+    padding: 0;
+    margin: 0;
   }
+}
+</style>
+</head>
+
+<body>
+<div class="page-content">
+  <!-- Company Info Header -->
+  <div class="company-info">
+    <div class="company-row">
+      <div class="company-left">
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>DESIGN - FABRICATION - INSTALLATION</p>
+        <p>JORDAN</p>
+        <p>Tel: +96264161060 Fax: +96264162060</p>
+        <p>https://www.omega-jordan.com</p>
+      </div>
+      <div class="company-right">
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>JORDAN</p>
+        <p>Tel: +96264161060 Fax: +96264162060</p>
+        <p>https://www.omega-jordan.com</p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Title -->
+  <h1 class="title">${language === 'ar' ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>
+
+  <!-- Terms Content -->
+  <div class="terms-content">${formattedText}</div>
+</div>
+</body>
+</html>
+  `;
+}
+
+/**
+ * ✅ Add Terms & Conditions page to existing PO PDF
+ */
+async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
+  let browser;
+  
+  try {
+    console.log('╔══════════════════════════════════════════════════════════╗');
+    console.log('║       ADDING PO TERMS & CONDITIONS PAGE                  ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    console.log('📄 Existing PDF:', existingPdfPath);
+    console.log('📄 Terms Text Length:', termsText?.length || 0);
+    console.log('📄 Language:', language);
+    console.log('════════════════════════════════════════════════════════════');
+    
+    // 1. Generate Terms HTML
+    console.log('   Step 1: Generating T&C HTML...');
+    const termsHTML = this.generateTermsHTML(termsText, language);
+    console.log('   ✅ T&C HTML generated');
+    
+    // 2. Create temporary Terms PDF
+    const tempTermsPath = existingPdfPath.replace('.pdf', '_terms_temp.pdf');
+    console.log('   Step 2: Creating temp T&C PDF at:', tempTermsPath);
+    
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+    });
+
+    const page = await browser.newPage();
+    await page.setContent(termsHTML, { 
+      waitUntil: 'networkidle0',
+      timeout: 30000 
+    });
+
+    await page.pdf({
+      path: tempTermsPath,
+      format: 'A4',
+      printBackground: true,
+      margin: {
+        top: '0mm',
+        right: '0mm',
+        bottom: '0mm',
+        left: '0mm'
+      },
+      preferCSSPageSize: true
+    });
+
+    await browser.close();
+    browser = null;
+    console.log('   ✅ Temp T&C PDF created');
+    
+    // 3. Merge PDFs using pdf-lib
+    console.log('   Step 3: Merging PDFs...');
+    
+    const fs = require('fs');
+    const existingPdfBytes = fs.readFileSync(existingPdfPath);
+    const termsPdfBytes = fs.readFileSync(tempTermsPath);
+    
+    const { PDFDocument } = require('pdf-lib');
+    const existingPdf = await PDFDocument.load(existingPdfBytes);
+    const termsPdf = await PDFDocument.load(termsPdfBytes);
+    const mergedPdf = await PDFDocument.create();
+    
+    console.log('   - Existing PDF pages:', existingPdf.getPageCount());
+    console.log('   - Terms PDF pages:', termsPdf.getPageCount());
+    
+    // Copy all pages from existing PO PDF
+    const existingPages = await mergedPdf.copyPages(existingPdf, existingPdf.getPageIndices());
+    existingPages.forEach(page => mergedPdf.addPage(page));
+    console.log('   ✅ Copied existing pages');
+    
+    // Copy all pages from Terms PDF
+    const termsPages = await mergedPdf.copyPages(termsPdf, termsPdf.getPageIndices());
+    termsPages.forEach(page => mergedPdf.addPage(page));
+    console.log('   ✅ Copied terms pages');
+    
+    // 4. Save merged PDF (overwrites original)
+    console.log('   Step 4: Saving merged PDF...');
+    const mergedPdfBytes = await mergedPdf.save();
+    fs.writeFileSync(existingPdfPath, mergedPdfBytes);
+    console.log('   ✅ Merged PDF saved');
+    
+    // 5. Delete temporary Terms PDF
+    console.log('   Step 5: Cleaning up temp file...');
+    fs.unlinkSync(tempTermsPath);
+    console.log('   ✅ Temp file deleted');
+    
+    console.log('✅ TERMS & CONDITIONS PAGE ADDED SUCCESSFULLY');
+    console.log('   Total pages in merged PDF:', mergedPdf.getPageCount());
+    console.log('════════════════════════════════════════════════════════════\n');
+    
+  } catch (error) {
+    if (browser) {
+      await browser.close();
+    }
+    console.error('❌ Error adding Terms & Conditions page:', error);
+    throw error;
+  }
+}
+
+  // ✅ UPDATED: Accept customFilename parameter
+async generatePOPDF(po, customFilename = null, termsAndConditionsText = null, includeTermsAndConditions = false) {
+  const language = this.detectLanguage(po);
+
+  return new Promise(async (resolve, reject) => {
+    let browser;
+    
+    try {
+      const pdfDir = path.join(__dirname, '../../data/purchases/pdfs');
+      if (!fs.existsSync(pdfDir)) {
+        fs.mkdirSync(pdfDir, { recursive: true });
+      }
+
+      const filename = customFilename 
+        ? `${customFilename}.pdf`
+        : `${po.poNumber || 'po'}_${Date.now()}.pdf`;
+      const filepath = path.join(pdfDir, filename);
+
+      console.log('╔══════════════════════════════════════════════════════════╗');
+      console.log('║       GENERATING PURCHASE ORDER PDF                      ║');
+      console.log('╚══════════════════════════════════════════════════════════╝');
+      console.log('📄 Filename:', filename);
+      console.log('📄 Language:', language);
+      console.log('📄 Include T&C:', includeTermsAndConditions);
+      
+      // ✅ If T&C enabled but no text provided, use default based on detected language
+      let finalTermsText = null;
+      if (includeTermsAndConditions) {
+        if (termsAndConditionsText && termsAndConditionsText.trim()) {
+          finalTermsText = termsAndConditionsText;
+          console.log('📄 Using custom T&C text');
+        } else {
+          finalTermsText = language === 'ar' ? this.DEFAULT_TERMS_AR : this.DEFAULT_TERMS_EN;
+          console.log('📄 Using default T&C for language:', language);
+        }
+      }
+      console.log('════════════════════════════════════════════════════════════');
+
+      const html = this.generateHTML(po);
+
+      browser = await puppeteer.launch({
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu'
+        ]
+      });
+
+      const page = await browser.newPage();
+      await page.setContent(html, { 
+        waitUntil: 'networkidle0',
+        timeout: 30000 
+      });
+
+      await page.pdf({
+        path: filepath,
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '0mm',
+          right: '0mm',
+          bottom: '0mm',
+          left: '0mm'
+        },
+        preferCSSPageSize: true
+      });
+
+      await browser.close();
+      browser = null;
+
+      // ✅ Add T&C page if enabled (with auto-language selection)
+      if (finalTermsText && finalTermsText.trim()) {
+        console.log('📄 Adding Terms & Conditions page...');
+        await this.addTermsAndConditionsPage(filepath, finalTermsText, language);
+        console.log('✅ Terms & Conditions page added');
+      }
+
+      console.log('✅ PDF generation complete\n');
+
+      resolve({ 
+        filename, 
+        filepath, 
+        language,
+        success: true,
+        hasTermsAndConditions: !!(finalTermsText && finalTermsText.trim())
+      });
+    } catch (error) {
+      if (browser) {
+        await browser.close();
+      }
+      reject({
+        success: false,
+        error: error.message,
+        stack: error.stack
+      });
+    }
+  });
+}
 
   getA4Dimensions() {
     return {

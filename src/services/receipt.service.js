@@ -28,6 +28,46 @@ console.log('  - Password:', EMAIL_PASS ? '✅ Configured' : '❌ Missing');
 console.log('  - From:', EMAIL_FROM);
 
 class ReceiptService {
+
+
+DEFAULT_TERMS_AR = `الشروط والأحكام
+
+تُعتبر جميع المواد والبنود والخدمات غير المذكورة صراحةً في هذا المستند مستثناة. كما أن أي خدمات أو أعمال تقع خارج نطاق عمل المورد غير مشمولة. ضريبة القيمة المضافة وأي رسوم حكومية أو تصاريح أو موافقات رسمية غير مشمولة ما لم يُذكر خلاف ذلك صراحةً. كما أن الأعمال المدنية وأعمال الرفع والمناولة وفك وإعادة تركيب العوائق الموجودة في الموقع أو أي أعمال مشابهة غير مشمولة ما لم يتم ذكرها بشكل واضح.
+
+أي أعمال إضافية أو تغييرات أو تعديلات أو متطلبات غير مذكورة في هذا المستند تخضع لتكاليف إضافية وتعديل في مدة التنفيذ حسب الحالة. كما أن رسوم الدراسات واعتماد التصاميم والموافقات الرسمية والتصاريح وختم المخططات والحسابات الهندسية أو أي متطلبات فنية مشابهة غير مشمولة ما لم يُذكر خلاف ذلك صراحةً.
+
+الأسعار مبنية على أساس تنفيذ الطلب بالكامل كما هو محدد، وفي حال تنفيذ جزء من الطلب يحق للمورد تعديل الأسعار وفقًا لذلك.
+
+تكون شروط الدفع على النحو التالي:
+• ( )% دفعة مقدمة عند تأكيد الطلب  
+• ( )% أثناء التنفيذ / عند التوريد  
+• ( )% عند الانتهاء والتسليم النهائي  
+
+يسري هذا المستند لمدة ( ) يوم تقويمي / يوم عمل من تاريخ الإصدار ما لم يُذكر خلاف ذلك.
+
+تعتمد مدة التنفيذ والتوريد على تأكيد الطلب واستلام الموافقات اللازمة وجاهزية الموقع.  
+مدة التنفيذ التقديرية: ( ) يوم / أسبوع / شهر من تاريخ تأكيد الطلب.`;
+
+
+
+ DEFAULT_TERMS_EN = `Terms and Conditions
+
+All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier’s scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
+
+Any additional work, variations, modifications, or requirements not specified in this document shall be subject to additional cost and corresponding time adjustments, as applicable. Fees related to studies, design approvals, authority approvals, permits, stamping, engineering calculations, or any similar technical requirements are not included unless explicitly stated.
+
+Prices are based on the execution of the complete order as specified. In the event of partial order execution, the Supplier reserves the right to revise and amend the prices accordingly.
+
+Payment terms shall be as follows:
+• ( )% advance payment upon order confirmation  
+• ( )% during project execution / upon delivery  
+• ( )% upon completion and final handover  
+
+This document is valid for ( ) calendar / working days from the date of issuance unless otherwise stated.
+
+Execution and delivery timelines are subject to order confirmation, receipt of required approvals, and readiness of the project/site conditions.  
+Estimated execution period: ( ) days / weeks / months from the date of order confirmation.`;
+
   /**
    * ✅ NEW: Create custom filename pattern: DN0005_Tarek_2026-02-07.pdf
    */
@@ -215,7 +255,6 @@ class ReceiptService {
     console.log('userId:', userId);
     console.log('userId type:', typeof userId);
     console.log('userRole:', userRole);
-    console.log('includeStaticFile:', receiptData.includeStaticFile);
     
     const receipts = await this.loadReceipts();
     
@@ -251,7 +290,9 @@ class ReceiptService {
       additionalText: receiptData.additionalText || '',
       items: receiptData.items || [],
       notes: receiptData.notes || '',
-      includeStaticFile: receiptData.includeStaticFile || false,
+      // ✅ NEW: Text-based Terms & Conditions
+      includeTermsAndConditions: receiptData.includeTermsAndConditions || false,
+      termsAndConditionsText: receiptData.termsAndConditionsText || '',
       createdBy: userId,
       createdByName: createdByName || 'Unknown User',
       createdByRole: userRole,
@@ -263,7 +304,6 @@ class ReceiptService {
     await this.saveReceipts(receipts);
 
     console.log('Receipt created with name:', newReceipt.createdByName);
-    console.log('Include static file:', newReceipt.includeStaticFile);
     return newReceipt;
   }
 
@@ -432,7 +472,13 @@ class ReceiptService {
     if (updateData.additionalText !== undefined) receipt.additionalText = updateData.additionalText;
     if (updateData.items !== undefined) receipt.items = updateData.items;
     if (updateData.notes !== undefined) receipt.notes = updateData.notes;
-    if (updateData.includeStaticFile !== undefined) receipt.includeStaticFile = updateData.includeStaticFile;
+        // ✅ UPDATE: Handle text-based Terms & Conditions
+    if (updateData.includeTermsAndConditions !== undefined) {
+      receipt.includeTermsAndConditions = updateData.includeTermsAndConditions;
+    }
+    if (updateData.termsAndConditionsText !== undefined) {
+      receipt.termsAndConditionsText = updateData.termsAndConditionsText;
+    }
 
     receipt.updatedAt = new Date().toISOString();
 
@@ -521,16 +567,26 @@ class ReceiptService {
   /**
    * ✅ UPDATED: Generate receipt PDF with custom filename pattern
    */
-  async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
+async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
     const receipt = await this.getReceiptById(id, userId, userRole);
     
-    console.log('🔵 Generating PDF for receipt:', receipt.receiptNumber);
-    console.log('🔵 Include static file:', receipt.includeStaticFile);
+    console.log('╔══════════════════════════════════════════════════════════╗');
+    console.log('║       GENERATING RECEIPT PDF                             ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    console.log('📄 Receipt Number:', receipt.receiptNumber);
+    console.log('📎 Include Terms & Conditions:', receipt.includeTermsAndConditions);
+    console.log('📎 Terms Text Length:', receipt.termsAndConditionsText?.length || 0);
+    console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
+    console.log('════════════════════════════════════════════════════════════');
     
-    // ✅ Create custom filename: DN001_to_date.pdf
     const customFilename = this.createReceiptFilename(receipt);
     
-    const pdfResult = await pdfGenerator.generateReceiptPDF(receipt, customFilename);
+    // ✅ Pass termsAndConditionsText to PDF generator
+    const pdfResult = await pdfGenerator.generateReceiptPDF(
+      receipt, 
+      customFilename,
+      receipt.termsAndConditionsText // Pass the text
+    );
     
     const pdfsToMerge = [];
     
@@ -541,20 +597,6 @@ class ReceiptService {
         console.log('✅ Added user attachment PDF to merge list');
       } else {
         console.warn('⚠️ Invalid user attachment PDF, skipping');
-      }
-    }
-    
-    if (receipt.includeStaticFile === true) {
-      try {
-        if (fsSync.existsSync(STATIC_PDF_PATH)) {
-          const staticPdfBytes = fsSync.readFileSync(STATIC_PDF_PATH);
-          pdfsToMerge.push(staticPdfBytes);
-          console.log('✅ Added static PDF to merge list');
-        } else {
-          console.warn('⚠️ Static PDF file not found at:', STATIC_PDF_PATH);
-        }
-      } catch (error) {
-        console.error('❌ Error reading static PDF:', error.message);
       }
     }
     
@@ -569,7 +611,7 @@ class ReceiptService {
           const mergeResult = await pdfGenerator.mergePDFs(
             currentPath,
             pdfsToMerge[i],
-            customFilename, // ✅ Pass custom filename
+            customFilename,
             pdfResult.language
           );
           currentPath = mergeResult.filepath;
@@ -590,7 +632,7 @@ class ReceiptService {
         const headerResult = await pdfGenerator.mergePDFs(
           pdfResult.filepath,
           null,
-          customFilename, // ✅ Pass custom filename
+          customFilename,
           pdfResult.language
         );
         
@@ -620,6 +662,10 @@ class ReceiptService {
       }
       await this.saveReceipts(receipts);
     }
+    
+    console.log('════════════════════════════════════════════════════════════');
+    console.log('✅ PDF generation complete!');
+    console.log('════════════════════════════════════════════════════════════\n');
     
     return {
       receipt,
