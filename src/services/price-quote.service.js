@@ -1,4 +1,4 @@
-// src/services/price-quote.service.js - ✅ COMPLETE FIX FOR TERMS AND CONDITIONS TEXT
+// src/services/price-quote.service.js - ✅ COMPLETE FIX FOR ENGLISH/ARABIC LANGUAGE SUPPORT
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -26,16 +26,42 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
 
-// ✅ Log configuration on startup
-console.log('📧 Email Configuration (Price Quotes):');
-console.log('  - Host:', EMAIL_HOST);
-console.log('  - Port:', EMAIL_PORT);
-console.log('  - User:', EMAIL_USER ? '✅ Configured' : '❌ Missing');
-console.log('  - Password:', EMAIL_PASS ? '✅ Configured' : '❌ Missing');
-console.log('  - From:', EMAIL_FROM);
-
-
 class PriceQuoteService {
+  
+  // ============================================
+  // ✅ NEW: LANGUAGE VALIDATION METHOD
+  // ============================================
+  
+  validateAndNormalizeLanguage(language) {
+    // Normalize language input
+    if (!language) {
+      console.warn('⚠️ No language provided, defaulting to arabic');
+      return 'arabic';
+    }
+
+    const lang = String(language).toLowerCase().trim();
+    
+    // Map common variations
+    const languageMap = {
+      'ar': 'arabic',
+      'arabic': 'arabic',
+      'عربي': 'arabic',
+      'en': 'english',
+      'english': 'english',
+      'إنجليزي': 'english'
+    };
+
+    const normalized = languageMap[lang];
+    
+    if (!normalized) {
+      console.warn(`⚠️ Unknown language "${language}", defaulting to arabic`);
+      return 'arabic';
+    }
+
+    console.log(`✅ Language normalized: "${language}" -> "${normalized}"`);
+    return normalized;
+  }
+
   async loadUsers() {
     try {
       console.log('Loading users from:', USERS_FILE);
@@ -276,16 +302,20 @@ class PriceQuoteService {
     }
   }
 
+  // ✅ FIXED: Proper language support in header
   buildHeaderHTML(quoteData, isArabic) {
     const logoBase64 = fsSync.existsSync(LOGO_PATH)
       ? fsSync.readFileSync(LOGO_PATH, 'base64')
       : '';
 
+    const quoteLabel = isArabic ? 'رقم العرض:' : 'Quote No:';
+    const dateLabel = isArabic ? 'التاريخ:' : 'DATE:';
+
     return `
       <div style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:10px 30px; border-bottom:3px solid #0b4fa2;">
-        <div style="text-align:left; font-family:'Roboto',Arial,sans-serif; font-size:11px;">
-          <p style="margin:3px 0;"><strong style="color:#0b4fa2;">Quote No:</strong> ${quoteData.quoteNumber}</p>
-          <p style="margin:3px 0;"><strong style="color:#0b4fa2;">DATE:</strong> ${quoteData.date}</p>
+        <div style="text-align:left; font-family:${isArabic ? "'Cairo',Arial,sans-serif" : "'Roboto',Arial,sans-serif"}; font-size:11px;">
+          <p style="margin:3px 0;"><strong style="color:#0b4fa2;">${quoteLabel}</strong> ${quoteData.quoteNumber}</p>
+          <p style="margin:3px 0;"><strong style="color:#0b4fa2;">${dateLabel}</strong> ${quoteData.date}</p>
         </div>
         <div>
           ${logoBase64 ? `<img src="data:image/png;base64,${logoBase64}" style="height:60px;" />` : ''}
@@ -295,32 +325,45 @@ class PriceQuoteService {
   }
 
   buildFooterHTML(isArabic) {
+    const pageText = isArabic 
+      ? 'صفحة <span class="pageNumber"></span> من <span class="totalPages"></span>'
+      : 'Page <span class="pageNumber"></span> of <span class="totalPages"></span>';
+
     return `
       <div style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:0 30px; font-size:11px; color:#555; border-top:1px solid #ddd;">
         <div style="font-family:'Roboto',Arial,sans-serif;">OMEGA-SAL-06</div>
-        <div style="font-family:'Cairo',Arial,sans-serif;">
-          ${isArabic ? 'صفحة <span class="pageNumber"></span> من <span class="totalPages"></span>' : 'Page <span class="pageNumber"></span> of <span class="totalPages"></span>'}
+        <div style="font-family:${isArabic ? "'Cairo',Arial,sans-serif" : "'Roboto',Arial,sans-serif"};">
+          ${pageText}
         </div>
       </div>
     `;
   }
 
-  // ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText parameters
+  // ============================================
+  // ✅ FIXED: GENERATE PDF WITH PROPER LANGUAGE HANDLING
+  // ============================================
+
   async generatePDF(quoteData, attachmentPath = null, includeTermsAndConditions = false, termsAndConditionsText = null) {
     let browser;
     try {
-      const isArabic = quoteData.language === 'arabic';
+      // ✅ VALIDATE LANGUAGE
+      const normalizedLanguage = this.validateAndNormalizeLanguage(quoteData.language);
+      const isArabic = normalizedLanguage === 'arabic';
+      
       const totals = this.calculateTotals(quoteData.items, quoteData.includeTax, quoteData.taxRate);
 
       const mainContent = this.buildMainContent(quoteData, totals, isArabic);
 
       console.log('🔵 ===== PDF GENERATION DEBUG =====');
       console.log('🔵 Quote Number:', quoteData.quoteNumber);
+      console.log('🔵 Raw Language:', quoteData.language);
+      console.log('🔵 Normalized Language:', normalizedLanguage);
+      console.log('🔵 Is Arabic:', isArabic);
       console.log('🔵 Include Terms:', includeTermsAndConditions);
       console.log('🔵 Terms Text Length:', termsAndConditionsText ? termsAndConditionsText.length : 0);
       console.log('🔵 ===================================');
 
-      // ✅ Build attachment HTML (user-uploaded PDF)
+      // Build attachment HTML (user-uploaded PDF)
       let attachmentHTML = '';
       if (attachmentPath && fsSync.existsSync(attachmentPath)) {
         console.log('📎 Adding user attachment PDF...');
@@ -335,14 +378,13 @@ class PriceQuoteService {
         console.log(`✅ Added ${attachmentPages.length} attachment page(s)`);
       }
 
-      // ✅ NEW: Add Terms and Conditions TEXT as formatted HTML page
+      // Add Terms and Conditions TEXT as formatted HTML page
       let termsHTML = '';
       if (includeTermsAndConditions === true && termsAndConditionsText && termsAndConditionsText.trim() !== '') {
         console.log('📝 ===== ADDING TERMS AND CONDITIONS =====');
         console.log('📝 Terms text length:', termsAndConditionsText.length);
         console.log('📝 First 100 chars:', termsAndConditionsText.substring(0, 100));
         
-        // Escape HTML and preserve line breaks
         const escapeHtml = (text) => {
           if (!text) return '';
           return String(text)
@@ -354,11 +396,12 @@ class PriceQuoteService {
         };
 
         const escapedTermsText = escapeHtml(termsAndConditionsText);
+        const termsTitle = isArabic ? 'الشروط والأحكام' : 'Terms and Conditions';
         
         termsHTML = `
           <div style="page-break-before: always; padding: 40px 50px; background: white; min-height: 100vh; box-sizing: border-box; font-family: ${isArabic ? "'Cairo', Arial, sans-serif" : "'Roboto', Arial, sans-serif"}; direction: ${isArabic ? 'rtl' : 'ltr'};">
             <h1 style="text-align: center; color: #0b4fa2; font-size: 28px; font-weight: 700; margin-bottom: 30px; border-bottom: 3px solid #0b4fa2; padding-bottom: 15px;">
-              ${isArabic ? 'الشروط والأحكام' : 'Terms and Conditions'}
+              ${termsTitle}
             </h1>
             <div style="white-space: pre-wrap; line-height: 1.8; font-size: 14px; color: #333; text-align: ${isArabic ? 'right' : 'left'};">
 ${escapedTermsText}
@@ -368,10 +411,6 @@ ${escapedTermsText}
         
         console.log('✅ Terms and Conditions HTML page created');
         console.log('📝 ==========================================');
-      } else {
-        console.log('⚠️ Terms and Conditions NOT added:');
-        console.log('   - includeTermsAndConditions:', includeTermsAndConditions);
-        console.log('   - termsAndConditionsText:', termsAndConditionsText ? 'EXISTS' : 'NULL/EMPTY');
       }
 
       const fullHTML = `
@@ -415,7 +454,7 @@ ${escapedTermsText}
     table tbody tr:nth-child(even) { background: #f9f9f9; }
     .client-info { margin: 25px 0; padding: 15px; border: 2px solid #0b4fa2; border-radius: 5px; }
     .client-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 13px; }
-    .totals-section { margin: 25px 0; padding: 15px; background: #f5f5f5; border-radius: 5px; text-align: right; }
+    .totals-section { margin: 25px 0; padding: 15px; background: #f5f5f5; border-radius: 5px; text-align: ${isArabic ? 'right' : 'left'}; }
     .total-row { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 8px; }
     .total-final { padding-top: 10px; border-top: 2px solid #0b4fa2; font-size: 16px; color: #0b4fa2; }
     .notes-section { margin: 25px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; page-break-inside: avoid; }
@@ -447,7 +486,6 @@ ${escapedTermsText}
       await page.evaluate(() => document.fonts.ready);
       await page.waitForNetworkIdle({ timeout: 15000 }).catch(() => {});
 
-      // ✅ UPDATED: Use custom filename pattern: Q0001_ClientName_DD-MM-YYYY.pdf
       const sanitizeFilename = (str) => {
         if (!str) return 'Unknown';
         return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
@@ -494,6 +532,7 @@ ${escapedTermsText}
     }
   }
 
+  // ✅ FIXED: Complete language support
   buildMainContent(data, totals, isArabic) {
     const title = isArabic ? 'عرض سعر' : 'Price Quote';
     const hasItems = data.items && data.items.length > 0;
@@ -515,13 +554,29 @@ ${escapedTermsText}
 
     return `
 <div class="main-content">
+  ${this.buildCompanySection(isArabic)}
+  <h1 class="title">${title}</h1>
+  ${projectNameHtml}
+  ${this.buildClientInfoSection(data, isArabic)}
+  ${hasItems ? this.buildItemsTable(data.items, isArabic) : ''}
+  ${hasItems ? this.buildTotalsSection(totals, data, isArabic) : ''}
+  ${this.buildNotesSection(data.customNotes, isArabic)}
+</div>
+    `;
+  }
+
+  // ✅ FIXED: Separate company section with proper language handling
+  buildCompanySection(isArabic) {
+    if (isArabic) {
+      // Arabic layout: Arabic on right, English on left
+      return `
   <section class="company">
     <div class="row">
       <div class="col-right">
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>المملكة الأردنية الهاشمية</p>
-        <p>+تلفون: 96264161060+ | فاكس: +96264162060</p>
+        <p>تلفون: 96264161060+ | فاكس: +96264162060</p>
       </div>
       <div class="col-left">
         <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
@@ -531,27 +586,46 @@ ${escapedTermsText}
       </div>
     </div>
   </section>
-
-  <h1 class="title">${title}</h1>
-  
-  ${projectNameHtml}
-
-  ${this.buildClientInfoSection(data, isArabic)}
-  ${hasItems ? this.buildItemsTable(data.items, isArabic) : ''}
-  ${hasItems ? this.buildTotalsSection(totals, data, isArabic) : ''}
-  ${this.buildNotesSection(data.customNotes, isArabic)}
-</div>
-    `;
+      `;
+    } else {
+      // English layout: English on left, Arabic on right
+      return `
+  <section class="company">
+    <div class="row">
+      <div class="col-left">
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>Design – Manufacture – Installation</p>
+        <p>Jordan</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
+      </div>
+      <div class="col-right">
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>المملكة الأردنية الهاشمية</p>
+        <p>تلفون: 96264161060+ | فاكس: +96264162060</p>
+      </div>
+    </div>
+  </section>
+      `;
+    }
   }
 
+  // ✅ FIXED: Language support in client info
   buildClientInfoSection(data, isArabic) {
-    const labels = {
-      name: isArabic ? 'اسم العميل' : 'Client Name',
-      phone: isArabic ? 'هاتف العميل' : 'Client Phone',
-      address: isArabic ? 'عنوان العميل' : 'Client Address',
-      city: isArabic ? 'مدينة العميل' : 'Client City',
-      valid: isArabic ? 'صالح لمدة' : 'Valid For',
-      days: isArabic ? 'يوم' : 'days'
+    const labels = isArabic ? {
+      name: 'اسم العميل',
+      phone: 'هاتف العميل',
+      address: 'عنوان العميل',
+      city: 'مدينة العميل',
+      valid: 'صالح لمدة',
+      days: 'يوم'
+    } : {
+      name: 'Client Name',
+      phone: 'Client Phone',
+      address: 'Client Address',
+      city: 'Client City',
+      valid: 'Valid For',
+      days: 'days'
     };
 
     return `
@@ -567,6 +641,7 @@ ${escapedTermsText}
     `;
   }
 
+  // ✅ FIXED: Language support in items table
   buildItemsTable(items, isArabic) {
     const headers = isArabic
       ? ['م', 'الوصف', 'الوحدة', 'الكمية', 'سعر الوحدة (دينار)', 'المجموع (دينار)']
@@ -597,11 +672,16 @@ ${escapedTermsText}
     `;
   }
 
+  // ✅ FIXED: Language support in totals
   buildTotalsSection(totals, data, isArabic) {
-    const labels = {
-      subtotal: isArabic ? 'المجموع الفرعي:' : 'Subtotal:',
-      tax: isArabic ? `نسبة الضريبة (${data.taxRate || 0}%):` : `Tax (${data.taxRate || 0}%):`,
-      total: isArabic ? 'المجموع الإجمالي:' : 'Total:'
+    const labels = isArabic ? {
+      subtotal: 'المجموع الفرعي:',
+      tax: `نسبة الضريبة (${data.taxRate || 0}%):`,
+      total: 'المجموع الإجمالي:'
+    } : {
+      subtotal: 'Subtotal:',
+      tax: `Tax (${data.taxRate || 0}%):`,
+      total: 'Total:'
     };
 
     return `
@@ -623,6 +703,7 @@ ${escapedTermsText}
     `;
   }
 
+  // ✅ FIXED: Language support in notes
   buildNotesSection(notes, isArabic) {
     if (!notes) return '';
     const title = isArabic ? 'ملاحظات وشروط:' : 'Notes & Terms:';
@@ -634,9 +715,18 @@ ${escapedTermsText}
     `;
   }
 
-  // ✅ UPDATED: Now includes includeTermsAndConditions and termsAndConditionsText
+  // ============================================
+  // ✅ FIXED: CREATE QUOTE WITH LANGUAGE NORMALIZATION
+  // ============================================
+
   async createQuote(quoteData, currentUser, attachmentFile = null) {
     console.log('\n=== CREATE QUOTE DEBUG ===');
+    console.log('Raw language input:', quoteData.language, 'Type:', typeof quoteData.language);
+    
+    // ✅ VALIDATE AND NORMALIZE LANGUAGE
+    const normalizedLanguage = this.validateAndNormalizeLanguage(quoteData.language);
+    console.log('Normalized language:', normalizedLanguage);
+    
     console.log('currentUser.id:', currentUser.id);
     console.log('currentUser.name:', currentUser.name);
     console.log('quoteData.projectName:', quoteData.projectName);
@@ -660,13 +750,13 @@ ${escapedTermsText}
       date: quoteData.date,
       revNumber: quoteData.revNumber || '00',
       validForDays: quoteData.validForDays || null,
-      language: quoteData.language || 'arabic',
+      language: normalizedLanguage, // ✅ USE NORMALIZED LANGUAGE
       includeTax: !!quoteData.includeTax,
       taxRate: quoteData.includeTax ? (quoteData.taxRate || 0) : 0,
       items: quoteData.items || [],
       customNotes: quoteData.customNotes || null,
-      includeTermsAndConditions: !!quoteData.includeTermsAndConditions, // ✅ NEW FIELD
-      termsAndConditionsText: quoteData.termsAndConditionsText || null, // ✅ NEW FIELD
+      includeTermsAndConditions: !!quoteData.includeTermsAndConditions,
+      termsAndConditionsText: quoteData.termsAndConditionsText || null,
       createdBy: currentUser.id,
       createdByName: createdByName || currentUser.name || 'Unknown User', 
       createdAt: new Date().toISOString(),
@@ -684,7 +774,9 @@ ${escapedTermsText}
       newQuote.attachmentPath = attachmentPath;
     }
 
-    // ✅ UPDATED: Pass terms parameters to PDF generation
+    console.log('🔵 GENERATING PDF WITH LANGUAGE:', newQuote.language);
+    console.log('🔵 Include Terms:', newQuote.includeTermsAndConditions);
+    
     const pdfPath = await this.generatePDF(
       newQuote, 
       attachmentPath, 
@@ -696,8 +788,7 @@ ${escapedTermsText}
     quotes.push(newQuote);
     await this.saveQuotes(quotes);
 
-    console.log('Quote created with includeTermsAndConditions:', newQuote.includeTermsAndConditions);
-    console.log('Quote created with termsAndConditionsText:', newQuote.termsAndConditionsText ? 'YES' : 'NO');
+    console.log('✅ Quote created successfully with language:', newQuote.language);
     console.log('==========================\n');
     return newQuote;
   }
@@ -775,7 +866,10 @@ ${escapedTermsText}
     };
   }
 
-  // ✅ UPDATED: Now includes includeTermsAndConditions and termsAndConditionsText
+  // ============================================
+  // ✅ FIXED: UPDATE QUOTE WITH LANGUAGE NORMALIZATION
+  // ============================================
+
   async updateQuote(id, updateData, attachmentFile = null) {
     const quotes = await this.loadQuotes();
     const quoteIndex = quotes.findIndex(q => q.id === id);
@@ -794,13 +888,17 @@ ${escapedTermsText}
     if (updateData.date) quote.date = updateData.date;
     if (updateData.revNumber !== undefined) quote.revNumber = updateData.revNumber;
     if (updateData.validForDays !== undefined) quote.validForDays = updateData.validForDays;
-    if (updateData.language) quote.language = updateData.language;
+    
+    if (updateData.language) {
+      // ✅ VALIDATE AND NORMALIZE LANGUAGE
+      quote.language = this.validateAndNormalizeLanguage(updateData.language);
+    }
+    
     if (updateData.includeTax !== undefined) quote.includeTax = !!updateData.includeTax;
     if (updateData.taxRate !== undefined) quote.taxRate = updateData.taxRate;
     if (updateData.items !== undefined) quote.items = updateData.items;
     if (updateData.customNotes !== undefined) quote.customNotes = updateData.customNotes;
     
-    // ✅ NEW FIELDS
     if (updateData.includeTermsAndConditions !== undefined) {
       quote.includeTermsAndConditions = !!updateData.includeTermsAndConditions;
     }
@@ -824,10 +922,9 @@ ${escapedTermsText}
       quote.attachmentPath = attachmentPath;
     }
 
+    console.log('Updating quote with language:', quote.language);
     console.log('Updating quote with includeTermsAndConditions:', quote.includeTermsAndConditions);
-    console.log('Updating quote with termsAndConditionsText:', quote.termsAndConditionsText ? 'YES' : 'NO');
     
-    // ✅ UPDATED: Pass terms parameters to PDF generation
     const pdfPath = await this.generatePDF(
       quote, 
       attachmentPath, 
@@ -870,9 +967,6 @@ ${escapedTermsText}
     return { message: 'Quote deleted successfully' };
   }
 
-  /**
-   * ✅ Send quote PDF by email with custom filename
-   */
   async sendQuoteByEmail(quoteId, userId, userRole, recipientEmail) {
     try {
       console.log('\n📧 === SEND EMAIL DEBUG (QUOTE) ===');
@@ -962,7 +1056,6 @@ ${escapedTermsText}
         </div>
       `;
 
-      // ✅ Create custom email attachment filename: Q0001_ClientName_DD-MM-YYYY.pdf
       const sanitizeFilename = (str) => {
         if (!str) return 'Unknown';
         return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
@@ -1033,6 +1126,5 @@ ${escapedTermsText}
     }
   }
 }
-
 
 module.exports = new PriceQuoteService();

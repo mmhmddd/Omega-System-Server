@@ -55,8 +55,8 @@ if (!fs.existsSync(usersFile)) {
       id: "USER-0001",
       username: "admin.super",
       name: "Super Admin",
-      email: "admin@laser.com",
-      password: "admin123",
+      email: "mohamed.m.mahmoud29@gmail.com",
+      password: "123456",
       role: "super_admin",
       active: true,
       createdAt: new Date().toISOString(),
@@ -64,11 +64,8 @@ if (!fs.existsSync(usersFile)) {
     }
   ];
   fs.writeFileSync(usersFile, JSON.stringify(defaultUsers, null, 2));
-  console.log('✅ Created users.json with default super admin');
-  console.log('📧 Default Login - Email: admin@laser.com | Password: admin123');
 }
 
-// Create empty data files if they don't exist
 const dataFiles = [
   { path: 'data/employees.json', content: [] },
   { path: 'data/files/index.json', content: [] },
@@ -106,11 +103,10 @@ logFiles.forEach(logFile => {
   const logPath = path.join(__dirname, logFile);
   if (!fs.existsSync(logPath)) {
     fs.writeFileSync(logPath, '');
-    console.log(`✅ Created: ${logFile}`);
   }
 });
 
-console.log('\n✨ System initialization completed!\n');
+console.log('\nSystem initialization completed!\n');
 
 // Middleware
 app.use(cors({
@@ -124,10 +120,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Serve static files (uploaded files)
 app.use('/uploads', express.static(path.join(__dirname, 'data/files/physical')));
 
-// Logging middleware (only in development)
 if (process.env.NODE_ENV === 'development') {
   app.use((req, res, next) => {
-    console.log(`${req.method} ${req.path}`);
     next();
   });
 }
@@ -137,7 +131,7 @@ if (process.env.NODE_ENV === 'development') {
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Laser Backend API',
+    message: 'Omega Backend API',
     version: '1.0.0',
     timestamp: new Date().toISOString()
   });
@@ -168,10 +162,7 @@ app.listen(PORT, () => {
   console.log('='.repeat(60));
   
   if (process.env.NODE_ENV !== 'production') {
-    console.log('\n📝 Default Super Admin Credentials:');
-    console.log('   Email: admin@laser.com');
-    console.log('   Password: admin123');
-    console.log('\n⚠️  Please change the default password after first login!');
+
   }
   console.log('\n✅ Server is ready to accept requests\n');
 });
@@ -185,17 +176,17 @@ process.on('unhandledRejection', (err) => {
 
 process.on('uncaughtException', (err) => {
   console.error('\n❌ Uncaught Exception:', err);
-  console.log('⚠️  Server shutting down...\n');
+  console.log('Server shutting down...\n');
   process.exit(1);
 });
 
 process.on('SIGTERM', () => {
-  console.log('\n👋 SIGTERM received, shutting down gracefully...');
+  console.log('\n SIGTERM received, shutting down gracefully...');
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log('\n👋 SIGINT received, shutting down gracefully...');
+  console.log('\n SIGINT received, shutting down gracefully...');
   process.exit(0);
 });
 
