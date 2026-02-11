@@ -26,11 +26,7 @@ const protect = async (req, res, next) => {
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-this');
 
-      // 🔍 DEBUG: Log what's in the token
-      console.log('🎫 Token decoded - User info:');
-      console.log('   - ID:', decoded.id);
-      console.log('   - Role:', decoded.role);
-      console.log('   - routeAccess from token:', decoded.routeAccess);
+
 
       // Attach user info to request (including systemAccess and routeAccess)
       req.user = {
@@ -86,17 +82,10 @@ const checkSystemAccess = (systemName) => {
 const checkRouteAccess = (routeKey) => {
   return (req, res, next) => {
     const user = req.user;
-    
-    console.log('=== Route Access Check ===');
-    console.log('Route Key:', routeKey);
-    console.log('User Role:', user.role);
-    console.log('User Route Access:', user.routeAccess);
-    console.log('Is Array:', Array.isArray(user.routeAccess));
-    console.log('Includes route:', user.routeAccess?.includes(routeKey));
+
     
     // Super admins and admins have access to all routes
     if (user.role === 'super_admin' || user.role === 'admin') {
-      console.log('✅ Access granted: Super Admin or Admin');
       return next();
     }
 
@@ -104,7 +93,6 @@ const checkRouteAccess = (routeKey) => {
     if (user.role === 'secretariat') {
       const secretariatRoutes = ['userForms', 'secretariatManagement', 'secretariat-user'];
       if (secretariatRoutes.includes(routeKey)) {
-        console.log('✅ Access granted: Secretariat has access to', routeKey);
         return next();
       }
       
@@ -142,7 +130,6 @@ const checkRouteAccess = (routeKey) => {
         });
       }
 
-      console.log('✅ Access granted: Employee has routeAccess to', routeKey);
       return next();
     }
 

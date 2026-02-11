@@ -180,22 +180,12 @@ router.get('/verify-token/:token', async (req, res, next) => {
  */
 router.post('/refresh-token', protect, async (req, res, next) => {
   try {
-    console.log('==========================================');
-    console.log('🔄 TOKEN REFRESH REQUEST');
-    console.log('User ID:', req.user.id);
-    console.log('Current role:', req.user.role);
-    console.log('Timestamp:', new Date().toISOString());
-    console.log('==========================================');
+
 
     // Get fresh user data and generate new token
     const result = await authService.refreshToken(req.user.id);
 
-    console.log('==========================================');
-    console.log('✅ TOKEN REFRESH SUCCESSFUL');
-    console.log('User:', result.user.username);
-    console.log('Updated systemAccess:', result.user.systemAccess);
-    console.log('Updated routeAccess:', result.user.routeAccess);
-    console.log('==========================================');
+
 
     res.status(200).json({
       success: true,

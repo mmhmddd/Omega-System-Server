@@ -18,13 +18,6 @@ router.get('/me', async (req, res, next) => {
     
     const { password, ...userWithoutPassword } = user;
     
-    console.log('✅ GET /me - Returning user:', {
-      id: user.id,
-      role: user.role,
-      systemAccess: user.systemAccess,
-      routeAccess: user.routeAccess
-    });
-    
     res.status(200).json({
       success: true,
       data: userWithoutPassword
@@ -135,15 +128,6 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const userData = req.body;
     
-    console.log('==========================================');
-    console.log('➕ POST /api/users - Creating user');
-    console.log('Data:', {
-      name: userData.name,
-      role: userData.role,
-      systemAccess: userData.systemAccess,
-      routeAccess: userData.routeAccess
-    });
-    console.log('==========================================');
     
     // Validate required fields
     const requiredFields = ['name', 'email', 'password', 'role'];
@@ -205,13 +189,7 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
     const user = await userService.createUser(userData);
     const { password, ...userWithoutPassword } = user;
 
-    console.log('==========================================');
-    console.log('✅ User created successfully');
-    console.log('ID:', user.id);
-    console.log('Username:', user.username);
-    console.log('System Access:', user.systemAccess);
-    console.log('Route Access:', user.routeAccess);
-    console.log('==========================================');
+
 
     res.status(201).json({
       success: true,
@@ -417,12 +395,7 @@ router.patch('/:id/system-access', restrictTo('super_admin'), async (req, res, n
   try {
     const systemAccess = req.body;
     
-    console.log('==========================================');
-    console.log('🔐 PATCH /api/users/:id/system-access');
-    console.log('User ID:', req.params.id);
-    console.log('Received:', systemAccess);
-    console.log('Type:', typeof systemAccess);
-    console.log('==========================================');
+
     
     // ✅ Validate that systemAccess is an object
     if (typeof systemAccess !== 'object' || systemAccess === null || Array.isArray(systemAccess)) {
@@ -437,10 +410,6 @@ router.patch('/:id/system-access', restrictTo('super_admin'), async (req, res, n
     const user = await userService.updateUser(req.params.id, { systemAccess });
     const { password, ...userWithoutPassword } = user;
 
-    console.log('==========================================');
-    console.log('✅ System access updated');
-    console.log('New value:', userWithoutPassword.systemAccess);
-    console.log('==========================================');
 
     res.status(200).json({
       success: true,
@@ -462,13 +431,6 @@ router.patch('/:id/route-access', restrictTo('super_admin'), async (req, res, ne
   try {
     const { routeAccess } = req.body;
     
-    console.log('==========================================');
-    console.log('🔐 PATCH /api/users/:id/route-access');
-    console.log('User ID:', req.params.id);
-    console.log('Received:', routeAccess);
-    console.log('Type:', typeof routeAccess);
-    console.log('Is Array:', Array.isArray(routeAccess));
-    console.log('==========================================');
     
     // ✅ Validate that routeAccess is an array
     if (!Array.isArray(routeAccess)) {
@@ -482,11 +444,6 @@ router.patch('/:id/route-access', restrictTo('super_admin'), async (req, res, ne
     // ✅ Update only routeAccess field
     const user = await userService.updateUser(req.params.id, { routeAccess });
     const { password, ...userWithoutPassword } = user;
-
-    console.log('==========================================');
-    console.log('✅ Route access updated');
-    console.log('New value:', userWithoutPassword.routeAccess);
-    console.log('==========================================');
 
     res.status(200).json({
       success: true,
@@ -508,8 +465,6 @@ router.patch('/:id/permissions', restrictTo('super_admin'), async (req, res, nex
   try {
     const { systemAccess, routeAccess } = req.body;
     
-    console.log('🔐 PATCH /api/users/:id/permissions');
-
     if (!systemAccess && !routeAccess) {
       return res.status(400).json({
         success: false,

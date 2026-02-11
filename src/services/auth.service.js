@@ -153,10 +153,7 @@ _generateToken(user) {
         console.log('⚠️ routeAccess was missing, initialized as empty array');
       }
 
-      console.log('📊 User permissions:', {
-        systemAccess: user.systemAccess,
-        routeAccess: user.routeAccess
-      });
+
 
       // ✅ Generate token with complete user object
       const token = this._generateToken(user);
@@ -384,12 +381,6 @@ _generateToken(user) {
         user.routeAccess = [];
       }
 
-      console.log('✅ Current user data fetched:', {
-        username: user.username,
-        role: user.role,
-        systemAccess: user.systemAccess,
-        routeAccess: user.routeAccess
-      });
 
       // Return user without password
       const { password, ...userWithoutPassword } = user;
@@ -486,10 +477,6 @@ _generateToken(user) {
         user.routeAccess = [];
       }
 
-      console.log('📊 Refreshing token with permissions:', {
-        systemAccess: user.systemAccess,
-        routeAccess: user.routeAccess
-      });
 
       // Generate new token with latest permissions
       const token = this._generateToken(user);
