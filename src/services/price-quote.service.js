@@ -417,7 +417,7 @@ ${escapedTermsText}
 <html lang="${isArabic ? 'ar' : 'en'}" dir="${isArabic ? 'rtl' : 'ltr'}">
 <head>
   <meta charset="UTF-8">
-  <title>${isArabic ? 'عرض سعر' : 'Price Quote'} - OMEGA</title>
+  <title>${isArabic ? 'عرض سعر' : 'Price Quotion'} - OMEGA</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
