@@ -199,6 +199,7 @@ router.delete('/:id', restrictTo('admin', 'super_admin'), async (req, res) => {
   } catch (error) {
     console.error('Error deleting item:', error);
     res.status(404).json({
+      
       success: false,
       message: error.message || 'فشل حذف الصنف'
     });
