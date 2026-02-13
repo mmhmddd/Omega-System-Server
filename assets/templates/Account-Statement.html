@@ -123,7 +123,7 @@
     }
     .total-final {
       border-top: 3px solid #0b4fa2;
-      margin-top: 8px;
+      margin-top: 3px;
       padding-top: 8px;
       font-size: 15px;
       font-weight: 700;
@@ -156,7 +156,7 @@
     .stamp-box p {
       font-weight: 600;
       color: #0b4fa2;
-      margin-bottom: 10px;
+      margin-bottom: 5px;
       font-size: 11px;
     }
     .stamp-area {
@@ -167,7 +167,7 @@
       border-radius: 8px;
     }
     .footer {
-      margin-top: 20px;
+      margin-top: 5px;
       text-align: center;
       font-size: 9px;
       color: #666;
@@ -200,7 +200,7 @@
       </div>
       <div class="form-field">
         <label>المنصب:</label>
-        <div class="value">----------------</div>
+        <div class="value">{{POSITION}}</div>
       </div>
       <div class="form-field">
         <label>اسم المشروع:</label>
@@ -222,25 +222,26 @@
         </tr>
       </thead>
       <tbody>
-        <tr><td>1</td><td>-------</td><td>---------</td><td>-----------</td><td>------------------</td><td>-------</td></tr>
-        <tr><td>2</td><td>-------</td><td>---------</td><td>-----------</td><td>------------------</td><td>-------</td></tr>
-        <tr><td>3</td><td>-------</td><td>---------</td><td>-----------</td><td>------------------</td><td>-------</td></tr>
-        <tr><td>4</td><td>-------</td><td>---------</td><td>-----------</td><td>------------------</td><td>-------</td></tr>
-        <tr><td>5</td><td>-------</td><td>---------</td><td>-----------</td><td>------------------</td><td>-------</td></tr>
-        <tr><td>6</td><td>-------</td><td>---------</td><td>-----------</td><td>------------------</td><td>-------</td></tr>
-        <tr><td>7</td><td>-------</td><td>---------</td><td>-----------</td><td>------------------</td><td>-------</td></tr>
-        <tr><td>8</td><td>-------</td><td>---------</td><td>-----------</td><td>------------------</td><td>-------</td></tr>
+        <tr><td>1</td><td>{{ROW_1_DATE}}</td><td>{{ROW_1_INVOICE}}</td><td>{{ROW_1_PROJECT}}</td><td>{{ROW_1_DESC}}</td><td>{{ROW_1_AMOUNT}}</td></tr>
+        <tr><td>2</td><td>{{ROW_2_DATE}}</td><td>{{ROW_2_INVOICE}}</td><td>{{ROW_2_PROJECT}}</td><td>{{ROW_2_DESC}}</td><td>{{ROW_2_AMOUNT}}</td></tr>
+        <tr><td>3</td><td>{{ROW_3_DATE}}</td><td>{{ROW_3_INVOICE}}</td><td>{{ROW_3_PROJECT}}</td><td>{{ROW_3_DESC}}</td><td>{{ROW_3_AMOUNT}}</td></tr>
+        <tr><td>4</td><td>{{ROW_4_DATE}}</td><td>{{ROW_4_INVOICE}}</td><td>{{ROW_4_PROJECT}}</td><td>{{ROW_4_DESC}}</td><td>{{ROW_4_AMOUNT}}</td></tr>
+        <tr><td>5</td><td>{{ROW_5_DATE}}</td><td>{{ROW_5_INVOICE}}</td><td>{{ROW_5_PROJECT}}</td><td>{{ROW_5_DESC}}</td><td>{{ROW_5_AMOUNT}}</td></tr>
+        <tr><td>6</td><td>{{ROW_6_DATE}}</td><td>{{ROW_6_INVOICE}}</td><td>{{ROW_6_PROJECT}}</td><td>{{ROW_6_DESC}}</td><td>{{ROW_6_AMOUNT}}</td></tr>
+        <tr><td>7</td><td>{{ROW_7_DATE}}</td><td>{{ROW_7_INVOICE}}</td><td>{{ROW_7_PROJECT}}</td><td>{{ROW_7_DESC}}</td><td>{{ROW_7_AMOUNT}}</td></tr>
+        <tr><td>8</td><td>{{ROW_8_DATE}}</td><td>{{ROW_8_INVOICE}}</td><td>{{ROW_8_PROJECT}}</td><td>{{ROW_8_DESC}}</td><td>{{ROW_8_AMOUNT}}</td></tr>
+        <tr><td>8</td><td>{{ROW_8_DATE}}</td><td>{{ROW_8_INVOICE}}</td><td>{{ROW_8_PROJECT}}</td><td>{{ROW_8_DESC}}</td><td>{{ROW_8_AMOUNT}}</td></tr>
       </tbody>
     </table>
 
     <div class="totals-section">
       <div class="total-row">
         <strong>المبلغ الإجمالي:</strong>
-        <span>________________ دينار</span>
+        <span>{{TOTAL_AMOUNT}} دينار</span>
       </div>
       <div class="total-row total-final">
         <strong>المبلغ النهائي:</strong>
-        <strong>________________ دينار</strong>
+        <strong>{{TOTAL_AMOUNT}} دينار</strong>
       </div>
     </div>
   </div>
