@@ -28,7 +28,6 @@ class MaterialService {
       console.log('Loading users from:', USERS_FILE);
       const data = await fs.readFile(USERS_FILE, 'utf8');
       const users = JSON.parse(data);
-      console.log('Loaded users count:', users.length);
       return users;
     } catch (error) {
       console.error('Error loading users file:', error);
