@@ -1,4 +1,6 @@
 // src/services/secretariat-user.service.js
+// COMPLETE WORKING VERSION WITH ACCOUNT STATEMENT SUPPORT
+
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -110,7 +112,6 @@ class SecretariatUserService {
       return notification;
     } catch (error) {
       console.error('Error creating notification:', error);
-      // Don't throw - notification failure shouldn't stop form creation
     }
   }
 
@@ -183,17 +184,18 @@ class SecretariatUserService {
       }
     } catch (error) {
       console.error('Error sending email to secretariat:', error);
-      // Don't throw - email failure shouldn't stop form creation
     }
   }
 
-  /**
-   * Enhanced PDF generation with manual data support
-   */
   async generatePDF(formData, formType, manualData = null) {
     let browser;
     try {
-      // Validate template exists
+      console.log('\n╔════════════════════════════════════════════════════════════╗');
+      console.log('║          STARTING PDF GENERATION                          ║');
+      console.log('╚════════════════════════════════════════════════════════════╝');
+      console.log('Form Type:', formType);
+      console.log('Manual Data Received:', JSON.stringify(manualData, null, 2));
+
       const templatePath = this.getTemplatePath(formType);
       if (!fsSync.existsSync(templatePath)) {
         throw new Error(`Template not found for form type: ${formType}`);
@@ -205,7 +207,7 @@ class SecretariatUserService {
 
       let htmlTemplate = await fs.readFile(templatePath, 'utf8');
 
-      // Replace common placeholders
+      // Base replacements
       const replacements = {
         '{{LOGO}}': logoBase64 ? `<img src="data:image/png;base64,${logoBase64}" alt="Logo" style="height: 50px;" />` : '',
         '{{EMPLOYEE_NAME}}': this.escapeHtml(formData.employeeName),
@@ -215,22 +217,24 @@ class SecretariatUserService {
         '{{FORM_NUMBER}}': formData.formNumber
       };
 
-      // Add manual data replacements if provided
+      // Get manual data replacements
       if (manualData && Object.keys(manualData).length > 0) {
         const manualReplacements = this.getManualDataReplacements(formType, manualData);
         Object.assign(replacements, manualReplacements);
       } else {
-        // If no manual data, add default replacements with "--------"
         const defaultReplacements = this.getManualDataReplacements(formType, {});
         Object.assign(replacements, defaultReplacements);
       }
 
-      // Apply all replacements
+      console.log('\n--- APPLYING REPLACEMENTS ---');
+      console.log('Total replacements:', Object.keys(replacements).length);
+      
+      // Apply all replacements to HTML template
       for (const [key, value] of Object.entries(replacements)) {
         htmlTemplate = htmlTemplate.replace(new RegExp(key, 'g'), String(value));
       }
 
-      // Launch browser with proper configuration
+      // Launch Puppeteer
       browser = await puppeteer.launch({
         headless: 'new',
         args: [
@@ -256,7 +260,6 @@ class SecretariatUserService {
         timeout: 60000 
       });
       
-      // Wait for fonts to load
       await page.evaluate(() => document.fonts.ready);
 
       const filename = `USER_${formData.formNumber}_${formData.employeeName.replace(/\s+/g, '_')}_${formData.date}.pdf`;
@@ -279,15 +282,15 @@ class SecretariatUserService {
       await page.pdf(pdfOptions);
       await browser.close();
       
-      // Verify PDF was created
       if (!fsSync.existsSync(pdfPath)) {
         throw new Error('PDF file was not created successfully');
       }
 
-      console.log('User PDF generated successfully:', pdfPath);
+      console.log('✓ PDF generated successfully:', pdfPath);
+      console.log('╚════════════════════════════════════════════════════════════╝\n');
       return pdfPath;
     } catch (error) {
-      console.error('User PDF generation failed:', error);
+      console.error('✗ PDF generation failed:', error);
       if (browser) {
         try {
           await browser.close();
@@ -299,14 +302,16 @@ class SecretariatUserService {
     }
   }
 
-  /**
-   * Get manual data replacements for template
-   * IMPORTANT: All empty fields default to "--------"
-   */
   getManualDataReplacements(formType, manualData = {}) {
     const replacements = {};
 
-    // Common fields - with default "--------" for empty values
+    console.log('\n╔════════════════════════════════════════════════════════════╗');
+    console.log('║      GETTING MANUAL DATA REPLACEMENTS                     ║');
+    console.log('╚════════════════════════════════════════════════════════════╝');
+    console.log('Form Type:', formType);
+    console.log('Manual Data:', JSON.stringify(manualData, null, 2));
+
+    // Common fields
     replacements['{{POSITION}}'] = manualData?.position || '--------';
     replacements['{{DEPARTMENT}}'] = manualData?.department || '--------';
     replacements['{{EMPLOYEE_NUMBER}}'] = manualData?.employeeNumber || '--------';
@@ -338,20 +343,83 @@ class SecretariatUserService {
         break;
 
       case FORM_TYPES.ACCOUNT_STATEMENT:
+        console.log('\n🔥 PROCESSING ACCOUNT STATEMENT 🔥');
+        
         replacements['{{ACCOUNT_TYPE}}'] = manualData?.accountType ? this.getAccountTypeArabic(manualData.accountType) : '--------';
         replacements['{{FROM_DATE}}'] = manualData?.fromDate || '--------';
         replacements['{{TO_DATE}}'] = manualData?.toDate || '--------';
-        replacements['{{TOTAL_AMOUNT}}'] = manualData?.totalAmount ? manualData.totalAmount.toString() : '--------';
         replacements['{{DESCRIPTION}}'] = manualData?.description ? this.escapeHtml(manualData.description) : '--------';
+        
+        // PROCESS ACCOUNT ROWS
+        console.log('Checking for accountRows...');
+        console.log('manualData.accountRows:', manualData.accountRows);
+        console.log('Is Array?', Array.isArray(manualData.accountRows));
+        
+        if (manualData.accountRows && Array.isArray(manualData.accountRows) && manualData.accountRows.length > 0) {
+          console.log('\n✅ FOUND ACCOUNT ROWS! Count:', manualData.accountRows.length);
+          const rows = manualData.accountRows;
+          let totalAmount = 0;
+          
+          // Process up to 8 rows
+          for (let i = 0; i < 8; i++) {
+            if (i < rows.length && rows[i]) {
+              const row = rows[i];
+              console.log(`\n  Row ${i + 1}:`, JSON.stringify(row, null, 2));
+              
+              const date = row.date || '';
+              const invoiceNumber = row.invoiceNumber || '';
+              const projectName = row.projectName || '';
+              const description = row.description || '';
+              const amount = parseFloat(row.amount) || 0;
+              
+              const formattedDate = date ? this.formatDateForPDF(date) : '-------';
+              const formattedInvoice = invoiceNumber || '---------';
+              const formattedProject = projectName || '-----------';
+              const formattedDesc = description || '------------------';
+              const formattedAmount = amount > 0 ? this.formatAmount(amount) : '-------';
+              
+              console.log(`    ✓ Formatted: ${formattedDate} | ${formattedInvoice} | ${formattedProject} | ${formattedDesc} | ${formattedAmount}`);
+              
+              replacements[`{{ROW_${i + 1}_DATE}}`] = formattedDate;
+              replacements[`{{ROW_${i + 1}_INVOICE}}`] = this.escapeHtml(formattedInvoice);
+              replacements[`{{ROW_${i + 1}_PROJECT}}`] = this.escapeHtml(formattedProject);
+              replacements[`{{ROW_${i + 1}_DESC}}`] = this.escapeHtml(formattedDesc);
+              replacements[`{{ROW_${i + 1}_AMOUNT}}`] = formattedAmount;
+              
+              totalAmount += amount;
+            } else {
+              // Empty row
+              replacements[`{{ROW_${i + 1}_DATE}}`] = '-------';
+              replacements[`{{ROW_${i + 1}_INVOICE}}`] = '---------';
+              replacements[`{{ROW_${i + 1}_PROJECT}}`] = '-----------';
+              replacements[`{{ROW_${i + 1}_DESC}}`] = '------------------';
+              replacements[`{{ROW_${i + 1}_AMOUNT}}`] = '-------';
+            }
+          }
+          
+          replacements['{{TOTAL_AMOUNT}}'] = totalAmount > 0 ? this.formatAmount(totalAmount) : '--------';
+          console.log(`\n✅ TOTAL: ${totalAmount} → Formatted: ${replacements['{{TOTAL_AMOUNT}}']}`);
+        } else {
+          console.log('\n❌ NO ACCOUNT ROWS - Filling with dashes');
+          // Fill all 8 rows with empty dashes
+          for (let i = 0; i < 8; i++) {
+            replacements[`{{ROW_${i + 1}_DATE}}`] = '-------';
+            replacements[`{{ROW_${i + 1}_INVOICE}}`] = '---------';
+            replacements[`{{ROW_${i + 1}_PROJECT}}`] = '-----------';
+            replacements[`{{ROW_${i + 1}_DESC}}`] = '------------------';
+            replacements[`{{ROW_${i + 1}_AMOUNT}}`] = '-------';
+          }
+          replacements['{{TOTAL_AMOUNT}}'] = '--------';
+        }
         break;
     }
 
+    console.log('\n--- FINAL REPLACEMENTS COUNT:', Object.keys(replacements).length);
+    console.log('╚════════════════════════════════════════════════════════════╝\n');
+    
     return replacements;
   }
 
-  /**
-   * Helper method to escape HTML
-   */
   escapeHtml(text) {
     if (!text) return '';
     const map = {
@@ -364,9 +432,6 @@ class SecretariatUserService {
     return text.replace(/[&<>"']/g, m => map[m]);
   }
 
-  /**
-   * Format currency
-   */
   formatCurrency(amount) {
     return new Intl.NumberFormat('ar-EG', {
       style: 'decimal',
@@ -375,9 +440,6 @@ class SecretariatUserService {
     }).format(amount) + ' جنيه';
   }
 
-  /**
-   * Get vacation type in Arabic
-   */
   getVacationTypeArabic(type) {
     const types = {
       'annual': 'إجازة سنوية',
@@ -388,9 +450,6 @@ class SecretariatUserService {
     return types[type] || type;
   }
 
-  /**
-   * Get repayment method in Arabic
-   */
   getRepaymentMethodArabic(method) {
     const methods = {
       'salary_deduction': 'خصم من الراتب',
@@ -400,9 +459,6 @@ class SecretariatUserService {
     return methods[method] || method;
   }
 
-  /**
-   * Get account type in Arabic
-   */
   getAccountTypeArabic(type) {
     const types = {
       'salary': 'راتب',
@@ -411,6 +467,38 @@ class SecretariatUserService {
       'other': 'أخرى'
     };
     return types[type] || type;
+  }
+
+  formatDateForPDF(dateString) {
+    if (!dateString) return '-------';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return '-------';
+      
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      
+      return `${year}-${month}-${day}`;
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return '-------';
+    }
+  }
+
+  formatAmount(amount) {
+    if (amount === undefined || amount === null) return '-------';
+    
+    try {
+      const num = parseFloat(amount);
+      if (isNaN(num)) return '-------';
+      
+      return num.toFixed(2);
+    } catch (error) {
+      console.error('Error formatting amount:', error);
+      return '-------';
+    }
   }
 
   getTemplatePath(formType) {
@@ -453,9 +541,6 @@ class SecretariatUserService {
     }
   }
 
-  /**
-   * Validate manual data
-   */
   validateManualData(formType, manualData) {
     const errors = [];
 
@@ -502,6 +587,18 @@ class SecretariatUserService {
             errors.push('تاريخ النهاية لا يمكن أن يكون قبل تاريخ البداية');
           }
         }
+        
+        if (manualData.accountRows && Array.isArray(manualData.accountRows)) {
+          if (manualData.accountRows.length > 10) {
+            errors.push('الحد الأقصى هو 10 صفوف');
+          }
+          
+          manualData.accountRows.forEach((row, index) => {
+            if (row.amount && row.amount < 0) {
+              errors.push(`الصف ${index + 1}: المبلغ لا يمكن أن يكون سالباً`);
+            }
+          });
+        }
         break;
     }
 
@@ -511,23 +608,25 @@ class SecretariatUserService {
     };
   }
 
-  /**
-   * Create form with enhanced error handling and manual data support
-   */
   async createForm(formData, createdBy) {
     try {
-      // Validate form type
+      console.log('\n╔════════════════════════════════════════════════════════════╗');
+      console.log('║                  CREATING FORM                             ║');
+      console.log('╚════════════════════════════════════════════════════════════╝');
+      console.log('Form Type:', formData.formType);
+      console.log('Created By:', createdBy);
+      console.log('RECEIVED FORM DATA:');
+      console.log(JSON.stringify(formData, null, 2));
+
       if (!Object.values(FORM_TYPES).includes(formData.formType)) {
         throw new Error('نوع النموذج غير صحيح');
       }
 
-      // Load user
       const user = await this.getUserById(createdBy);
       if (!user) {
         throw new Error('المستخدم غير موجود');
       }
 
-      // Validate manual data if provided
       if (formData.manualData) {
         const validation = this.validateManualData(formData.formType, formData.manualData);
         if (!validation.isValid) {
@@ -535,7 +634,6 @@ class SecretariatUserService {
         }
       }
 
-      // Generate form number
       const formNumber = await this.generateFormNumber(formData.formType);
 
       const newForm = {
@@ -554,24 +652,27 @@ class SecretariatUserService {
         manualData: formData.manualData || null
       };
 
-      // Generate PDF with manual data
+      console.log('\nFORM OBJECT TO BE SAVED:');
+      console.log(JSON.stringify(newForm, null, 2));
+
       const pdfPath = await this.generatePDF(newForm, formData.formType, formData.manualData);
       newForm.pdfPath = pdfPath;
 
-      // Save form
       const forms = await this.loadForms();
       forms.push(newForm);
       await this.saveForms(forms);
 
-      // Create notification (don't let it fail the form creation)
+      console.log('✓ Form saved successfully');
+
       await this.createNotification(newForm, formData.formType, createdBy);
-      
-      // Send emails (don't let it fail the form creation)
       await this.sendEmailToSecretariat(newForm, formData.formType);
+
+      console.log('╚════════════════════════════════════════════════════════════╝\n');
 
       return newForm;
     } catch (error) {
-      console.error('Error creating form:', error);
+      console.error('\n✗✗✗ ERROR CREATING FORM ✗✗✗');
+      console.error('Error:', error);
       throw error;
     }
   }

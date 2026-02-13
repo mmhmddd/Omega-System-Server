@@ -1,4 +1,4 @@
-// src/services/cutting.service.js (COMPLETE READY-TO-PASTE VERSION)
+// src/services/cutting.service.js (FINAL VERSION - AUTOMATIC COMPLETION AT 100%)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -275,7 +275,7 @@ class CuttingService {
   }
 
   /**
-   * Build detailed change description for history - ENHANCED VERSION
+   * Build detailed change description for history
    */
   buildChangeDescription(modifications) {
     const descriptions = [];
@@ -374,7 +374,7 @@ class CuttingService {
   }
 
   /**
-   * Generate a human-readable summary of updates - ENHANCED VERSION
+   * Generate a human-readable summary of updates
    */
   generateUpdateSummary(modifications, actionType, notes) {
     const summaryEn = [];
@@ -397,7 +397,6 @@ class CuttingService {
       }
     });
 
-    // Add notes indicator to summary if provided
     if (notes) {
       summaryEn.push(`Note added`);
       summaryAr.push(`تمت إضافة ملاحظة`);
@@ -450,7 +449,7 @@ class CuttingService {
         savedFileName = fileName;
       }
 
-      // Create job object with enhanced tracking
+      // Create job object
       const newJob = {
         id: jobId,
         projectName: jobData.projectName,
@@ -587,7 +586,7 @@ class CuttingService {
   }
 
   /**
-   * Update cutting job - ✅ ENHANCED VERSION WITH DETAILED NOTES TRACKING
+   * ✅ Update cutting job - WITH AUTOMATIC 100% COMPLETION
    */
   async updateCuttingJob(id, updateData, file, updatedBy) {
     try {
@@ -601,17 +600,15 @@ class CuttingService {
       const job = jobs[jobIndex];
       const oldStatus = job.fileStatus;
       
-      // Initialize updateHistory if it doesn't exist
       if (!job.updateHistory) {
         job.updateHistory = [];
       }
 
-      // Track changes for history
       const modifications = [];
       let actionType = 'job_updated';
-      let updateNotes = updateData.notes; // ✅ Capture notes from update
+      let updateNotes = updateData.notes;
 
-      // Update basic fields with tracking
+      // Update basic fields
       if (updateData.projectName && updateData.projectName !== job.projectName) {
         modifications.push({
           field: 'projectName',
@@ -666,11 +663,10 @@ class CuttingService {
         job.dateFrom = updateData.dateFrom;
       }
 
-      // ✅ Handle currentlyCut update with detailed tracking and notes
+      // ✅✅✅ CRITICAL: HANDLE PROGRESS UPDATE WITH AUTOMATIC 100% COMPLETION ✅✅✅
       if (updateData.currentlyCut !== undefined) {
         const newCutAmount = parseInt(updateData.currentlyCut);
         
-        // Validate the cut amount
         if (isNaN(newCutAmount)) {
           throw new Error('Cut amount must be a valid number');
         }
@@ -687,7 +683,6 @@ class CuttingService {
           const difference = newCutAmount - job.currentlyCut;
           const progressPercentage = Math.round((newCutAmount / job.quantity) * 100);
           
-          // ✅ ATTACH NOTES TO THE PROGRESS MODIFICATION
           modifications.push({
             field: 'currentlyCut',
             oldValue: job.currentlyCut,
@@ -696,58 +691,71 @@ class CuttingService {
             progress: `${newCutAmount}/${job.quantity} (${progressPercentage}%)`,
             progressPercentage: progressPercentage,
             quantity: job.quantity,
-            notes: updateNotes || null // ✅ Include notes here
+            notes: updateNotes || null
           });
           
           job.currentlyCut = newCutAmount;
           actionType = 'progress_updated';
           
-          // Auto-update status based on progress if status is not explicitly provided
-          if (!updateData.fileStatus) {
-            let autoStatus;
-            if (newCutAmount === 0) {
-              autoStatus = 'معلق';
-            } else if (newCutAmount < job.quantity) {
-              autoStatus = 'قيد التنفيذ';
-            } else if (newCutAmount === job.quantity) {
-              autoStatus = 'مكتمل';
+          // ✅✅✅ AUTOMATIC STATUS UPDATE BASED ON PROGRESS ✅✅✅
+          let autoStatus = null;
+          
+          if (newCutAmount === 0) {
+            autoStatus = 'معلق';
+          } else if (newCutAmount >= job.quantity) {
+            // ✅ IF PROGRESS IS 100% OR MORE, AUTOMATICALLY SET TO COMPLETED
+            autoStatus = 'مكتمل';
+          } else {
+            autoStatus = 'قيد التنفيذ';
+          }
+          
+          // Update status if it changed
+          if (autoStatus && autoStatus !== job.fileStatus) {
+            // Move file if exists
+            if (job.fileName) {
+              await this.moveFileToStatusFolder(job.fileName, job.fileStatus, autoStatus);
+              job.filePath = `data/cutting-jobs/${STATUS_FOLDERS[autoStatus]}/${job.fileName}`;
             }
             
-            if (autoStatus && autoStatus !== job.fileStatus) {
-              modifications.push({
-                field: 'fileStatus',
-                oldValue: job.fileStatus,
-                newValue: autoStatus,
-                reason: 'Auto-updated based on progress',
-                notes: updateNotes || null // ✅ Include notes with auto status change
-              });
-              job.fileStatus = autoStatus;
-              actionType = 'status_changed';
-            }
+            modifications.push({
+              field: 'fileStatus',
+              oldValue: job.fileStatus,
+              newValue: autoStatus,
+              reason: progressPercentage >= 100 
+                ? 'Automatically completed - 100% progress reached' 
+                : 'Auto-updated based on progress',
+              notes: updateNotes || null
+            });
+            
+            job.fileStatus = autoStatus;
+            actionType = 'status_changed';
           }
         }
       }
 
-      // ✅ Handle file status change with tracking
-      if (updateData.fileStatus && updateData.fileStatus !== oldStatus) {
+      // Handle manual status change (if user explicitly sets status)
+      if (updateData.fileStatus && updateData.fileStatus !== job.fileStatus) {
+        // Move file if exists
+        if (job.fileName) {
+          await this.moveFileToStatusFolder(job.fileName, job.fileStatus, updateData.fileStatus);
+          job.filePath = `data/cutting-jobs/${STATUS_FOLDERS[updateData.fileStatus]}/${job.fileName}`;
+        }
+        
         modifications.push({
           field: 'fileStatus',
-          oldValue: oldStatus,
+          oldValue: job.fileStatus,
           newValue: updateData.fileStatus,
           reason: 'Manual status update',
-          notes: updateNotes || null // ✅ Include notes with manual status change
+          notes: updateNotes || null
         });
+        
         job.fileStatus = updateData.fileStatus;
-        actionType = 'status_changed';
-
-        // Move file to new status folder if file exists
-        if (job.fileName) {
-          await this.moveFileToStatusFolder(job.fileName, oldStatus, updateData.fileStatus);
-          job.filePath = `data/cutting-jobs/${STATUS_FOLDERS[updateData.fileStatus]}/${job.fileName}`;
+        if (actionType !== 'status_changed') {
+          actionType = 'status_changed';
         }
       }
 
-      // Handle cutBy field - add user if not already in array
+      // Add user to cutBy if not present
       if (updatedBy && !job.cutBy.includes(updatedBy)) {
         job.cutBy.push(updatedBy);
         modifications.push({
@@ -757,7 +765,7 @@ class CuttingService {
         });
       }
 
-      // Handle new file upload with tracking
+      // Handle file upload
       if (file) {
         const allowedExtensions = ['.dwg', '.dxf', '.dwt', '.nc', '.txt'];
         const ext = path.extname(file.originalname).toLowerCase();
@@ -765,7 +773,6 @@ class CuttingService {
           throw new Error('Invalid file type. Only DWG, DXF, DWT, NC, TXT files are allowed');
         }
 
-        // Delete old file if exists
         if (job.fileName) {
           const oldFilePath = path.join(CUTTING_JOBS_DIR, STATUS_FOLDERS[job.fileStatus], job.fileName);
           if (fsSync.existsSync(oldFilePath)) {
@@ -773,7 +780,6 @@ class CuttingService {
           }
         }
 
-        // Save new file
         const fileName = this.generateFileName(
           file.originalname,
           job.thickness,
@@ -797,11 +803,11 @@ class CuttingService {
         actionType = 'file_updated';
       }
 
-      // Update tracking fields
+      // Update tracking
       job.lastUpdatedBy = updatedBy;
       job.updatedAt = new Date().toISOString();
 
-      // ✅ Add to update history with detailed information
+      // Add to history
       if (modifications.length > 0) {
         const detailedDescriptions = this.buildChangeDescription(modifications);
         
@@ -812,7 +818,7 @@ class CuttingService {
             modifications: modifications,
             detailedDescriptions: detailedDescriptions,
             summary: this.generateUpdateSummary(modifications, actionType, updateNotes),
-            notes: updateNotes || null // ✅ Store notes at top level too
+            notes: updateNotes || null
           })
         );
       }
@@ -841,7 +847,6 @@ class CuttingService {
 
       const job = jobs[jobIndex];
 
-      // Delete associated file if exists
       if (job.fileName) {
         const filePath = path.join(CUTTING_JOBS_DIR, STATUS_FOLDERS[job.fileStatus], job.fileName);
         if (fsSync.existsSync(filePath)) {
@@ -882,20 +887,16 @@ class CuttingService {
         }
       };
 
-      // Count by material type and calculate total progress
       jobs.forEach(job => {
-        // Material stats
         if (!stats.byMaterial[job.materialType]) {
           stats.byMaterial[job.materialType] = 0;
         }
         stats.byMaterial[job.materialType]++;
 
-        // Progress stats
         stats.totalProgress.totalQuantity += job.quantity || 0;
         stats.totalProgress.totalCut += job.currentlyCut || 0;
       });
 
-      // Calculate overall percentage
       if (stats.totalProgress.totalQuantity > 0) {
         stats.totalProgress.percentageComplete = Math.round(
           (stats.totalProgress.totalCut / stats.totalProgress.totalQuantity) * 100
