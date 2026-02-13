@@ -145,8 +145,8 @@ class SupplierService {
     }
   }
 
-  // Add new supplier
-  async addSupplier(supplierData) {
+  // Create new supplier (main method used by routes)
+  async createSupplier(supplierData, userId = null) {
     try {
       const suppliers = await this.readSuppliers();
       
@@ -186,22 +186,27 @@ class SupplierService {
         notes: supplierData.notes || '',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        createdBy: supplierData.createdBy || null
+        createdBy: userId
       };
 
       suppliers.push(newSupplier);
       await this.writeSuppliers(suppliers);
       
-      console.log(`Supplier added: ${newSupplier.id}`);
+      console.log(`Supplier created: ${newSupplier.id}`);
       return newSupplier;
     } catch (err) {
-      console.error('Failed to add supplier:', err);
+      console.error('Failed to create supplier:', err);
       throw err;
     }
   }
 
+  // Add new supplier (legacy method, calls createSupplier)
+  async addSupplier(supplierData) {
+    return await this.createSupplier(supplierData, supplierData.createdBy);
+  }
+
   // Update supplier
-  async updateSupplier(id, updateData) {
+  async updateSupplier(id, updateData, userId = null) {
     try {
       const suppliers = await this.readSuppliers();
       const index = suppliers.findIndex(s => s.id === id);
@@ -247,7 +252,7 @@ class SupplierService {
         createdAt: suppliers[index].createdAt,
         createdBy: suppliers[index].createdBy,
         updatedAt: new Date().toISOString(),
-        updatedBy: updateData.updatedBy || null
+        updatedBy: userId
       };
 
       await this.writeSuppliers(suppliers);
@@ -274,7 +279,10 @@ class SupplierService {
       await this.writeSuppliers(suppliers);
       
       console.log(`Supplier deleted: ${id}`);
-      return deletedSupplier;
+      return {
+        message: 'تم حذف المورد بنجاح',
+        supplier: deletedSupplier
+      };
     } catch (err) {
       console.error(`Failed to delete supplier ${id}:`, err);
       throw err;
@@ -398,14 +406,14 @@ class SupplierService {
   }
 
   // Update supplier status
-  async updateSupplierStatus(id, status) {
+  async updateSupplierStatus(id, status, userId = null) {
     try {
       const validStatuses = ['active', 'inactive', 'pending', 'suspended'];
       if (!validStatuses.includes(status)) {
         throw new Error('Invalid status. Must be one of: ' + validStatuses.join(', '));
       }
 
-      return await this.updateSupplier(id, { status });
+      return await this.updateSupplier(id, { status }, userId);
     } catch (err) {
       console.error('Failed to update supplier status:', err);
       throw err;
@@ -422,7 +430,7 @@ class SupplierService {
 
       for (const supplierData of suppliersData) {
         try {
-          const supplier = await this.addSupplier({ ...supplierData, createdBy });
+          const supplier = await this.createSupplier(supplierData, createdBy);
           results.success.push({ id: supplier.id, name: supplier.name });
         } catch (err) {
           results.failed.push({ 
