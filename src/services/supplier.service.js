@@ -4,6 +4,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
+const ExcelJS = require('exceljs');
 
 class SupplierService {
   constructor() {
@@ -447,6 +448,241 @@ class SupplierService {
       throw err;
     }
   }
+ 
+
+/**
+ * Generate Excel export of suppliers
+ * @param {Array} suppliers - Array of supplier objects to export
+ * @returns {Promise<Buffer>} Excel file buffer
+ */
+async generateExcelExport(suppliers) {
+  try {
+    // Helper function to get status label in Arabic
+    const getStatusLabel = (status) => {
+      const statusMap = {
+        'active': 'نشط',
+        'inactive': 'غير نشط',
+        'pending': 'قيد الانتظار',
+        'suspended': 'معلق'
+      };
+      return statusMap[status] || status;
+    };
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('الموردين');
+
+    // Set RTL for Arabic
+    worksheet.views = [{ rightToLeft: true }];
+
+    // Define columns (REMOVED: secondaryPhone, postalCode, website, taxId, deliveryTime, minimumOrder)
+    worksheet.columns = [
+      { header: 'رقم المورد', key: 'id', width: 15 },
+      { header: 'الاسم', key: 'name', width: 25 },
+      { header: 'اسم الشركة', key: 'companyName', width: 25 },
+      { header: 'الشخص المسؤول', key: 'contactPerson', width: 25 },
+      { header: 'البريد الإلكتروني', key: 'email', width: 30 },
+      { header: 'رقم الهاتف', key: 'phone', width: 20 },
+      { header: 'العنوان', key: 'address', width: 35 },
+      { header: 'المدينة', key: 'city', width: 20 },
+      { header: 'الدولة', key: 'country', width: 20 },
+      { header: 'أنواع المواد', key: 'materialTypes', width: 40 },
+      { header: 'التقييم', key: 'rating', width: 12 },
+      { header: 'شروط الدفع', key: 'paymentTerms', width: 25 },
+      { header: 'العملة', key: 'currency', width: 12 },
+      { header: 'الحالة', key: 'status', width: 15 },
+      { header: 'ملاحظات', key: 'notes', width: 40 },
+      { header: 'تاريخ الإنشاء', key: 'createdAt', width: 20 },
+      { header: 'تاريخ التحديث', key: 'updatedAt', width: 20 }
+    ];
+
+    // Style header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, size: 12, name: 'Arial' };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1565C0' }
+    };
+    headerRow.font = { ...headerRow.font, color: { argb: 'FFFFFFFF' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.height = 25;
+
+    // Add data rows
+    suppliers.forEach(supplier => {
+      const row = worksheet.addRow({
+        id: supplier.id || '',
+        name: supplier.name || '',
+        companyName: supplier.companyName || '',
+        contactPerson: supplier.contactPerson || '',
+        email: supplier.email || '',
+        phone: supplier.phone || '',
+        address: supplier.address || '',
+        city: supplier.city || '',
+        country: supplier.country || '',
+        materialTypes: Array.isArray(supplier.materialTypes) 
+          ? supplier.materialTypes.join(', ') 
+          : '',
+        rating: supplier.rating || 0,
+        paymentTerms: supplier.paymentTerms || '',
+        currency: supplier.currency || 'EGP',
+        status: getStatusLabel(supplier.status),
+        notes: supplier.notes || '',
+        createdAt: supplier.createdAt 
+          ? new Date(supplier.createdAt).toLocaleDateString('ar-EG', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          : '',
+        updatedAt: supplier.updatedAt 
+          ? new Date(supplier.updatedAt).toLocaleDateString('ar-EG', {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          : ''
+      });
+
+      // Style data rows
+      row.font = { name: 'Arial', size: 11 };
+      row.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+
+      // Status color coding
+      const statusCell = row.getCell('status');
+      switch (supplier.status) {
+        case 'active':
+          statusCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF22C55E' }
+          };
+          statusCell.font = { ...statusCell.font, color: { argb: 'FFFFFFFF' }, bold: true };
+          break;
+        case 'inactive':
+          statusCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFEF4444' }
+          };
+          statusCell.font = { ...statusCell.font, color: { argb: 'FFFFFFFF' }, bold: true };
+          break;
+        case 'pending':
+          statusCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFF59E0B' }
+          };
+          statusCell.font = { ...statusCell.font, color: { argb: 'FFFFFFFF' }, bold: true };
+          break;
+        case 'suspended':
+          statusCell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF6B7280' }
+          };
+          statusCell.font = { ...statusCell.font, color: { argb: 'FFFFFFFF' }, bold: true };
+          break;
+      }
+
+      // Rating color coding
+      const ratingCell = row.getCell('rating');
+      const rating = supplier.rating || 0;
+      if (rating >= 4.5) {
+        ratingCell.font = { ...ratingCell.font, color: { argb: 'FF22C55E' }, bold: true };
+      } else if (rating >= 3.5) {
+        ratingCell.font = { ...ratingCell.font, color: { argb: 'FFF59E0B' }, bold: true };
+      } else if (rating > 0) {
+        ratingCell.font = { ...ratingCell.font, color: { argb: 'FFEF4444' }, bold: true };
+      }
+    });
+
+    // Add borders to all cells
+    worksheet.eachRow((row, rowNumber) => {
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+      });
+    });
+
+    // Freeze header row
+    worksheet.views = [
+      { 
+        rightToLeft: true,
+        state: 'frozen',
+        ySplit: 1
+      }
+    ];
+
+    // Add summary statistics sheet
+    const statsSheet = workbook.addWorksheet('الإحصائيات');
+    statsSheet.views = [{ rightToLeft: true }];
+
+    // Calculate statistics
+    const stats = {
+      total: suppliers.length,
+      active: suppliers.filter(s => s.status === 'active').length,
+      inactive: suppliers.filter(s => s.status === 'inactive').length,
+      pending: suppliers.filter(s => s.status === 'pending').length,
+      suspended: suppliers.filter(s => s.status === 'suspended').length,
+      averageRating: suppliers.length > 0 
+        ? (suppliers.reduce((sum, s) => sum + (s.rating || 0), 0) / suppliers.length).toFixed(2)
+        : 0
+    };
+
+    // Add statistics data
+    statsSheet.getCell('A1').value = 'إحصائيات الموردين';
+    statsSheet.getCell('A1').font = { bold: true, size: 16, name: 'Arial' };
+    statsSheet.getCell('A1').fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF1565C0' }
+    };
+    statsSheet.getCell('A1').font = { ...statsSheet.getCell('A1').font, color: { argb: 'FFFFFFFF' } };
+    statsSheet.mergeCells('A1:B1');
+
+    const statsData = [
+      ['', ''],
+      ['إجمالي الموردين', stats.total],
+      ['الموردون النشطون', stats.active],
+      ['الموردون غير النشطين', stats.inactive],
+      ['قيد الانتظار', stats.pending],
+      ['معلق', stats.suspended],
+      ['', ''],
+      ['متوسط التقييم', stats.averageRating]
+    ];
+
+    statsData.forEach((rowData, index) => {
+      const row = statsSheet.addRow(rowData);
+      if (index > 0 && rowData[0]) {
+        row.getCell(1).font = { bold: true, size: 12, name: 'Arial' };
+        row.getCell(2).font = { bold: true, size: 12, name: 'Arial', color: { argb: 'FF1565C0' } };
+      }
+    });
+
+    statsSheet.getColumn(1).width = 30;
+    statsSheet.getColumn(2).width = 20;
+
+    // Generate buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+    
+    console.log(`Excel export generated: ${suppliers.length} suppliers`);
+    return buffer;
+
+  } catch (error) {
+    console.error('Error generating Excel export:', error);
+    throw new Error(`Failed to generate Excel export: ${error.message}`);
+  }
 }
+
+}
+
 
 module.exports = new SupplierService();

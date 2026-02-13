@@ -1,4 +1,4 @@
-// src/routes/price-quote.routes.js - UPDATED WITH TERMS & CONDITIONS TEXT FIELD
+// src/routes/price-quote.routes.js - UPDATED WITH OPTIONAL PHONE NUMBER
 
 const express = require('express');
 const router = express.Router();
@@ -31,7 +31,7 @@ router.use(checkRouteAccess('priceQuotes'));
  * @route   POST /api/price-quotes
  * @desc    Create a new price quote
  * @access  Private (Admin, Employee with permission, Super Admin)
- * ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText parameters
+ * ✅ UPDATED: Phone number is now optional
  */
 router.post('/', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -49,19 +49,19 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       taxRate,
       items,
       customNotes,
-      includeTermsAndConditions, // ✅ NEW FIELD
-      termsAndConditionsText // ✅ NEW FIELD
+      includeTermsAndConditions,
+      termsAndConditionsText
     } = req.body;
 
     console.log('📝 Creating Price Quote with Terms & Conditions:');
     console.log('  - includeTermsAndConditions:', includeTermsAndConditions);
     console.log('  - termsAndConditionsText length:', termsAndConditionsText ? termsAndConditionsText.length : 0);
 
-    // Validate required fields
-    if (!clientName || !date || !clientPhone) {
+    // ✅ UPDATED: Phone is now optional - only validate required fields
+    if (!clientName || !date) {
       return res.status(400).json({
         success: false,
-        message: 'Client name, date, and phone are required'
+        message: 'Client name and date are required'
       });
     }
 
@@ -115,7 +115,7 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
 
     const quoteData = {
       clientName,
-      clientPhone,
+      clientPhone: clientPhone || '', // ✅ Default to empty string if not provided
       clientAddress,
       clientCity,
       projectName,
@@ -127,8 +127,8 @@ router.post('/', upload.single('attachment'), async (req, res, next) => {
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes,
-      includeTermsAndConditions: includeTermsAndConditionsBool, // ✅ NEW FIELD
-      termsAndConditionsText: includeTermsAndConditionsBool ? termsAndConditionsText : null // ✅ NEW FIELD
+      includeTermsAndConditions: includeTermsAndConditionsBool,
+      termsAndConditionsText: includeTermsAndConditionsBool ? termsAndConditionsText : null
     };
 
     console.log('🔍 Final quoteData:');
@@ -312,7 +312,7 @@ router.get('/:id/pdf', async (req, res, next) => {
  * @route   PUT /api/price-quotes/:id
  * @desc    Update price quote
  * @access  Private (Owner or Super Admin)
- * ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText parameters
+ * ✅ UPDATED: Phone number is now optional
  */
 router.put('/:id', upload.single('attachment'), async (req, res, next) => {
   try {
@@ -339,8 +339,8 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       taxRate,
       items,
       customNotes,
-      includeTermsAndConditions, // ✅ NEW FIELD
-      termsAndConditionsText // ✅ NEW FIELD
+      includeTermsAndConditions,
+      termsAndConditionsText
     } = req.body;
 
     console.log('📝 Updating Price Quote with Terms & Conditions:');
@@ -389,7 +389,7 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
 
     const updateData = {
       clientName,
-      clientPhone,
+      clientPhone, // ✅ Phone is optional - can be empty or undefined
       clientAddress,
       clientCity,
       projectName,
@@ -401,8 +401,8 @@ router.put('/:id', upload.single('attachment'), async (req, res, next) => {
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes,
-      includeTermsAndConditions: includeTermsAndConditionsBool, // ✅ NEW FIELD
-      termsAndConditionsText: includeTermsAndConditionsBool ? termsAndConditionsText : undefined // ✅ NEW FIELD
+      includeTermsAndConditions: includeTermsAndConditionsBool,
+      termsAndConditionsText: includeTermsAndConditionsBool ? termsAndConditionsText : undefined
     };
 
     console.log('🔍 Final updateData:');

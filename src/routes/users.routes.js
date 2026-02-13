@@ -1,4 +1,4 @@
-// src/routes/users.routes.js (COMPLETE FIX - All Validation Issues Resolved)
+// src/routes/users.routes.js (UPDATED - Phone Number Support)
 const express = require('express');
 const router = express.Router();
 const userService = require('../services/user.service');
@@ -44,16 +44,17 @@ router.get('/profile', async (req, res, next) => {
 
 router.put('/profile', async (req, res, next) => {
   try {
-    const { name, email } = req.body;
+    const { name, email, phone } = req.body;
     
     const allowedUpdates = {};
     if (name !== undefined) allowedUpdates.name = name;
     if (email !== undefined) allowedUpdates.email = email;
+    if (phone !== undefined) allowedUpdates.phone = phone; // ✅ Allow phone update
     
     if (Object.keys(allowedUpdates).length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'No valid update fields provided'
+        message: 'لم يتم تقديم حقول صالحة للتحديث'
       });
     }
     
@@ -62,7 +63,7 @@ router.put('/profile', async (req, res, next) => {
     
     res.status(200).json({
       success: true,
-      message: 'Profile updated successfully',
+      message: 'تم تحديث الملف الشخصي بنجاح',
       data: userWithoutPassword
     });
   } catch (error) {
@@ -128,15 +129,28 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const userData = req.body;
     
+    console.log('==========================================');
+    console.log('📝 CREATE USER REQUEST');
+    console.log('Data:', userData);
+    console.log('==========================================');
     
-    // Validate required fields
-    const requiredFields = ['name', 'email', 'password', 'role'];
+    // ✅ Validate required fields
+    const requiredFields = ['name', 'phone', 'password', 'role'];
     const missingFields = requiredFields.filter(field => !userData[field]);
     
     if (missingFields.length > 0) {
       return res.status(400).json({
         success: false,
-        message: `Missing required fields: ${missingFields.join(', ')}`
+        message: `الحقول المطلوبة مفقودة: ${missingFields.join(', ')}`
+      });
+    }
+
+    // ✅ Validate phone number format
+    const phoneRegex = /^07[0-9]{8}$/;
+    if (!phoneRegex.test(userData.phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'رقم الهاتف يجب أن يكون أردني بصيغة 07XXXXXXXX'
       });
     }
 
@@ -145,24 +159,26 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
     if (!validRoles.includes(userData.role)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid role. Valid: ${validRoles.join(', ')}`
+        message: `دور غير صالح. الأدوار الصالحة: ${validRoles.join(', ')}`
       });
     }
 
-    // Validate email
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(userData.email)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid email format'
-      });
+    // ✅ Validate email ONLY if provided (OPTIONAL)
+    if (userData.email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(userData.email)) {
+        return res.status(400).json({
+          success: false,
+          message: 'صيغة البريد الإلكتروني غير صالحة'
+        });
+      }
     }
 
     // Validate password
     if (userData.password.length < 6) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters'
+        message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'
       });
     }
 
@@ -171,7 +187,7 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
       if (typeof userData.systemAccess !== 'object' || userData.systemAccess === null) {
         return res.status(400).json({
           success: false,
-          message: 'systemAccess must be an object'
+          message: 'يجب أن يكون systemAccess كائناً'
         });
       }
     }
@@ -181,7 +197,7 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
       if (!Array.isArray(userData.routeAccess)) {
         return res.status(400).json({
           success: false,
-          message: 'routeAccess must be an array'
+          message: 'يجب أن يكون routeAccess مصفوفة'
         });
       }
     }
@@ -189,11 +205,13 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
     const user = await userService.createUser(userData);
     const { password, ...userWithoutPassword } = user;
 
-
+    console.log('✅ User created successfully');
+    console.log('Phone:', user.phone);
+    console.log('==========================================');
 
     res.status(201).json({
       success: true,
-      message: 'User created successfully',
+      message: 'تم إنشاء المستخدم بنجاح',
       data: userWithoutPassword
     });
   } catch (error) {
@@ -201,13 +219,40 @@ router.post('/', restrictTo('super_admin'), async (req, res, next) => {
     console.error('❌ Error creating user:', error.message);
     console.error('==========================================');
     
-    if (error.message && error.message.includes('already exists')) {
+    if (error.message && error.message.includes('مستخدم')) {
       return res.status(409).json({
         success: false,
         message: error.message
       });
     }
     
+    next(error);
+  }
+});
+
+/**
+ * ✅ NEW: Check phone availability
+ */
+router.get('/check/phone/:phone', restrictTo('super_admin'), async (req, res, next) => {
+  try {
+    const { phone } = req.params;
+    
+    // Validate phone format
+    const phoneRegex = /^07[0-9]{8}$/;
+    if (!phoneRegex.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'رقم الهاتف يجب أن يكون أردني بصيغة 07XXXXXXXX'
+      });
+    }
+    
+    const isAvailable = await userService.isPhoneAvailable(phone);
+    
+    res.status(200).json({
+      success: true,
+      data: { phone, available: isAvailable }
+    });
+  } catch (error) {
     next(error);
   }
 });
@@ -250,18 +295,29 @@ router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
       if (!validRoles.includes(updateData.role)) {
         return res.status(400).json({
           success: false,
-          message: `Invalid role. Valid: ${validRoles.join(', ')}`
+          message: `دور غير صالح. الأدوار الصالحة: ${validRoles.join(', ')}`
         });
       }
     }
 
-    // Validate email if provided
+    // ✅ Validate phone if provided
+    if (updateData.phone) {
+      const phoneRegex = /^07[0-9]{8}$/;
+      if (!phoneRegex.test(updateData.phone)) {
+        return res.status(400).json({
+          success: false,
+          message: 'رقم الهاتف يجب أن يكون أردني بصيغة 07XXXXXXXX'
+        });
+      }
+    }
+
+    // ✅ Validate email ONLY if provided (OPTIONAL)
     if (updateData.email) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(updateData.email)) {
         return res.status(400).json({
           success: false,
-          message: 'Invalid email format'
+          message: 'صيغة البريد الإلكتروني غير صالحة'
         });
       }
     }
@@ -270,7 +326,7 @@ router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
     if (updateData.password && updateData.password.length < 6) {
       return res.status(400).json({
         success: false,
-        message: 'Password must be at least 6 characters'
+        message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'
       });
     }
 
@@ -279,7 +335,7 @@ router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
       if (typeof updateData.systemAccess !== 'object' || updateData.systemAccess === null) {
         return res.status(400).json({
           success: false,
-          message: 'systemAccess must be an object'
+          message: 'يجب أن يكون systemAccess كائناً'
         });
       }
     }
@@ -289,7 +345,7 @@ router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
       if (!Array.isArray(updateData.routeAccess)) {
         return res.status(400).json({
           success: false,
-          message: 'routeAccess must be an array'
+          message: 'يجب أن يكون routeAccess مصفوفة'
         });
       }
     }
@@ -299,11 +355,11 @@ router.put('/:id', restrictTo('super_admin'), async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'User updated successfully',
+      message: 'تم تحديث المستخدم بنجاح',
       data: userWithoutPassword
     });
   } catch (error) {
-    if (error.message && error.message.includes('already exists')) {
+    if (error.message && error.message.includes('مستخدم')) {
       return res.status(409).json({
         success: false,
         message: error.message
@@ -319,7 +375,7 @@ router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
     if (req.params.id === req.user.id) {
       return res.status(400).json({
         success: false,
-        message: 'You cannot delete your own account'
+        message: 'لا يمكنك حذف حسابك الخاص'
       });
     }
 
@@ -327,7 +383,7 @@ router.delete('/:id', restrictTo('super_admin'), async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'User deleted successfully'
+      message: 'تم حذف المستخدم بنجاح'
     });
   } catch (error) {
     next(error);
@@ -341,7 +397,7 @@ router.patch('/:id/role', restrictTo('super_admin'), async (req, res, next) => {
     if (!role) {
       return res.status(400).json({
         success: false,
-        message: 'Role is required'
+        message: 'الدور مطلوب'
       });
     }
 
@@ -349,7 +405,7 @@ router.patch('/:id/role', restrictTo('super_admin'), async (req, res, next) => {
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         success: false,
-        message: `Invalid role. Valid: ${validRoles.join(', ')}`
+        message: `دور غير صالح. الأدوار الصالحة: ${validRoles.join(', ')}`
       });
     }
 
@@ -358,7 +414,7 @@ router.patch('/:id/role', restrictTo('super_admin'), async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Role updated successfully',
+      message: 'تم تحديث الدور بنجاح',
       data: userWithoutPassword
     });
   } catch (error) {
@@ -371,7 +427,7 @@ router.patch('/:id/toggle-active', restrictTo('super_admin'), async (req, res, n
     if (req.params.id === req.user.id) {
       return res.status(400).json({
         success: false,
-        message: 'You cannot deactivate your own account'
+        message: 'لا يمكنك إلغاء تفعيل حسابك الخاص'
       });
     }
 
@@ -380,7 +436,7 @@ router.patch('/:id/toggle-active', restrictTo('super_admin'), async (req, res, n
 
     res.status(200).json({
       success: true,
-      message: `User ${user.active ? 'activated' : 'deactivated'} successfully`,
+      message: `تم ${user.active ? 'تفعيل' : 'إلغاء تفعيل'} المستخدم بنجاح`,
       data: userWithoutPassword
     });
   } catch (error) {
@@ -388,21 +444,16 @@ router.patch('/:id/toggle-active', restrictTo('super_admin'), async (req, res, n
   }
 });
 
-/**
- * ✅ FIXED: UPDATE SYSTEM ACCESS with proper validation
- */
 router.patch('/:id/system-access', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const systemAccess = req.body;
-    
-
     
     // ✅ Validate that systemAccess is an object
     if (typeof systemAccess !== 'object' || systemAccess === null || Array.isArray(systemAccess)) {
       console.error('❌ systemAccess validation failed');
       return res.status(400).json({
         success: false,
-        message: 'systemAccess must be an object'
+        message: 'يجب أن يكون systemAccess كائناً'
       });
     }
 
@@ -410,10 +461,9 @@ router.patch('/:id/system-access', restrictTo('super_admin'), async (req, res, n
     const user = await userService.updateUser(req.params.id, { systemAccess });
     const { password, ...userWithoutPassword } = user;
 
-
     res.status(200).json({
       success: true,
-      message: 'System access updated successfully',
+      message: 'تم تحديث صلاحيات النظام بنجاح',
       data: userWithoutPassword
     });
   } catch (error) {
@@ -424,20 +474,16 @@ router.patch('/:id/system-access', restrictTo('super_admin'), async (req, res, n
   }
 });
 
-/**
- * ✅ FIXED: UPDATE ROUTE ACCESS with proper validation
- */
 router.patch('/:id/route-access', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { routeAccess } = req.body;
-    
     
     // ✅ Validate that routeAccess is an array
     if (!Array.isArray(routeAccess)) {
       console.error('❌ routeAccess validation failed');
       return res.status(400).json({
         success: false,
-        message: 'routeAccess must be an array'
+        message: 'يجب أن يكون routeAccess مصفوفة'
       });
     }
 
@@ -447,7 +493,7 @@ router.patch('/:id/route-access', restrictTo('super_admin'), async (req, res, ne
 
     res.status(200).json({
       success: true,
-      message: 'Route access updated successfully',
+      message: 'تم تحديث صلاحيات المسارات بنجاح',
       data: userWithoutPassword
     });
   } catch (error) {
@@ -458,9 +504,6 @@ router.patch('/:id/route-access', restrictTo('super_admin'), async (req, res, ne
   }
 });
 
-/**
- * ✅ UPDATE BOTH PERMISSIONS
- */
 router.patch('/:id/permissions', restrictTo('super_admin'), async (req, res, next) => {
   try {
     const { systemAccess, routeAccess } = req.body;
@@ -468,7 +511,7 @@ router.patch('/:id/permissions', restrictTo('super_admin'), async (req, res, nex
     if (!systemAccess && !routeAccess) {
       return res.status(400).json({
         success: false,
-        message: 'At least one of systemAccess or routeAccess required'
+        message: 'مطلوب systemAccess أو routeAccess على الأقل'
       });
     }
 
@@ -478,7 +521,7 @@ router.patch('/:id/permissions', restrictTo('super_admin'), async (req, res, nex
       if (typeof systemAccess !== 'object' || systemAccess === null || Array.isArray(systemAccess)) {
         return res.status(400).json({
           success: false,
-          message: 'systemAccess must be an object'
+          message: 'يجب أن يكون systemAccess كائناً'
         });
       }
       updateData.systemAccess = systemAccess;
@@ -488,7 +531,7 @@ router.patch('/:id/permissions', restrictTo('super_admin'), async (req, res, nex
       if (!Array.isArray(routeAccess)) {
         return res.status(400).json({
           success: false,
-          message: 'routeAccess must be an array'
+          message: 'يجب أن يكون routeAccess مصفوفة'
         });
       }
       updateData.routeAccess = routeAccess;
@@ -499,7 +542,7 @@ router.patch('/:id/permissions', restrictTo('super_admin'), async (req, res, nex
 
     res.status(200).json({
       success: true,
-      message: 'Permissions updated successfully',
+      message: 'تم تحديث الصلاحيات بنجاح',
       data: userWithoutPassword
     });
   } catch (error) {

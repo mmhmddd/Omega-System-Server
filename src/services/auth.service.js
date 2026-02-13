@@ -1,4 +1,4 @@
-// src/services/auth.service.js (FIXED - Complete Version)
+// src/services/auth.service.js (UPDATED - Phone-based Login)
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
@@ -32,7 +32,6 @@ class AuthService {
    */
   _writeUsers(users) {
     try {
-      // Use sync version since this is a synchronous method
       atomicWrite.sync(USERS_FILE, JSON.stringify(users, null, 2));
     } catch (error) {
       logger.error('Error writing users file', error);
@@ -61,7 +60,6 @@ class AuthService {
    */
   _writeResetTokens(tokens) {
     try {
-      // Use sync version since this is a synchronous method
       atomicWrite.sync(RESET_TOKENS_FILE, JSON.stringify(tokens, null, 2));
     } catch (error) {
       logger.error('Error writing reset tokens file', error);
@@ -69,29 +67,31 @@ class AuthService {
     }
   }
 
-// ✅ NEW VERSION
-_generateToken(user) {
-  const systemAccess = user.systemAccess || {
-    laserCuttingManagement: false
-  };
+  /**
+   * Generate JWT token
+   */
+  _generateToken(user) {
+    const systemAccess = user.systemAccess || {
+      laserCuttingManagement: false
+    };
 
-  const routeAccess = Array.isArray(user.routeAccess) ? user.routeAccess : [];
+    const routeAccess = Array.isArray(user.routeAccess) ? user.routeAccess : [];
 
-  const payload = {
-    id: user.id,
-    role: user.role,
-    systemAccess: systemAccess,
-    routeAccess: routeAccess
-  };
+    const payload = {
+      id: user.id,
+      role: user.role,
+      systemAccess: systemAccess,
+      routeAccess: routeAccess
+    };
 
-  console.log('🔐 Generating JWT with:', payload);
+    console.log('🔐 Generating JWT with:', payload);
 
-  return jwt.sign(
-    payload,
-    process.env.JWT_SECRET || 'your-secret-key-change-this',
-    { expiresIn: process.env.JWT_EXPIRE || '7d' }
-  );
-}
+    return jwt.sign(
+      payload,
+      process.env.JWT_SECRET || 'your-secret-key-change-this',
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
+    );
+  }
 
   /**
    * Generate password reset token
@@ -101,30 +101,30 @@ _generateToken(user) {
   }
 
   /**
-   * ✅ FIXED: Login user with username and password
+   * ✅ UPDATED: Login user with phone and password
    */
-  async login(username, password) {
+  async login(phone, password) {
     try {
       const users = this._readUsers();
 
-      console.log('🔍 Login attempt for username:', username);
+      console.log('🔍 Login attempt for phone:', phone);
 
-      // Find user by username (case-insensitive)
-      const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+      // ✅ Find user by phone number
+      const user = users.find(u => u.phone === phone);
 
       if (!user) {
-        console.log('❌ User not found:', username);
-        const error = new Error('Invalid username or password');
+        console.log('❌ User not found with phone:', phone);
+        const error = new Error('رقم الهاتف أو كلمة المرور غير صحيحة');
         error.statusCode = 401;
         throw error;
       }
 
-      console.log('✅ User found:', user.username);
+      console.log('✅ User found:', user.username, '(', user.name, ')');
 
       // Check if user is active
       if (!user.active) {
         console.log('❌ User account is deactivated:', user.username);
-        const error = new Error('Account is deactivated. Please contact administrator');
+        const error = new Error('الحساب معطل. يرجى الاتصال بالمسؤول');
         error.statusCode = 403;
         throw error;
       }
@@ -132,7 +132,7 @@ _generateToken(user) {
       // Verify password (plain text comparison - you should hash in production)
       if (user.password !== password) {
         console.log('❌ Invalid password for user:', user.username);
-        const error = new Error('Invalid username or password');
+        const error = new Error('رقم الهاتف أو كلمة المرور غير صحيحة');
         error.statusCode = 401;
         throw error;
       }
@@ -153,10 +153,9 @@ _generateToken(user) {
         console.log('⚠️ routeAccess was missing, initialized as empty array');
       }
 
-
-
       // ✅ Generate token with complete user object
       const token = this._generateToken(user);
+      
       // Update last login
       user.lastLogin = new Date().toISOString();
       this._writeUsers(users);
@@ -179,29 +178,40 @@ _generateToken(user) {
   }
 
   /**
-   * Forgot password - Generate reset token and send email
+   * ✅ UPDATED: Forgot password - now supports both email and phone
    */
-  async forgotPassword(email) {
+  async forgotPassword(emailOrPhone) {
     try {
       const users = this._readUsers();
 
-      console.log('🔍 Password reset request for email:', email);
+      console.log('🔍 Password reset request for:', emailOrPhone);
 
-      // Find user by email
-      const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+      // ✅ Find user by email OR phone
+      const user = users.find(u => 
+        (u.email && u.email.toLowerCase() === emailOrPhone.toLowerCase()) ||
+        u.phone === emailOrPhone
+      );
 
       if (!user) {
-        console.log('❌ User not found with email:', email);
-        const error = new Error('No user found with this email address');
+        console.log('❌ User not found with:', emailOrPhone);
+        const error = new Error('لم يتم العثور على مستخدم بهذا البريد الإلكتروني أو رقم الهاتف');
         error.statusCode = 404;
         throw error;
       }
 
       // Check if user is active
       if (!user.active) {
-        console.log('❌ User account is deactivated:', user.email);
-        const error = new Error('Account is deactivated. Please contact administrator');
+        console.log('❌ User account is deactivated:', user.phone);
+        const error = new Error('الحساب معطل. يرجى الاتصال بالمسؤول');
         error.statusCode = 403;
+        throw error;
+      }
+
+      // ✅ Check if user has email for password reset
+      if (!user.email) {
+        console.log('❌ User has no email for password reset');
+        const error = new Error('لا يوجد بريد إلكتروني مسجل لهذا الحساب. يرجى الاتصال بالمسؤول');
+        error.statusCode = 400;
         throw error;
       }
 
@@ -220,6 +230,7 @@ _generateToken(user) {
         userId: user.id,
         token: resetToken,
         email: user.email,
+        phone: user.phone,
         expiresAt: resetTokenExpiry,
         createdAt: new Date().toISOString(),
         used: false
@@ -227,7 +238,7 @@ _generateToken(user) {
 
       this._writeResetTokens(filteredTokens);
 
-      console.log('✅ Reset token generated for user:', user.email);
+      console.log('✅ Reset token generated for user:', user.phone);
 
       // Send email with reset token
       try {
@@ -239,11 +250,11 @@ _generateToken(user) {
         console.error('❌ Failed to send email:', emailError.message);
         // Remove the token if email fails
         this._writeResetTokens(resetTokens.filter(t => t.userId !== user.id));
-        throw new Error('Failed to send password reset email. Please try again later.');
+        throw new Error('فشل إرسال البريد الإلكتروني. يرجى المحاولة مرة أخرى لاحقاً');
       }
 
       return {
-        message: 'Password reset email has been sent to your email address',
+        message: 'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني',
         email: user.email
       };
     } catch (error) {
@@ -270,12 +281,12 @@ _generateToken(user) {
 
       if (!tokenData) {
         console.log('❌ Invalid or expired reset token');
-        const error = new Error('Invalid or expired reset token');
+        const error = new Error('رمز إعادة التعيين غير صالح أو منتهي الصلاحية');
         error.statusCode = 400;
         throw error;
       }
 
-      console.log('✅ Valid reset token found for user:', tokenData.email);
+      console.log('✅ Valid reset token found for user:', tokenData.phone || tokenData.email);
 
       // Update user password
       const users = this._readUsers();
@@ -283,7 +294,7 @@ _generateToken(user) {
 
       if (userIndex === -1) {
         console.log('❌ User not found for token');
-        const error = new Error('User not found');
+        const error = new Error('المستخدم غير موجود');
         error.statusCode = 404;
         throw error;
       }
@@ -298,10 +309,10 @@ _generateToken(user) {
       tokenData.usedAt = new Date().toISOString();
       this._writeResetTokens(resetTokens);
 
-      logger.info(`Password reset successful for user: ${users[userIndex].email}`);
-      console.log('✅ Password reset successful for user:', users[userIndex].email);
+      logger.info(`Password reset successful for user: ${users[userIndex].phone}`);
+      console.log('✅ Password reset successful for user:', users[userIndex].phone);
 
-      return { message: 'Password reset successful' };
+      return { message: 'تم إعادة تعيين كلمة المرور بنجاح' };
     } catch (error) {
       logger.error('Reset password error', error);
       throw error;
@@ -320,7 +331,7 @@ _generateToken(user) {
 
       if (userIndex === -1) {
         console.log('❌ User not found:', userId);
-        const error = new Error('User not found');
+        const error = new Error('المستخدم غير موجود');
         error.statusCode = 404;
         throw error;
       }
@@ -330,7 +341,7 @@ _generateToken(user) {
       // Verify current password
       if (user.password !== currentPassword) {
         console.log('❌ Current password is incorrect for user:', user.username);
-        const error = new Error('Current password is incorrect');
+        const error = new Error('كلمة المرور الحالية غير صحيحة');
         error.statusCode = 401;
         throw error;
       }
@@ -342,10 +353,10 @@ _generateToken(user) {
       users[userIndex].updatedAt = new Date().toISOString();
       this._writeUsers(users);
 
-      logger.info(`Password changed for user: ${user.email}`);
+      logger.info(`Password changed for user: ${user.phone}`);
       console.log('✅ Password changed successfully for user:', user.username);
 
-      return { message: 'Password changed successfully' };
+      return { message: 'تم تغيير كلمة المرور بنجاح' };
     } catch (error) {
       logger.error('Change password error', error);
       throw error;
@@ -364,7 +375,7 @@ _generateToken(user) {
 
       if (!user) {
         console.log('❌ User not found:', userId);
-        const error = new Error('User not found');
+        const error = new Error('المستخدم غير موجود');
         error.statusCode = 404;
         throw error;
       }
@@ -380,7 +391,6 @@ _generateToken(user) {
       if (!user.routeAccess) {
         user.routeAccess = [];
       }
-
 
       // Return user without password
       const { password, ...userWithoutPassword } = user;
@@ -441,8 +451,7 @@ _generateToken(user) {
   }
 
   /**
-   * ✅ NEW: Refresh token with latest user data
-   * This is used when user permissions change and they need a new token
+   * Refresh token with latest user data
    */
   async refreshToken(userId) {
     try {
@@ -453,14 +462,14 @@ _generateToken(user) {
 
       if (!user) {
         console.log('❌ User not found:', userId);
-        const error = new Error('User not found');
+        const error = new Error('المستخدم غير موجود');
         error.statusCode = 404;
         throw error;
       }
 
       if (!user.active) {
         console.log('❌ User account is deactivated:', user.username);
-        const error = new Error('Account is deactivated');
+        const error = new Error('الحساب معطل');
         error.statusCode = 403;
         throw error;
       }
@@ -476,7 +485,6 @@ _generateToken(user) {
       if (!user.routeAccess) {
         user.routeAccess = [];
       }
-
 
       // Generate new token with latest permissions
       const token = this._generateToken(user);

@@ -1,4 +1,6 @@
-// src/routes/Items.routes.js - FIXED WITH CORRECT ROUTE KEY
+// ============================================
+// src/routes/Items.routes.js - UPDATED WITH EXCEL EXPORT
+// ============================================
 
 const express = require('express');
 const router = express.Router();
@@ -8,7 +10,7 @@ const { restrictTo } = require('../middleware/role.middleware');
 
 // Apply route access check to all routes
 router.use(protect);
-router.use(checkRouteAccess('itemsControl')); // ✅ FIXED: Changed from 'items' to 'itemsControl'
+router.use(checkRouteAccess('itemsControl'));
 
 /**
  * @route   POST /api/items
@@ -68,9 +70,48 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * @route   GET /api/items/export/excel
+ * @desc    Export items to Excel file
+ * @access  Private (All authenticated users)
+ * @note    IMPORTANT: This route MUST be before /api/items/:id to avoid route conflict
+ */
+router.get('/export/excel', async (req, res) => {
+  try {
+    const { search } = req.query;
+
+    // Generate Excel file
+    const excelBuffer = await itemsService.exportItemsToExcel({
+      search: search || ''
+    });
+
+    // Generate filename with current date and time
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toISOString().split('T')[1].split('.')[0].replace(/:/g, '-');
+    const filename = `items-export-${dateStr}-${timeStr}.xlsx`;
+
+    // Set headers for file download
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Content-Length', excelBuffer.length);
+    res.setHeader('Cache-Control', 'no-cache');
+
+    // Send file
+    res.send(excelBuffer);
+  } catch (error) {
+    console.error('Error exporting items to Excel:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'فشل تصدير الأصناف إلى Excel'
+    });
+  }
+});
+
+/**
  * @route   GET /api/items/simple
  * @desc    Get all items in simple format (id and name only)
  * @access  Private (All authenticated users)
+ * @note    IMPORTANT: This route MUST be before /api/items/:id to avoid route conflict
  */
 router.get('/simple', async (req, res) => {
   try {
@@ -93,6 +134,7 @@ router.get('/simple', async (req, res) => {
  * @route   GET /api/items/:id
  * @desc    Get item by ID
  * @access  Private (All authenticated users)
+ * @note    This route MUST come AFTER specific routes like /export/excel and /simple
  */
 router.get('/:id', async (req, res) => {
   try {

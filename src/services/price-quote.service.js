@@ -631,7 +631,7 @@ ${escapedTermsText}
     <section class="client-info">
       <div class="client-grid">
         <div><strong>${labels.name}:</strong> ${data.clientName}</div>
-        <div><strong>${labels.phone}:</strong> ${data.clientPhone}</div>
+        ${data.clientPhone && data.clientPhone.trim() !== '' ? `<div><strong>${labels.phone}:</strong> ${data.clientPhone}</div>` : ''}
         ${data.clientAddress ? `<div><strong>${labels.address}:</strong> ${data.clientAddress}</div>` : ''}
         ${data.clientCity ? `<div><strong>${labels.city}:</strong> ${data.clientCity}</div>` : ''}
         ${data.validForDays ? `<div><strong>${labels.valid}:</strong> ${data.validForDays} ${labels.days}</div>` : ''}

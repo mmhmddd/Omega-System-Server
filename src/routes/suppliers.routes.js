@@ -288,4 +288,50 @@ router.post('/bulk-import', restrictTo('super_admin'), async (req, res) => {
   }
 });
 
+/**
+ * @route   GET /api/suppliers/export/excel
+ * @desc    Export all suppliers to Excel file
+ * @access  Private (All authenticated users)
+ */
+router.get('/export/excel', async (req, res) => {
+  try {
+    const {
+      status,
+      materialType,
+      country,
+      city,
+      minRating
+    } = req.query;
+
+    // Build filters object
+    const filters = {};
+    if (status) filters.status = status;
+    if (materialType) filters.materialType = materialType;
+    if (country) filters.country = country;
+    if (city) filters.city = city;
+    if (minRating) filters.minRating = parseFloat(minRating);
+
+    // Get filtered suppliers
+    const suppliers = await supplierService.getAllSuppliers(filters);
+
+    // Generate Excel file
+    const excelBuffer = await supplierService.generateExcelExport(suppliers);
+
+    // Set headers for file download
+    const filename = `suppliers-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', excelBuffer.length);
+
+    // Send the buffer
+    res.send(excelBuffer);
+
+  } catch (error) {
+    console.error('Error exporting suppliers to Excel:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'فشل تصدير الموردين إلى Excel'
+    });
+  }
+});
 module.exports = router;

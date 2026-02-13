@@ -1,4 +1,4 @@
-// src/routes/proforma-invoice.routes.js - UPDATED WITH TERMS AND CONDITIONS SUPPORT
+// src/routes/proforma-invoice.routes.js - UPDATED WITH PHONE OPTIONAL
 
 const express = require('express');
 const router = express.Router();
@@ -32,7 +32,7 @@ const proformaInvoiceAccess = checkRouteAccess('proformaInvoice');
  * @route   POST /api/proforma-invoices
  * @desc    Create a new proforma invoice
  * @access  Private (Admin, Employee with permission, Super Admin)
- * ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText
+ * ✅ UPDATED: Phone number is now OPTIONAL
  */
 router.post('/', proformaInvoiceAccess, upload.single('attachment'), async (req, res, next) => {
   try {
@@ -50,15 +50,15 @@ router.post('/', proformaInvoiceAccess, upload.single('attachment'), async (req,
       taxRate,
       items,
       customNotes,
-      includeTermsAndConditions,  // ✅ NEW FIELD
-      termsAndConditionsText      // ✅ NEW FIELD
+      includeTermsAndConditions,
+      termsAndConditionsText
     } = req.body;
 
-    // Validate required fields
-    if (!clientName || !date || !clientPhone) {
+    // ✅ UPDATED: Only client name and date are required (phone is optional)
+    if (!clientName || !date) {
       return res.status(400).json({
         success: false,
-        message: 'Client name, date, and phone are required'
+        message: 'Client name and date are required'
       });
     }
 
@@ -109,7 +109,7 @@ router.post('/', proformaInvoiceAccess, upload.single('attachment'), async (req,
 
     const invoiceData = {
       clientName,
-      clientPhone,
+      clientPhone: clientPhone || '',  // ✅ Default to empty string if not provided
       clientAddress,
       clientCity,
       projectName,
@@ -121,8 +121,8 @@ router.post('/', proformaInvoiceAccess, upload.single('attachment'), async (req,
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes,
-      includeTermsAndConditions: includeTermsAndConditions === true || includeTermsAndConditions === 'true',  // ✅ NEW
-      termsAndConditionsText: termsAndConditionsText || null  // ✅ NEW
+      includeTermsAndConditions: includeTermsAndConditions === true || includeTermsAndConditions === 'true',
+      termsAndConditionsText: termsAndConditionsText || null
     };
 
     const invoice = await proformaInvoiceService.createInvoice(
@@ -295,7 +295,6 @@ router.get('/:id/pdf', proformaInvoiceAccess, async (req, res, next) => {
  * @route   PUT /api/proforma-invoices/:id
  * @desc    Update proforma invoice
  * @access  Private (Owner or Super Admin)
- * ✅ UPDATED: Now accepts includeTermsAndConditions and termsAndConditionsText
  */
 router.put('/:id', proformaInvoiceAccess, upload.single('attachment'), async (req, res, next) => {
   try {
@@ -329,8 +328,8 @@ router.put('/:id', proformaInvoiceAccess, upload.single('attachment'), async (re
       taxRate,
       items,
       customNotes,
-      includeTermsAndConditions,  // ✅ NEW FIELD
-      termsAndConditionsText      // ✅ NEW FIELD
+      includeTermsAndConditions,
+      termsAndConditionsText
     } = req.body;
 
     let parsedItems = items;
@@ -381,10 +380,10 @@ router.put('/:id', proformaInvoiceAccess, upload.single('attachment'), async (re
       taxRate: includeTaxBool ? parseFloat(taxRate) : 0,
       items: parsedItems,
       customNotes,
-      includeTermsAndConditions: includeTermsAndConditions !== undefined   // ✅ NEW
+      includeTermsAndConditions: includeTermsAndConditions !== undefined
         ? (includeTermsAndConditions === true || includeTermsAndConditions === 'true')
         : undefined,
-      termsAndConditionsText: termsAndConditionsText !== undefined   // ✅ NEW
+      termsAndConditionsText: termsAndConditionsText !== undefined
         ? termsAndConditionsText
         : undefined
     };

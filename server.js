@@ -55,6 +55,7 @@ if (!fs.existsSync(usersFile)) {
       id: "USER-0001",
       username: "admin.super",
       name: "Super Admin",
+      phone: "0722345678",
       email: "mohamed.m.mahmoud29@gmail.com",
       password: "123456",
       role: "super_admin",

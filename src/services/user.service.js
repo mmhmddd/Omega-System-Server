@@ -1,4 +1,4 @@
-// src/services/user.service.js (COMPLETE FIX - All Issues Resolved)
+// src/services/user.service.js (UPDATED - Phone Number Support)
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -86,7 +86,6 @@ const AVAILABLE_ROUTES = [
 
 const VALID_ROUTE_KEYS = AVAILABLE_ROUTES.map(r => r.key);
 
-
 class UserService {
   /**
    * ✅ CRITICAL: Initialize missing fields for a user
@@ -139,7 +138,8 @@ class UserService {
             id: "USER-0001",
             username: "admin.super",
             name: "Super Admin",
-            email: "admin@laser.com",
+            phone: "0790000000", // ✅ Added phone
+            email: "admin@laser.com", // ✅ Optional
             password: "admin123",
             role: "super_admin",
             active: true,
@@ -201,8 +201,12 @@ class UserService {
     await atomicWrite(USERS_FILE, JSON.stringify(users, null, 2));
   }
 
-  async generateUniqueUsername(name, email, users) {
-    const emailPrefix = email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+  /**
+   * ✅ UPDATED: Generate username from phone number
+   */
+  async generateUniqueUsername(name, phone, users) {
+    // Use last 6 digits of phone number as base
+    const phoneBase = phone.slice(-6);
     
     let cleanName = name
       .toLowerCase()
@@ -213,16 +217,11 @@ class UserService {
       .join('.');
     
     if (!cleanName) {
-      cleanName = emailPrefix;
+      cleanName = `user${phoneBase}`;
     }
     
-    let username = cleanName;
+    let username = `${cleanName}.${phoneBase}`;
     
-    if (!users.some(u => u.username === username)) {
-      return username;
-    }
-    
-    username = `${cleanName}.${emailPrefix}`;
     if (!users.some(u => u.username === username)) {
       return username;
     }
@@ -233,7 +232,7 @@ class UserService {
     
     while (attempts < maxAttempts) {
       const paddedSuffix = suffix.toString().padStart(3, '0');
-      username = `${cleanName}.${paddedSuffix}`;
+      username = `${cleanName}.${phoneBase}.${paddedSuffix}`;
       
       if (!users.some(u => u.username === username)) {
         return username;
@@ -244,7 +243,7 @@ class UserService {
     }
     
     const timestamp = Date.now().toString().slice(-6);
-    username = `${cleanName}.${timestamp}`;
+    username = `${cleanName}.${phoneBase}.${timestamp}`;
     
     if (users.some(u => u.username === username)) {
       throw new Error('Failed to generate unique username');
@@ -253,7 +252,19 @@ class UserService {
     return username;
   }
 
+  /**
+   * ✅ NEW: Check if phone number exists
+   */
+  async phoneExists(phone, excludeId = null) {
+    const users = await this.loadUsers();
+    return users.some(u => u.phone === phone && u.id !== excludeId);
+  }
+
+  /**
+   * ✅ UPDATED: Email is now optional
+   */
   async emailExists(email, excludeId = null) {
+    if (!email) return false; // Email is optional
     const users = await this.loadUsers();
     return users.some(u => u.email === email && u.id !== excludeId);
   }
@@ -261,6 +272,20 @@ class UserService {
   async usernameExists(username, excludeId = null) {
     const users = await this.loadUsers();
     return users.some(u => u.username === username && u.id !== excludeId);
+  }
+
+  /**
+   * ✅ NEW: Validate Jordanian phone number
+   */
+  validatePhoneNumber(phone) {
+    // Jordanian phone format: 07XXXXXXXX (10 digits starting with 07)
+    const phoneRegex = /^07[0-9]{8}$/;
+    
+    if (!phoneRegex.test(phone)) {
+      throw new Error('رقم الهاتف يجب أن يكون أردني بصيغة 07XXXXXXXX');
+    }
+    
+    return true;
   }
 
   validateRouteKeys(routeKeys) {
@@ -279,11 +304,27 @@ class UserService {
     return true;
   }
 
+  /**
+   * ✅ UPDATED: Create user with phone number
+   */
   async createUser(userData) {
     const users = await this.loadUsers();
 
-    if (await this.emailExists(userData.email)) {
-      throw new Error('Email already exists');
+    // ✅ Validate phone number (REQUIRED)
+    if (!userData.phone) {
+      throw new Error('رقم الهاتف مطلوب');
+    }
+
+    this.validatePhoneNumber(userData.phone);
+
+    // ✅ Check if phone already exists
+    if (await this.phoneExists(userData.phone)) {
+      throw new Error('رقم الهاتف مستخدم بالفعل');
+    }
+
+    // ✅ Validate email ONLY if provided (OPTIONAL)
+    if (userData.email && await this.emailExists(userData.email)) {
+      throw new Error('البريد الإلكتروني مستخدم بالفعل');
     }
 
     const validRoles = ['super_admin', 'admin', 'employee', 'secretariat'];
@@ -291,9 +332,10 @@ class UserService {
       throw new Error('Invalid role specified');
     }
 
+    // ✅ Generate username from phone
     const username = await this.generateUniqueUsername(
       userData.name,
-      userData.email,
+      userData.phone,
       users
     );
 
@@ -320,7 +362,8 @@ class UserService {
       id: generateId('USER'),
       username,
       name: userData.name,
-      email: userData.email,
+      phone: userData.phone, // ✅ Required
+      email: userData.email || '', // ✅ Optional
       password: userData.password,
       role: userData.role,
       active: true,
@@ -352,8 +395,9 @@ class UserService {
       const searchLower = filters.search.toLowerCase();
       users = users.filter(u => 
         u.name.toLowerCase().includes(searchLower) ||
-        u.email.toLowerCase().includes(searchLower) ||
-        u.username.toLowerCase().includes(searchLower)
+        (u.email && u.email.toLowerCase().includes(searchLower)) ||
+        u.username.toLowerCase().includes(searchLower) ||
+        u.phone.includes(searchLower) // ✅ Search by phone
       );
     }
 
@@ -392,7 +436,24 @@ class UserService {
   }
 
   /**
-   * ✅ FIXED: Update user with proper handling of systemAccess and routeAccess
+   * ✅ NEW: Get user by phone number (for login)
+   */
+  async getUserByPhone(phone) {
+    const users = await this.loadUsers();
+    const user = users.find(u => u.phone === phone);
+
+    if (!user) {
+      return null;
+    }
+
+    // ✅ Initialize missing fields
+    this._initializeUserFields(user);
+
+    return user;
+  }
+
+  /**
+   * ✅ UPDATED: Update user with phone validation
    */
   async updateUser(id, updateData) {
     const users = await this.loadUsers();
@@ -404,10 +465,19 @@ class UserService {
 
     const user = users[userIndex];
 
-    // Validate email if changed
+    // ✅ Validate phone if changed
+    if (updateData.phone && updateData.phone !== user.phone) {
+      this.validatePhoneNumber(updateData.phone);
+      
+      if (await this.phoneExists(updateData.phone, id)) {
+        throw new Error('رقم الهاتف مستخدم بالفعل');
+      }
+    }
+
+    // ✅ Validate email ONLY if provided and changed (OPTIONAL)
     if (updateData.email && updateData.email !== user.email) {
       if (await this.emailExists(updateData.email, id)) {
-        throw new Error('Email already exists');
+        throw new Error('البريد الإلكتروني مستخدم بالفعل');
       }
     }
 
@@ -421,7 +491,8 @@ class UserService {
 
     // Update basic fields
     if (updateData.name) user.name = updateData.name;
-    if (updateData.email) user.email = updateData.email;
+    if (updateData.phone) user.phone = updateData.phone; // ✅ Update phone
+    if (updateData.email !== undefined) user.email = updateData.email; // ✅ Allow empty email
     if (updateData.password) user.password = updateData.password;
     if (updateData.role) user.role = updateData.role;
     if (updateData.active !== undefined) user.active = updateData.active;
@@ -526,6 +597,14 @@ class UserService {
   async isUsernameAvailable(username) {
     const users = await this.loadUsers();
     return !users.some(u => u.username.toLowerCase() === username.toLowerCase());
+  }
+
+  /**
+   * ✅ NEW: Check if phone is available
+   */
+  async isPhoneAvailable(phone) {
+    const users = await this.loadUsers();
+    return !users.some(u => u.phone === phone);
   }
 
   getAvailableRoutes() {
