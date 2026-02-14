@@ -533,7 +533,7 @@ ${escapedTermsText}
 
   // ✅ FIXED: Complete language support
   buildMainContent(data, totals, isArabic) {
-    const title = isArabic ? 'عرض سعر' : 'Price Quotion';
+    const title = isArabic ? 'عرض سعر' : 'Price Quotation';
     const hasItems = data.items && data.items.length > 0;
 
     const escapeHtml = (text) => {
