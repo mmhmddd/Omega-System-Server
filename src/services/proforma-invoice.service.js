@@ -1,4 +1,4 @@
-// src/services/proforma-invoice.service.js - UPDATED WITH TERMS AND CONDITIONS TEXT
+// src/services/proforma-invoice.service.js - UPDATED: Attachment FIRST, then Terms & Conditions LAST
 
 const fs = require('fs').promises;
 const fsSync = require('fs');
@@ -266,7 +266,7 @@ class ProformaInvoiceService {
     }
   }
 
-  // ✅ NEW: Get default terms and conditions based on language
+  // ✅ Get default terms and conditions based on language
   getDefaultTermsAndConditions(language) {
     if (language === 'arabic') {
       return `الشروط والأحكام:
@@ -344,7 +344,7 @@ class ProformaInvoiceService {
     return dateStr;
   }
 
-  // ✅ UPDATED: Generate PDF with Terms and Conditions text
+  // ✅ UPDATED: Generate PDF - Attachment FIRST, then Terms & Conditions LAST
   async generatePDF(invoiceData, attachmentPath = null) {
     let browser;
     try {
@@ -354,14 +354,15 @@ class ProformaInvoiceService {
       console.log('🔵 Generating PDF for invoice:', invoiceData.invoiceNumber);
       console.log('🔵 Language parameter:', invoiceData.language);
       console.log('🔵 Is Arabic:', isArabic);
+      console.log('🔵 Has attachment:', !!attachmentPath);
       console.log('🔵 Include T&C:', invoiceData.includeTermsAndConditions);
-      console.log('🔵 T&C Text:', invoiceData.termsAndConditionsText ? 'Present' : 'Not present');
 
       const mainContent = this.buildMainContent(invoiceData, totals, isArabic);
 
-      // ✅ Build attachment HTML (user-uploaded PDF)
+      // ✅ Build attachment HTML (user-uploaded PDF) - يظهر أولاً بعد المحتوى الرئيسي
       let attachmentHTML = '';
       if (attachmentPath && fsSync.existsSync(attachmentPath)) {
+        console.log('📎 Processing attachment...');
         const attachmentPages = await this.convertPdfPagesToImages(attachmentPath);
         attachmentPages.forEach((base64, index) => {
           attachmentHTML += `
@@ -370,6 +371,25 @@ class ProformaInvoiceService {
             </div>
           `;
         });
+        console.log(`✅ Added ${attachmentPages.length} attachment pages`);
+      }
+
+      // ✅ Build Terms & Conditions HTML - يظهر في النهاية
+      let termsHTML = '';
+      if (invoiceData.includeTermsAndConditions && invoiceData.termsAndConditionsText) {
+        console.log('📋 Adding Terms & Conditions page...');
+        const title = isArabic ? 'الشروط والأحكام' : 'Terms & Conditions';
+        termsHTML = `
+          <div style="page-break-before: always; padding: 40px 30px;">
+            <h1 style="text-align: center; color: #0b4fa2; font-size: 28px; font-weight: 700; margin-bottom: 30px; font-family: ${isArabic ? "'Cairo', Arial, sans-serif" : "'Roboto', Arial, sans-serif"};">
+              ${title}
+            </h1>
+            <div style="background: #f8fafc; border: 2px solid #0b4fa2; border-radius: 8px; padding: 25px; font-family: ${isArabic ? "'Cairo', Arial, sans-serif" : "'Roboto', Arial, sans-serif"}; font-size: 14px; line-height: 2; color: #334155; white-space: pre-wrap; direction: ${isArabic ? 'rtl' : 'ltr'};">
+              ${invoiceData.termsAndConditionsText}
+            </div>
+          </div>
+        `;
+        console.log('✅ Terms & Conditions page added');
       }
 
       const fullHTML = `
@@ -423,6 +443,7 @@ class ProformaInvoiceService {
 <body>
   ${mainContent}
   ${attachmentHTML}
+  ${termsHTML}
 </body>
 </html>
       `;
@@ -470,6 +491,9 @@ class ProformaInvoiceService {
 
       await browser.close();
       console.log('✅ PDF generated successfully:', pdfPath);
+      console.log('   📄 Main content included');
+      console.log('   📎 Attachment:', attachmentHTML ? 'Yes' : 'No');
+      console.log('   📋 Terms & Conditions:', termsHTML ? 'Yes' : 'No');
       return pdfPath;
     } catch (error) {
       console.error('❌ PDF generation failed:', error);
@@ -539,6 +563,7 @@ class ProformaInvoiceService {
       `;
     }
 
+    // ✅ المحتوى الرئيسي بدون الشروط والأحكام (ستظهر في النهاية بعد الملف المرفق)
     return `
 <div class="main-content">
   ${companySection}
@@ -551,7 +576,6 @@ class ProformaInvoiceService {
   ${hasItems ? this.buildItemsTable(data.items, isArabic) : ''}
   ${hasItems ? this.buildTotalsSection(totals, data, isArabic) : ''}
   ${this.buildNotesSection(data.customNotes, isArabic)}
-  ${this.buildTermsAndConditionsSection(data, isArabic)}
 </div>
     `;
   }
@@ -646,29 +670,20 @@ class ProformaInvoiceService {
     `;
   }
 
-  // ✅ NEW: Build Terms and Conditions Section
+  // ✅ هذه الدالة لم تعد تُستخدم في المحتوى الرئيسي
+  // الشروط والأحكام تُبنى الآن كصفحة منفصلة في generatePDF
   buildTermsAndConditionsSection(data, isArabic) {
-    if (!data.includeTermsAndConditions || !data.termsAndConditionsText) {
-      return '';
-    }
-
-    const title = isArabic ? 'الشروط والأحكام:' : 'Terms & Conditions:';
-    
-    return `
-    <section class="notes-section" style="margin-top: 30px; background: #f8fafc; border: 2px solid #0b4fa2;">
-      <h3 class="notes-title" style="font-size: 17px; font-weight: 700;">${title}</h3>
-      <div style="white-space: pre-wrap; line-height: 1.8; color: #334155;">${data.termsAndConditionsText}</div>
-    </section>
-    `;
+    // This method is kept for backward compatibility but not used in main content
+    return '';
   }
 
-  // ✅ UPDATED: Create Invoice with T&C
   async createInvoice(invoiceData, currentUser, attachmentFile = null) {
     console.log('\n=== CREATE INVOICE DEBUG ===');
     console.log('currentUser.id:', currentUser.id);
     console.log('currentUser.name:', currentUser.name);
     console.log('invoiceData.includeTermsAndConditions:', invoiceData.includeTermsAndConditions);
     console.log('invoiceData.termsAndConditionsText:', invoiceData.termsAndConditionsText ? 'Present' : 'Not present');
+    console.log('Has attachment:', !!attachmentFile);
     
     const invoices = await this.loadInvoices();
     const invoiceNumber = await this.generateInvoiceNumber();
@@ -710,6 +725,7 @@ class ProformaInvoiceService {
     if (attachmentFile) {
       attachmentPath = await this.saveAttachment(attachmentFile, newInvoice.language);
       newInvoice.attachmentPath = attachmentPath;
+      console.log('✅ Attachment saved at:', attachmentPath);
     }
 
     const pdfPath = await this.generatePDF(newInvoice, attachmentPath);
@@ -718,12 +734,11 @@ class ProformaInvoiceService {
     invoices.push(newInvoice);
     await this.saveInvoices(invoices);
 
-    console.log('Invoice created with T&C:', newInvoice.includeTermsAndConditions);
+    console.log('✅ Invoice created successfully');
+    console.log('   - Has attachment:', !!attachmentPath);
+    console.log('   - Has T&C:', newInvoice.includeTermsAndConditions);
     return newInvoice;
   }
-
-  // ... (Continue with remaining methods - they stay mostly the same)
-  // I'll provide the key update methods in the next section
 
   async getAllInvoices(filters = {}) {
     let invoices = await this.loadInvoices();
@@ -798,7 +813,6 @@ class ProformaInvoiceService {
     };
   }
 
-  // ✅ UPDATED: Update Invoice with T&C
   async updateInvoice(id, updateData, attachmentFile = null) {
     const invoices = await this.loadInvoices();
     const invoiceIndex = invoices.findIndex(inv => inv.id === id);
@@ -823,7 +837,6 @@ class ProformaInvoiceService {
     if (updateData.items !== undefined) invoice.items = updateData.items;
     if (updateData.customNotes !== undefined) invoice.customNotes = updateData.customNotes;
     
-    // ✅ NEW: Update T&C fields
     if (updateData.includeTermsAndConditions !== undefined) {
       invoice.includeTermsAndConditions = !!updateData.includeTermsAndConditions;
     }
@@ -847,7 +860,9 @@ class ProformaInvoiceService {
       invoice.attachmentPath = attachmentPath;
     }
 
-    console.log('Updating invoice with T&C:', invoice.includeTermsAndConditions);
+    console.log('Updating invoice...');
+    console.log('   - Has attachment:', !!attachmentPath);
+    console.log('   - Has T&C:', invoice.includeTermsAndConditions);
     
     if (invoice.pdfPath && fsSync.existsSync(invoice.pdfPath)) {
       await fs.unlink(invoice.pdfPath).catch(() => {});
