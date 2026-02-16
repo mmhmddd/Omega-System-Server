@@ -1,5 +1,5 @@
 // ============================================================
-// FIXED PDF GENERATOR MATERIAL - WITH WORKING TERMS & CONDITIONS
+// UPDATED PDF GENERATOR MATERIAL - T&C PAGE ALWAYS LAST
 // src/utils/pdf-generator-material.util.js
 // ============================================================
 const fsSync = require('fs');
@@ -30,7 +30,7 @@ class MaterialPDFGenerator {
 
   DEFAULT_TERMS_EN = `Terms and Conditions
 
-All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier’s scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
+All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier's scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
 
 Any additional work, variations, modifications, or requirements not specified in this document shall be subject to additional cost and corresponding time adjustments, as applicable. Fees related to studies, design approvals, authority approvals, permits, stamping, engineering calculations, or any similar technical requirements are not included unless explicitly stated.
 
@@ -718,10 +718,10 @@ body {
 }
 
 /**
- * ✅ FIXED: Generate Material PDF with Terms & Conditions support
+ * ✅ UPDATED: Generate Material PDF WITHOUT T&C (T&C will be added separately as last page)
  * @param {Object} material - Material request data
  * @param {String} customFilename - Custom filename (optional)
- * @param {String} termsAndConditionsText - T&C text to add (optional)
+ * @param {String} termsAndConditionsText - IGNORED (T&C added separately)
  */
 async generateMaterialPDF(material, customFilename = null, termsAndConditionsText = null) {
   const language = this.detectLanguage(material);
@@ -741,21 +741,15 @@ async generateMaterialPDF(material, customFilename = null, termsAndConditionsTex
       const filepath = path.join(pdfDir, filename);
 
       console.log('╔══════════════════════════════════════════════════════════╗');
-      console.log('║       GENERATING MATERIAL REQUEST PDF                    ║');
+      console.log('║       GENERATING MATERIAL REQUEST PDF (NO T&C YET)       ║');
       console.log('╚══════════════════════════════════════════════════════════╝');
       console.log('📄 Filename:', filename);
       console.log('📄 Path:', filepath);
       console.log('📄 Language:', language);
-      console.log('📄 T&C Text Provided:', !!termsAndConditionsText);
-      console.log('📄 T&C Text Length:', termsAndConditionsText?.length || 0);
-      
-      // ✅ DEBUG: Print first 100 chars of T&C text if provided
-      if (termsAndConditionsText) {
-        console.log('📄 T&C Preview:', termsAndConditionsText.substring(0, 100) + '...');
-      }
+      console.log('📄 NOTE: T&C will be added separately as LAST page');
       console.log('════════════════════════════════════════════════════════════');
 
-      // ✅ STEP 1: Generate main material request HTML and PDF
+      // ✅ Generate main material request HTML and PDF (WITHOUT T&C)
       const html = this.generateHTML(material);
 
       browser = await puppeteer.launch({
@@ -789,19 +783,7 @@ async generateMaterialPDF(material, customFilename = null, termsAndConditionsTex
 
       await browser.close();
       browser = null;
-      console.log('✅ Main PDF created successfully');
-
-      // ✅ STEP 2: If T&C text provided, add it as a new page
-      if (termsAndConditionsText && termsAndConditionsText.trim()) {
-        console.log('📄 Terms & Conditions text detected, adding page...');
-        console.log('   T&C Length:', termsAndConditionsText.trim().length);
-        await this.addTermsAndConditionsPage(filepath, termsAndConditionsText, language);
-        console.log('✅ Terms & Conditions page added successfully');
-      } else {
-        console.log('ℹ️  No Terms & Conditions text provided, skipping T&C page');
-      }
-
-      console.log('✅ PDF generation complete');
+      console.log('✅ Main PDF created successfully (without T&C)');
       console.log('════════════════════════════════════════════════════════════\n');
 
       resolve({ 
@@ -809,7 +791,7 @@ async generateMaterialPDF(material, customFilename = null, termsAndConditionsTex
         filepath, 
         language,
         success: true,
-        hasTermsAndConditions: !!(termsAndConditionsText && termsAndConditionsText.trim())
+        hasTermsAndConditions: false  // T&C will be added later
       });
     } catch (error) {
       if (browser) {
@@ -836,7 +818,7 @@ async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
   
   try {
     console.log('╔══════════════════════════════════════════════════════════╗');
-    console.log('║       ADDING TERMS & CONDITIONS PAGE                     ║');
+    console.log('║       ADDING TERMS & CONDITIONS AS LAST PAGE             ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
     console.log('📄 Existing PDF:', existingPdfPath);
     console.log('📄 Terms Text Length:', termsText?.length || 0);
@@ -886,7 +868,7 @@ async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
     console.log('   ✅ Temp T&C PDF created');
     
     // 3. Merge PDFs using pdf-lib
-    console.log('   Step 3: Merging PDFs...');
+    console.log('   Step 3: Merging PDFs (T&C as LAST page)...');
     
     const existingPdfBytes = fsSync.readFileSync(existingPdfPath);
     const termsPdfBytes = fsSync.readFileSync(tempTermsPath);
@@ -903,10 +885,10 @@ async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
     existingPages.forEach(page => mergedPdf.addPage(page));
     console.log('   ✅ Copied existing pages');
     
-    // Copy all pages from Terms PDF
+    // Copy all pages from Terms PDF AS LAST PAGES
     const termsPages = await mergedPdf.copyPages(termsPdf, termsPdf.getPageIndices());
     termsPages.forEach(page => mergedPdf.addPage(page));
-    console.log('   ✅ Copied terms pages');
+    console.log('   ✅ Copied terms pages AS LAST PAGES');
     
     // 4. Save merged PDF (overwrites original)
     console.log('   Step 4: Saving merged PDF...');
@@ -919,7 +901,7 @@ async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
     fsSync.unlinkSync(tempTermsPath);
     console.log('   ✅ Temp file deleted');
     
-    console.log('✅ TERMS & CONDITIONS PAGE ADDED SUCCESSFULLY');
+    console.log('✅ TERMS & CONDITIONS PAGE ADDED AS LAST PAGE');
     console.log('   Total pages in merged PDF:', mergedPdf.getPageCount());
     console.log('════════════════════════════════════════════════════════════\n');
     
@@ -1284,25 +1266,72 @@ generateTermsHTML(termsText, language = 'ar') {
     return pdfDoc;
   }
 
-  async mergePDFs(generatedPdfPath, attachmentPdf = null, outputFilename = null, language = 'ar') {
+  /**
+   * ✅ NEW: Add headers and footers only (no merging)
+   */
+  async addHeadersAndFootersOnly(pdfPath, language = 'ar') {
+    try {
+      console.log('📄 Adding headers and footers to:', pdfPath);
+      
+      const pdfBytes = fsSync.readFileSync(pdfPath);
+      const pdfDoc = await PDFDocument.load(pdfBytes);
+      
+      await this.addHeadersFootersToAllPages(pdfDoc, language);
+      
+      const updatedBytes = await pdfDoc.save();
+      fsSync.writeFileSync(pdfPath, updatedBytes);
+      
+      console.log('✅ Headers/footers added successfully');
+      
+      return {
+        filepath: pdfPath,
+        filename: path.basename(pdfPath),
+        pageCount: {
+          total: pdfDoc.getPageCount()
+        }
+      };
+    } catch (error) {
+      throw new Error(`Failed to add headers/footers: ${error.message}`);
+    }
+  }
+
+  /**
+   * ✅ UPDATED: Merge PDFs with option to skip headers/footers
+   */
+  async mergePDFs(generatedPdfPath, attachmentPdf = null, outputFilename = null, language = 'ar', addHeadersFooters = true) {
     try {
       if (!attachmentPdf) {
-        const pdfBytes = fsSync.readFileSync(generatedPdfPath);
-        const pdfDoc = await PDFDocument.load(pdfBytes);
-        
-        await this.addHeadersFootersToAllPages(pdfDoc, language);
-        
-        const updatedBytes = await pdfDoc.save();
-        fsSync.writeFileSync(generatedPdfPath, updatedBytes);
-        
-        return {
-          filepath: generatedPdfPath,
-          filename: path.basename(generatedPdfPath),
-          merged: false,
-          pageCount: {
-            total: pdfDoc.getPageCount()
-          }
-        };
+        if (addHeadersFooters) {
+          const pdfBytes = fsSync.readFileSync(generatedPdfPath);
+          const pdfDoc = await PDFDocument.load(pdfBytes);
+          
+          await this.addHeadersFootersToAllPages(pdfDoc, language);
+          
+          const updatedBytes = await pdfDoc.save();
+          fsSync.writeFileSync(generatedPdfPath, updatedBytes);
+          
+          return {
+            filepath: generatedPdfPath,
+            filename: path.basename(generatedPdfPath),
+            merged: false,
+            pageCount: {
+              total: pdfDoc.getPageCount()
+            }
+          };
+        } else {
+          // Just return without modification
+          const pdfBytes = fsSync.readFileSync(generatedPdfPath);
+          const pdfDoc = await PDFDocument.load(pdfBytes);
+          
+          return {
+            filepath: generatedPdfPath,
+            filename: path.basename(generatedPdfPath),
+            merged: false,
+            pageCount: {
+              total: pdfDoc.getPageCount()
+            }
+          };
+        }
       }
 
       const generatedPdfBytes = fsSync.readFileSync(generatedPdfPath);
@@ -1342,7 +1371,10 @@ generateTermsHTML(termsText, language = 'ar') {
         mergedPdf.addPage(copiedPage);
       }
 
-      await this.addHeadersFootersToAllPages(mergedPdf, language);
+      // ✅ Only add headers/footers if requested
+      if (addHeadersFooters) {
+        await this.addHeadersFootersToAllPages(mergedPdf, language);
+      }
 
       const timestamp = Date.now();
       const finalFilename = outputFilename || 
@@ -1406,7 +1438,7 @@ generateTermsHTML(termsText, language = 'ar') {
       const pdf = await PDFDocument.load(pdfBytes);
       return pdf.getPageCount();
     } catch (error) {
-      throw new error(`Failed to get page count: ${error.message}`);
+      throw new Error(`Failed to get page count: ${error.message}`);
     }
   }
 }
