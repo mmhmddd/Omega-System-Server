@@ -1,4 +1,3 @@
-// src/utils/pdf-generator-rfq.util.js - FIXED VERSION WITH CUSTOM FILENAME SUPPORT
 
 const fs = require('fs');
 const path = require('path');
@@ -6,7 +5,6 @@ const puppeteer = require('puppeteer');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
 
 class RFQPDFGenerator {
-    // ✅ ADD THESE DEFAULT TERMS & CONDITIONS
  DEFAULT_TERMS_AR = `الشروط والأحكام
 
 تُعتبر جميع المواد والبنود والخدمات غير المذكورة صراحةً في هذا المستند مستثناة. كما أن أي خدمات أو أعمال تقع خارج نطاق عمل المورد غير مشمولة. ضريبة القيمة المضافة وأي رسوم حكومية أو تصاريح أو موافقات رسمية غير مشمولة ما لم يُذكر خلاف ذلك صراحةً. كما أن الأعمال المدنية وأعمال الرفع والمناولة وفك وإعادة تركيب العوائق الموجودة في الموقع أو أي أعمال مشابهة غير مشمولة ما لم يتم ذكرها بشكل واضح.
@@ -53,14 +51,11 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     return arabicPattern.test(text);
   }
 
-  // ✅ FIXED: Language detection based on requester field (مقدم الطلب)
   detectLanguage(rfqData) {
-    // Priority 1: Check requester field first (مقدم الطلب)
     if (rfqData.requester && rfqData.requester.trim() !== '') {
       return this.isArabic(rfqData.requester) ? 'ar' : 'en';
     }
 
-    // Priority 2: If no requester, check other content fields
     const fieldsToCheck = [];
     
     if (rfqData.production) fieldsToCheck.push(rfqData.production);
@@ -68,7 +63,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     if (rfqData.supplierAddress) fieldsToCheck.push(rfqData.supplierAddress);
     if (rfqData.notes) fieldsToCheck.push(rfqData.notes);
 
-    // Add item descriptions
     if (rfqData.items && rfqData.items.length > 0) {
       rfqData.items.forEach(item => {
         if (item.description) fieldsToCheck.push(item.description);
@@ -89,14 +83,11 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
       }
     });
 
-    // Return language based on majority
     return arabicCount > (fieldsToCheck.length / 2) ? 'ar' : 'en';
   }
 
-  // ✅ Department translation mapping
   getDepartmentTranslation(departmentLabel, targetLanguage) {
     const departmentMap = {
-      // Arabic labels
       'المشتريات': { ar: 'المشتريات', en: 'Procurement' },
       'المخزن': { ar: 'المخزن', en: 'Warehouse' },
       'الصيانة': { ar: 'الصيانة', en: 'Maintenance' },
@@ -115,12 +106,10 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
       'Other': { ar: 'أخرى', en: 'Other' }
     };
 
-    // If department is in the map, return translated version
     if (departmentMap[departmentLabel]) {
       return departmentMap[departmentLabel][targetLanguage];
     }
 
-    // If not in map, return as-is
     return departmentLabel;
   }
 
@@ -137,7 +126,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         website: 'https://www.omega-jordan.com',
         rfqNumber: 'رقم الوثيقة',
         date: 'تاريخ الإصدار',
-        rfqNo: 'RFQ No',
+        rfqNo: 'رقم طلب التسعير',
         requestInfo: 'معلومات الطلب',
         dateLabel: 'التاريخ',
         requester: 'مقدم الطلب',
@@ -205,7 +194,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     return labels[lang] || labels.ar;
   }
 
-  // ✅ Helper: Check if any field has data
   hasData(value) {
     if (value === null || value === undefined || value === '') return false;
     if (typeof value === 'string' && value.trim() === '') return false;
@@ -227,7 +215,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     );
   }
 
-  // ✅ Helper: Check if request info section has data
   hasRequestInfoData(rfq) {
     return this.hasData(rfq.requester) ||
            this.hasData(rfq.production) ||
@@ -645,14 +632,14 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>الأردن</p>
-        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
+        <p>تلفون: 96264161060+ | فاكس:  96264161060+</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       <div class="company-col company-col-left">
         <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
         <p>Design – Manufacture – Installation</p>
         <p>Jordan</p>
-        <p>Tel: +96264161060 | Fax: 96264162060</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       ` : `
@@ -667,7 +654,7 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>الأردن</p>
-        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
+        <p>تلفون: 96264161060+ | فاكس:  96264161060+</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       `}
@@ -1218,7 +1205,7 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>الأردن</p>
-        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
+        <p>تلفون: 96264161060+ | فاكس:  96264161060+</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       <div class="company-col company-col-left">
@@ -1240,7 +1227,7 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>الأردن</p>
-        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
+        <p>تلفون: 96264161060+ | فاكس:  96264161060+</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       `}
@@ -1433,7 +1420,7 @@ getLabels(lang) {
       website: 'https://www.omega-jordan.com',
       rfqNumber: 'رقم الوثيقة',
       date: 'تاريخ الإصدار',
-      rfqNo: 'RFQ No',
+      rfqNo: 'رقم طلب التسعير',
       requestInfo: 'معلومات الطلب',
       dateLabel: 'التاريخ',
       requester: 'مقدم الطلب',

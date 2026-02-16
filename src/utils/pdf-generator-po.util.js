@@ -27,7 +27,7 @@ class POPDFGenerator {
 
   DEFAULT_TERMS_EN = `Terms and Conditions
 
-All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier’s scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
+All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier's scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
 
 Any additional work, variations, modifications, or requirements not specified in this document shall be subject to additional cost and corresponding time adjustments, as applicable. Fees related to studies, design approvals, authority approvals, permits, stamping, engineering calculations, or any similar technical requirements are not included unless explicitly stated.
 
@@ -118,8 +118,10 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         companyNameEn: 'OMEGA ENGINEERING INDUSTRIES CO.',
         tagline: 'تصميم – تصنيع – تركيب',
         taglineEn: 'DESIGN - FABRICATION - INSTALLATION',
-        country: 'JORDAN',
-        tel: 'Tel: +96264161060 Fax: +96264162060',
+        countryAR: 'الاردن',
+        countryEn: 'JORDAN',
+        telEN: 'Tel: +96264161060 Fax: +96264162060',
+        telAR : 'تلفون: 96264161060+ | فاكس: 96264162060+',
         website: 'https://www.omega-jordan.com',
         poNumber: 'رقم الطلب',
         date: 'تاريخ الإصدار',
@@ -165,7 +167,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         accountant: 'المحاسب',
         docCode: 'OMEGA-PUR-05',
         issueDate: 'DATE OF ISSUE',
-        termsAndConditions: 'الشروط والأحكام' // ✅ ADD THIS LINE
+        termsAndConditions: 'الشروط والأحكام' 
       },
       en: {
         title: 'Purchase Order',
@@ -173,8 +175,10 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         companyNameEn: 'OMEGA ENGINEERING INDUSTRIES CO.',
         tagline: 'تصميم – تصنيع – تركيب',
         taglineEn: 'DESIGN - FABRICATION - INSTALLATION',
-        country: 'JORDAN',
-        tel: 'Tel: +96264161060 Fax: +96264162060',
+        countryAR: 'الاردن',
+        countryEn: 'JORDAN',
+        telEN: 'Tel: +96264161060 Fax: +96264162060',
+        telAR : 'تلفون: 96264161060+ | فاكس: 96264162060+',
         website: 'https://www.omega-jordan.com',
         poNumber: 'Order Number',
         date: 'Issue Date',
@@ -220,7 +224,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         accountant: 'Accountant',
         docCode: 'OMEGA-PUR-05',
         issueDate: 'DATE OF ISSUE',
-        termsAndConditions: 'Terms and Conditions' // ✅ ADD THIS LINE
+        termsAndConditions: 'Terms and Conditions'
       }
     };
 
@@ -802,22 +806,20 @@ body {
       <div class="company-left">
         <p><strong>${labels.companyNameEn}</strong></p>
         <p>${labels.taglineEn}</p>
-        <p>${labels.country}</p>
-        <p>${labels.tel}</p>
+        <p>${labels.countryEn}</p>
+        <p>${labels.telEN}</p>
         <p>${labels.website}</p>
       </div>
       <div class="company-right">
         <p><strong>${labels.companyNameAr}</strong></p>
         <p>${labels.tagline}</p>
-        <p>${labels.country}</p>
-        <p>${labels.tel}</p>
+        <p>${labels.countryAR}</p>
+        <p>${labels.telAR}</p>
         <p>${labels.website}</p>
       </div>
     </div>
   </div>
 
-  <!-- ✅ Blue separator line -->
-  <div class="separator-line"></div>
 
   <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>
@@ -1015,7 +1017,7 @@ body {
   // Add these methods to the POPDFGenerator class in pdf-generator-po.util.js
 
 /**
- * ✅ Generate Terms & Conditions HTML Page for Purchase Orders
+ * ✅ Generate Terms & Conditions HTML Page for Purchase Orders - MATCHES MAIN PO FORMAT
  */
 generateTermsHTML(termsText, language = 'ar') {
   console.log('🔨 Generating Purchase Order Terms HTML...');
@@ -1024,6 +1026,21 @@ generateTermsHTML(termsText, language = 'ar') {
   
   const labels = this.getLabels(language);
   const isRTL = language === 'ar';
+  
+  // ✅ Load and convert logo to base64 for embedding in HTML
+  let logoBase64 = '';
+  try {
+    const logoPath = path.join(__dirname, '../../assets/images/OmegaLogo.png');
+    if (fs.existsSync(logoPath)) {
+      const logoBuffer = fs.readFileSync(logoPath);
+      logoBase64 = `data:image/png;base64,${logoBuffer.toString('base64')}`;
+      console.log('   ✅ Logo loaded and converted to base64');
+    } else {
+      console.log('   ⚠️ Logo file not found at:', logoPath);
+    }
+  } catch (error) {
+    console.log('   ⚠️ Error loading logo:', error.message);
+  }
   
   // Escape HTML special characters
   const escapeHtml = (text) => {
@@ -1068,12 +1085,27 @@ body {
   background: #fff;
 }
 
-.company-info {
-  padding: 10px 0;
+/* ✅ MATCHES MAIN PO FORMAT: Logo positioned top-left with text wrapping around it */
+.header-container {
+  position: relative;
+  min-height: 80px;
   margin-bottom: 10px;
-  direction: ltr;
   break-inside: avoid;
   page-break-inside: avoid;
+}
+
+.company-logo-left {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 120px;
+  height: auto;
+  z-index: 10;
+}
+
+.company-info {
+  padding: 10px 0 10px 140px;
+  direction: ltr;
 }
 
 .company-row {
@@ -1145,25 +1177,8 @@ body {
 
 <body>
 <div class="page-content">
-  <!-- Company Info Header -->
-  <div class="company-info">
-    <div class="company-row">
-      <div class="company-left">
-        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
-        <p>DESIGN - FABRICATION - INSTALLATION</p>
-        <p>JORDAN</p>
-        <p>Tel: +96264161060 Fax: +96264162060</p>
-        <p>https://www.omega-jordan.com</p>
-      </div>
-      <div class="company-right">
-        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
-        <p>تصميم – تصنيع – تركيب</p>
-        <p>JORDAN</p>
-        <p>Tel: +96264161060 Fax: +96264162060</p>
-        <p>https://www.omega-jordan.com</p>
-      </div>
-    </div>
-  </div>
+  <!-- ✅ MATCHES MAIN PO: Logo on left with company info beside it -->
+  <div class="header-container">
 
 
   <!-- Title -->

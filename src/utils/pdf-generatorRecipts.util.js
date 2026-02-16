@@ -1,4 +1,3 @@
-// src/utils/pdf-generatorRecipts.util.js - UPDATED: Restructured table layout + Fixed PDF merge
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -515,7 +514,6 @@ body {
 
 <div class="page-content">
 
-  <!-- ✅ Company info directly under logo (no background) -->
   <div class="company-info">
     <div class="company-row">
       ${isRTL ? `
@@ -523,7 +521,7 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>المملكة الأردنية الهاشمية</p>
-        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
+        <p>تلفون: 96264161060+ | فاكس:  96264161060+</p>
       </div>
       <div class="company-col company-col-left">
         <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
@@ -542,7 +540,7 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>المملكة الأردنية الهاشمية</p>
-        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
+        <p>تلفون: 96264161060+ | فاكس:  96264161060+</p>
       </div>
       `}
     </div>
