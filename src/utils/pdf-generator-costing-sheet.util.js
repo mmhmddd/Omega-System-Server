@@ -887,38 +887,6 @@ body {
 
 <div class="page-content">
 
-  <!-- ✅ FIXED: Company Info Header matching Receipt format -->
-  <div class="company-info">
-    <div class="company-row">
-      ${isRTL ? `
-      <div class="company-col company-col-right">
-        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
-        <p>تصميم – تصنيع – تركيب</p>
-        <p>المملكة الأردنية الهاشمية</p>
-        <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
-      </div>
-      <div class="company-col company-col-left">
-        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
-        <p>Design – Manufacture – Installation</p>
-        <p>Jordan</p>
-        <p>Tel: +96264161060 | Fax: +96264162060</p>
-      </div>
-      ` : `
-      <div class="company-col company-col-left">
-        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
-        <p>Design – Manufacture – Installation</p>
-        <p>Jordan</p>
-        <p>Tel: +96264161060 | Fax: +96264162060</p>
-      </div>
-      <div class="company-col company-col-right">
-        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
-        <p>تصميم – تصنيع – تركيب</p>
-        <p>المملكة الأردنية الهاشمية</p>
-        <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
-      </div>
-      `}
-    </div>
-  </div>
 
   <!-- Title -->
   <h1 class="title">${language === 'ar' ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>

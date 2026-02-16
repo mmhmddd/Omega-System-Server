@@ -415,7 +415,7 @@ buildHeaderHTML(quoteData, isArabic) {
         
         termsHTML = `
           <div style="page-break-before: always; padding: 40px 50px; background: white; min-height: 100vh; box-sizing: border-box; font-family: ${isArabic ? "'Cairo', Arial, sans-serif" : "'Roboto', Arial, sans-serif"}; direction: ${isArabic ? 'rtl' : 'ltr'};">
-            <h1 style="text-align: center; color: #0b4fa2; font-size: 28px; font-weight: 700; margin-bottom: 30px; border-bottom: 3px solid #0b4fa2; padding-bottom: 15px;">
+            <h1 style="text-align: center; color: #0b4fa2; font-size: 28px; font-weight: 700; margin-bottom: 30px; padding-bottom: 15px;">
               ${termsTitle}
             </h1>
             <div style="white-space: pre-wrap; line-height: 1.8; font-size: 14px; color: #333; text-align: ${isArabic ? 'right' : 'left'};">

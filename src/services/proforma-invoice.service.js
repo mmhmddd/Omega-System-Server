@@ -291,17 +291,32 @@ class ProformaInvoiceService {
     }
   }
 
-  buildHeaderHTML(invoiceData, isArabic) {
-    const logoBase64 = fsSync.existsSync(LOGO_PATH)
-      ? fsSync.readFileSync(LOGO_PATH, 'base64')
-      : '';
+buildHeaderHTML(invoiceData, isArabic) {
+  const logoBase64 = fsSync.existsSync(LOGO_PATH)
+    ? fsSync.readFileSync(LOGO_PATH, 'base64')
+    : '';
 
-    const invoiceNoLabel = isArabic ? 'رقم الفاتورة:' : 'Invoice No:';
-    const dateLabel = isArabic ? 'التاريخ:' : 'DATE:';
+  const invoiceNoLabel = isArabic ? 'رقم الفاتورة:' : 'Invoice No:';
+  const dateLabel = isArabic ? 'التاريخ:' : 'DATE:';
 
+  // ✅ For Arabic: info on RIGHT, logo on LEFT
+  // ✅ For English: info on LEFT, logo on RIGHT
+  if (isArabic) {
     return `
-      <div style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:10px 30px; border-bottom:3px solid #0b4fa2;">
-        <div style="text-align:${isArabic ? 'right' : 'left'}; font-family:${isArabic ? "'Cairo',Arial,sans-serif" : "'Roboto',Arial,sans-serif"}; font-size:11px;">
+      <div style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:10px 30px; border-bottom:3px solid #0b4fa2; direction:rtl;">
+        <div style="text-align:right; font-family:'Cairo',Arial,sans-serif; font-size:11px; direction:rtl;">
+          <p style="margin:3px 0;"><strong style="color:#0b4fa2;">${invoiceNoLabel}</strong> ${invoiceData.invoiceNumber}</p>
+          <p style="margin:3px 0;"><strong style="color:#0b4fa2;">${dateLabel}</strong> ${invoiceData.date}</p>
+        </div>
+        <div>
+          ${logoBase64 ? `<img src="data:image/png;base64,${logoBase64}" style="height:60px;" />` : ''}
+        </div>
+      </div>
+    `;
+  } else {
+    return `
+      <div style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:10px 30px; border-bottom:3px solid #0b4fa2; direction:ltr;">
+        <div style="text-align:left; font-family:'Roboto',Arial,sans-serif; font-size:11px; direction:ltr;">
           <p style="margin:3px 0;"><strong style="color:#0b4fa2;">${invoiceNoLabel}</strong> ${invoiceData.invoiceNumber}</p>
           <p style="margin:3px 0;"><strong style="color:#0b4fa2;">${dateLabel}</strong> ${invoiceData.date}</p>
         </div>
@@ -311,6 +326,7 @@ class ProformaInvoiceService {
       </div>
     `;
   }
+}
 
   buildFooterHTML(isArabic) {
     return `

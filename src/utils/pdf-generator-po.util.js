@@ -123,10 +123,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         telEN: 'Tel: +96264161060 Fax: +96264162060',
         telAR : 'تلفون: 96264161060+ | فاكس: 96264162060+',
         website: 'https://www.omega-jordan.com',
-        poNumber: 'رقم الطلب',
-        date: 'تاريخ الإصدار',
-        poNo: 'PO No',
-        revNo: 'REV. No',
         supplierInfo: 'معلومات المورد',
         supplierName: 'اسم المورد',
         supplierAddress: 'عنوان المورد',
@@ -181,9 +177,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         telAR : 'تلفون: 96264161060+ | فاكس: 96264162060+',
         website: 'https://www.omega-jordan.com',
         poNumber: 'Order Number',
-        date: 'Issue Date',
-        poNo: 'PO No',
-        revNo: 'REV. No',
         supplierInfo: 'Supplier Information',
         supplierName: 'Supplier Name',
         supplierAddress: 'Supplier Address',
@@ -799,46 +792,42 @@ body {
   <!-- ✅ FIXED: Company info header matching Material Request format exactly -->
   <div class="company-info">
     <div class="company-row">
+      ${isRTL ? `
+      <div class="company-col company-col-right">
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>المملكة الأردنية الهاشمية</p>
+        <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
+      </div>
       <div class="company-col company-col-left">
-        <p><strong>${labels.companyNameEn}</strong></p>
-        <p>${labels.taglineEn}</p>
-        <p>${labels.countryEn}</p>
-        <p>${labels.telEN}</p>
-        <p>${labels.website}</p>
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>Design – Manufacture – Installation</p>
+        <p>Jordan</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
+      </div>
+      ` : `
+      <div class="company-col company-col-left">
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>Design – Manufacture – Installation</p>
+        <p>Jordan</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
       </div>
       <div class="company-col company-col-right">
-        <p><strong>${labels.companyNameAr}</strong></p>
-        <p>${labels.tagline}</p>
-        <p>${labels.countryAR}</p>
-        <p>${labels.telAR}</p>
-        <p>${labels.website}</p>
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>المملكة الأردنية الهاشمية</p>
+        <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
       </div>
+      `}
     </div>
   </div>
 
-  <div class="separator-line"></div>
 
+  <!-- ✅ Title after separator line -->
   <h1 class="title">${labels.title}</h1>
-  ${(hasPONumber || hasDate) ? `
-  <div class="doc-info">
-    ${hasPONumber ? `
-    <div class="doc-info-item">
-      <span class="doc-info-label">${labels.poNo}:</span>
-      <span>${po.poNumber}</span>
-    </div>
-    ` : ''}
-    ${hasDate ? `
-    <div class="doc-info-item">
-      <span class="doc-info-label">${labels.date}:</span>
-      <span>${formattedDate}</span>
-    </div>
-    ` : ''}
-    <div class="doc-info-item">
-      <span class="doc-info-label">${labels.revNo}:</span>
-      <span>01</span>
-    </div>
-  </div>
-  ` : ''}
+
+  <!-- ✅ Doc info - only show if data exists -->
+
 
   <!-- ✅ Supplier info section - only show if data exists -->
   ${hasSupplierInfo ? `
@@ -1174,24 +1163,6 @@ body {
 <body>
 <div class="page-content">
   <div class="header-container">
-    ${logoBase64 ? `<img src="${logoBase64}" class="company-logo-left" alt="OMEGA Logo" />` : ''}
-    <div class="company-info">
-      <div class="company-row">
-        <div class="company-col company-col-left">
-          <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
-          <p>Design – Manufacture – Installation</p>
-          <p>Jordan</p>
-          <p>Tel: +96264161060 | Fax: +96264162060</p>
-        </div>
-        <div class="company-col company-col-right">
-          <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
-          <p>تصميم – تصنيع – تركيب</p>
-          <p>المملكة الأردنية الهاشمية</p>
-          <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- Blue separator line -->
   <div class="separator-line"></div>
