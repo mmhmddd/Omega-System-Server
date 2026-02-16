@@ -10,7 +10,6 @@ const RFQS_FILE = path.join(__dirname, '../../data/rfqs/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
-// ✅ Email configuration
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
 const EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '587');
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -23,9 +22,7 @@ class RFQService {
       const data = await fs.readFile(RFQS_FILE, 'utf8');
       return JSON.parse(data);
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return [];
-      }
+      if (error.code === 'ENOENT') return [];
       throw error;
     }
   }
@@ -40,9 +37,7 @@ class RFQService {
       const counters = JSON.parse(data);
       return counters.RFQ || 0;
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return 0;
-      }
+      if (error.code === 'ENOENT') return 0;
       throw error;
     }
   }
@@ -54,11 +49,8 @@ class RFQService {
         const data = await fs.readFile(COUNTER_FILE, 'utf8');
         counters = JSON.parse(data);
       } catch (error) {
-        if (error.code !== 'ENOENT') {
-          throw error;
-        }
+        if (error.code !== 'ENOENT') throw error;
       }
-
       counters.RFQ = counter;
       await atomicWrite(COUNTER_FILE, JSON.stringify(counters, null, 2));
     } catch (error) {
@@ -70,13 +62,8 @@ class RFQService {
     try {
       const data = await fs.readFile(USERS_FILE, 'utf8');
       const users = JSON.parse(data);
-
       const user = users.find(u => u.id === userId);
-      
-      if (user) {
-        return user.name || user.username || userId;
-      }
-      
+      if (user) return user.name || user.username || userId;
       return userId;
     } catch (error) {
       console.log('Could not fetch user name:', error.message);
@@ -87,13 +74,10 @@ class RFQService {
   async loadUsers() {
     try {
       const data = await fs.readFile(USERS_FILE, 'utf8');
-      const users = JSON.parse(data);
-      return users;
+      return JSON.parse(data);
     } catch (error) {
       console.error('Error loading users file:', error);
-      if (error.code === 'ENOENT') {
-        return [];
-      }
+      if (error.code === 'ENOENT') return [];
       throw error;
     }
   }
@@ -107,10 +91,8 @@ class RFQService {
     const oldCounter = await this.loadCounter();
     const rfqs = await this.loadRFQs();
     const deletedCount = rfqs.length;
-
     await this.saveCounter(0);
     await this.saveRFQs([]);
-
     return {
       oldCounter,
       newCounter: 0,
@@ -127,6 +109,11 @@ class RFQService {
   }
 
   detectRFQLanguage(rfqData) {
+    // Priority 1: Check requester field first
+    if (rfqData.requester && rfqData.requester.trim() !== '') {
+      return this.detectLanguage(rfqData.requester);
+    }
+
     const fieldsToCheck = [
       rfqData.production,
       rfqData.supplier,
@@ -136,9 +123,7 @@ class RFQService {
 
     if (rfqData.items && rfqData.items.length > 0) {
       rfqData.items.forEach(item => {
-        if (item.description) {
-          fieldsToCheck.push(item.description);
-        }
+        if (item.description) fieldsToCheck.push(item.description);
       });
     }
 
@@ -148,18 +133,14 @@ class RFQService {
     fieldsToCheck.forEach(field => {
       if (field) {
         totalFields++;
-        if (this.detectLanguage(field) === 'ar') {
-          arabicCount++;
-        }
+        if (this.detectLanguage(field) === 'ar') arabicCount++;
       }
     });
 
+    if (totalFields === 0) return 'ar';
     return arabicCount > (totalFields / 2) ? 'ar' : 'en';
   }
 
-  /**
-   * ✅ CREATE RFQ - WITH TEXT-BASED TERMS & CONDITIONS
-   */
   async createRFQ(rfqData, userId, userRole) {
     console.log('\n=== CREATE RFQ DEBUG ===');
     console.log('Include Terms & Conditions:', rfqData.includeTermsAndConditions);
@@ -172,14 +153,11 @@ class RFQService {
     const paddedCounter = String(newCounter).padStart(4, '0');
     const id = `RFQ-${paddedCounter}`;
     const rfqNumber = this.generateRFQNumber(newCounter);
-
     await this.saveCounter(newCounter);
 
     const today = new Date().toISOString().split('T')[0];
     const currentTime = new Date().toTimeString().split(' ')[0];
-
     const detectedLanguage = rfqData.forceLanguage || this.detectRFQLanguage(rfqData);
-
     const userName = await this.getUserName(userId);
 
     let requesterName = rfqData.requester;
@@ -199,7 +177,6 @@ class RFQService {
       urgent: rfqData.urgent || false,
       items: rfqData.items || [],
       notes: rfqData.notes || '',
-      // ✅ NEW: Store Terms & Conditions as text instead of file flag
       includeTermsAndConditions: rfqData.includeTermsAndConditions || false,
       termsAndConditionsText: rfqData.termsAndConditionsText || '',
       language: detectedLanguage,
@@ -227,39 +204,21 @@ class RFQService {
     }
 
     if (filters.rfqNumber) {
-      rfqs = rfqs.filter(r => 
-        r.rfqNumber.toLowerCase().includes(filters.rfqNumber.toLowerCase())
-      );
+      rfqs = rfqs.filter(r => r.rfqNumber.toLowerCase().includes(filters.rfqNumber.toLowerCase()));
     }
-
-    if (filters.startDate) {
-      rfqs = rfqs.filter(r => r.date >= filters.startDate);
-    }
-    if (filters.endDate) {
-      rfqs = rfqs.filter(r => r.date <= filters.endDate);
-    }
-
+    if (filters.startDate) rfqs = rfqs.filter(r => r.date >= filters.startDate);
+    if (filters.endDate) rfqs = rfqs.filter(r => r.date <= filters.endDate);
     if (filters.supplier) {
-      rfqs = rfqs.filter(r => 
-        r.supplier.toLowerCase().includes(filters.supplier.toLowerCase())
-      );
+      rfqs = rfqs.filter(r => r.supplier.toLowerCase().includes(filters.supplier.toLowerCase()));
     }
-
     if (filters.production) {
-      rfqs = rfqs.filter(r => 
-        r.production.toLowerCase().includes(filters.production.toLowerCase())
-      );
+      rfqs = rfqs.filter(r => r.production.toLowerCase().includes(filters.production.toLowerCase()));
     }
-
-    if (filters.status) {
-      rfqs = rfqs.filter(r => r.status === filters.status);
-    }
-
+    if (filters.status) rfqs = rfqs.filter(r => r.status === filters.status);
     if (filters.urgent !== undefined) {
       const isUrgent = filters.urgent === 'true' || filters.urgent === true;
       rfqs = rfqs.filter(r => r.urgent === isUrgent);
     }
-
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       rfqs = rfqs.filter(r =>
@@ -277,7 +236,6 @@ class RFQService {
     const limit = filters.limit || 10;
     const startIndex = (page - 1) * limit;
     const endIndex = page * limit;
-
     const paginatedRFQs = rfqs.slice(startIndex, endIndex);
 
     for (let rfq of paginatedRFQs) {
@@ -300,10 +258,7 @@ class RFQService {
   async getRFQById(id, userId, userRole) {
     const rfqs = await this.loadRFQs();
     const rfq = rfqs.find(r => r.id === id);
-
-    if (!rfq) {
-      throw new Error('RFQ not found');
-    }
+    if (!rfq) throw new Error('RFQ not found');
 
     if (userRole === 'employee' || userRole === 'admin') {
       if (rfq.createdBy !== userId) {
@@ -318,16 +273,10 @@ class RFQService {
     return rfq;
   }
 
-  /**
-   * ✅ UPDATE RFQ - WITH TEXT-BASED TERMS & CONDITIONS
-   */
   async updateRFQ(id, updateData, userId, userRole) {
     const rfqs = await this.loadRFQs();
     const rfqIndex = rfqs.findIndex(r => r.id === id);
-
-    if (rfqIndex === -1) {
-      throw new Error('RFQ not found');
-    }
+    if (rfqIndex === -1) throw new Error('RFQ not found');
 
     const rfq = rfqs[rfqIndex];
 
@@ -347,8 +296,6 @@ class RFQService {
     if (updateData.items) rfq.items = updateData.items;
     if (updateData.notes !== undefined) rfq.notes = updateData.notes;
     if (updateData.status) rfq.status = updateData.status;
-
-    // ✅ UPDATE: Handle text-based Terms & Conditions
     if (updateData.includeTermsAndConditions !== undefined) {
       rfq.includeTermsAndConditions = updateData.includeTermsAndConditions;
     }
@@ -358,7 +305,6 @@ class RFQService {
 
     const detectedLanguage = updateData.forceLanguage || this.detectRFQLanguage(rfq);
     rfq.language = detectedLanguage;
-
     rfq.updatedAt = new Date().toISOString();
 
     if (!rfq.createdByName) {
@@ -367,14 +313,12 @@ class RFQService {
 
     rfqs[rfqIndex] = rfq;
     await this.saveRFQs(rfqs);
-
     return rfq;
   }
 
   async deleteRFQ(id) {
     const rfqs = await this.loadRFQs();
     const rfqIndex = rfqs.findIndex(r => r.id === id);
-
     if (rfqIndex === -1) throw new Error('RFQ not found');
 
     const rfq = rfqs[rfqIndex];
@@ -387,12 +331,10 @@ class RFQService {
       } catch (error) {
         console.log('⚠️ RFQ: File Management deletion warning:', error.message);
       }
-      
+
       const pdfPath = path.join(__dirname, '../../data/rfqs/pdfs', rfq.pdfFilename);
       if (fsSync.existsSync(pdfPath)) {
-        try {
-          fsSync.unlinkSync(pdfPath);
-        } catch (err) {
+        try { fsSync.unlinkSync(pdfPath); } catch (err) {
           console.log('Could not delete PDF:', err.message);
         }
       }
@@ -400,7 +342,6 @@ class RFQService {
 
     rfqs.splice(rfqIndex, 1);
     await this.saveRFQs(rfqs);
-
     return { message: 'RFQ deleted successfully' };
   }
 
@@ -429,7 +370,6 @@ class RFQService {
 
     rfqs.forEach(rfq => {
       const rfqDate = new Date(rfq.createdAt);
-      
       if (rfqDate >= startOfMonth) stats.thisMonth++;
       if (rfqDate >= startOfWeek) stats.thisWeek++;
       if (rfqDate >= startOfDay) stats.today++;
@@ -439,7 +379,16 @@ class RFQService {
   }
 
   /**
-   * ✅ GENERATE RFQ PDF WITH TEXT-BASED TERMS & CONDITIONS
+   * ✅ GENERATE RFQ PDF.
+   *
+   *  Final page order is ALWAYS:
+   *    1. Main RFQ page(s)
+   *    2. Attachment PDF page(s)   ← if provided
+   *    3. Terms & Conditions page  ← ALWAYS LAST
+   *
+   *  Key fix: termsText is NOT passed into rfqPdfGenerator.generateRFQPDF().
+   *  addTermsAndConditionsPage() is called as the very last step, after all
+   *  attachments have already been merged in.
    */
   async generateRFQPDF(id, userId, userRole, attachmentPdf = null) {
     const rfq = await this.getRFQById(id, userId, userRole);
@@ -479,15 +428,36 @@ class RFQService {
 
     console.log('📝 Custom filename:', customFilename);
 
-    // ✅ Pass termsAndConditionsText to PDF generator
+    // ✅ Detect language for T&C
+    const detectedLanguage = this.detectRFQLanguage(rfq);
+    console.log('🌐 Detected language:', detectedLanguage);
+
+    // ✅ Resolve Terms & Conditions text — will be appended as the very last page
+    let termsText = null;
+    if (rfq.includeTermsAndConditions) {
+      if (rfq.termsAndConditionsText && rfq.termsAndConditionsText.trim()) {
+        termsText = rfq.termsAndConditionsText;
+        console.log('📎 Using custom Terms & Conditions');
+      } else {
+        termsText = detectedLanguage === 'ar'
+          ? rfqPdfGenerator.DEFAULT_TERMS_AR
+          : rfqPdfGenerator.DEFAULT_TERMS_EN;
+        console.log('📎 Using default Terms & Conditions in', detectedLanguage === 'ar' ? 'Arabic' : 'English');
+      }
+    }
+
+    console.log('📎 Terms Text Length:', termsText?.length || 0);
+
+    // ✅ Generate the main RFQ PDF.
+    //    Pass null for termsText — T&C is appended AFTER the attachment below.
     const pdfResult = await rfqPdfGenerator.generateRFQPDF(
-      rfq, 
+      rfq,
       customFilename,
-      rfq.termsAndConditionsText // Pass the text
+      null  // ← intentionally null; T&C added last
     );
 
+    // ✅ Validate and queue the attachment (if any)
     const pdfsToMerge = [];
-
     if (attachmentPdf) {
       const isValid = await rfqPdfGenerator.isValidPDF(attachmentPdf);
       if (isValid) {
@@ -499,12 +469,14 @@ class RFQService {
     }
 
     let finalPdfResult = pdfResult;
+
     try {
       if (pdfsToMerge.length > 0) {
-        console.log(`🔄 Merging ${pdfsToMerge.length} PDF(s) with RFQ...`);
-        
+        // ── Step 1: Merge attachment(s) after the main RFQ ──────────────────
+        console.log(`🔄 Merging ${pdfsToMerge.length} attachment(s) with RFQ...`);
+
         let currentPath = pdfResult.filepath;
-        
+
         for (let i = 0; i < pdfsToMerge.length; i++) {
           const mergeResult = await rfqPdfGenerator.mergePDFs(
             currentPath,
@@ -513,7 +485,7 @@ class RFQService {
             pdfResult.language
           );
           currentPath = mergeResult.filepath;
-          
+
           if (i === pdfsToMerge.length - 1) {
             finalPdfResult = {
               ...pdfResult,
@@ -524,16 +496,17 @@ class RFQService {
             };
           }
         }
-        
-        console.log('✅ PDF merge completed successfully');
+
+        console.log('✅ Attachment merge completed successfully');
       } else {
+        // ── Step 1 (no attachment): stamp headers/footers only ───────────────
         const headerResult = await rfqPdfGenerator.mergePDFs(
           pdfResult.filepath,
           null,
           null,
           pdfResult.language
         );
-        
+
         finalPdfResult = {
           ...pdfResult,
           filename: headerResult.filename,
@@ -542,11 +515,25 @@ class RFQService {
           pageCount: headerResult.pageCount
         };
       }
+
+      // ── Step 2: Append Terms & Conditions as the VERY LAST page ──────────
+      //    Runs after all attachments are merged — always the final page.
+      if (termsText) {
+        console.log('📄 Appending Terms & Conditions as the last page...');
+        await rfqPdfGenerator.addTermsAndConditionsPage(
+          finalPdfResult.filepath,
+          termsText,
+          detectedLanguage
+        );
+        console.log('✅ Terms & Conditions appended as last page');
+      }
+
     } catch (mergeError) {
       console.error('❌ PDF merge/header failed:', mergeError.message);
       finalPdfResult.mergeError = mergeError.message;
     }
 
+    // ✅ Persist PDF metadata back to the RFQ record
     const rfqs = await this.loadRFQs();
     const rfqIndex = rfqs.findIndex(r => r.id === id);
 
@@ -565,10 +552,7 @@ class RFQService {
     console.log('✅ PDF generation complete!');
     console.log('════════════════════════════════════════════════════════════\n');
 
-    return {
-      rfq,
-      pdf: finalPdfResult
-    };
+    return { rfq, pdf: finalPdfResult };
   }
 
   async sendRFQByEmail(rfqId, userId, userRole, recipientEmail) {
@@ -586,38 +570,24 @@ class RFQService {
       const rfq = await this.getRFQById(rfqId, userId, userRole);
       console.log('✅ RFQ found:', rfq.rfqNumber);
 
-      if (!rfq.pdfFilename) {
-        throw new Error('PDF not generated yet. Please generate PDF first.');
-      }
+      if (!rfq.pdfFilename) throw new Error('PDF not generated yet. Please generate PDF first.');
 
       const pdfPath = path.join(__dirname, '../../data/rfqs/pdfs', rfq.pdfFilename);
-
-      if (!fsSync.existsSync(pdfPath)) {
-        throw new Error('PDF file not found');
-      }
+      if (!fsSync.existsSync(pdfPath)) throw new Error('PDF file not found');
       console.log('✅ PDF file found');
 
       const users = await this.loadUsers();
       const creator = users.find(u => u.id === rfq.createdBy);
-      
       const senderName = creator && creator.name ? creator.name : 'Omega System';
       const creatorEmail = creator && creator.email ? creator.email : null;
-      
       console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
 
-      console.log('📧 Creating email transporter...');
-      
       const transporter = nodemailer.createTransport({
         host: EMAIL_HOST,
         port: EMAIL_PORT,
         secure: EMAIL_PORT === 465,
-        auth: {
-          user: EMAIL_USER,
-          pass: EMAIL_PASS,
-        },
-        tls: {
-          rejectUnauthorized: false
-        }
+        auth: { user: EMAIL_USER, pass: EMAIL_PASS },
+        tls: { rejectUnauthorized: false }
       });
 
       console.log('🔄 Verifying SMTP connection...');
@@ -626,7 +596,7 @@ class RFQService {
 
       const subject = `Request for Quotation ${rfq.rfqNumber}`;
       const text = `Please find attached the Request for Quotation ${rfq.rfqNumber}.\n\nSupplier: ${rfq.supplier || 'N/A'}\nDate: ${rfq.date}\nDepartment: ${rfq.production || 'N/A'}\n${rfq.urgent ? 'URGENT REQUEST\n' : ''}\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
-      
+
       const html = `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0;">
@@ -662,7 +632,7 @@ class RFQService {
         if (!str) return 'Unknown';
         return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
       };
-      
+
       const formatDate = (dateStr) => {
         if (!dateStr) {
           const today = new Date().toISOString().split('T')[0];
@@ -672,26 +642,21 @@ class RFQService {
         const [year, month, day] = dateStr.split('-');
         return `${day}-${month}-${year}`;
       };
-      
+
       const rfqNumber = rfq.rfqNumber || 'RFQ0000';
       const requesterName = sanitizeFilename(rfq.requester);
       const dateFormatted = formatDate(rfq.date);
       const emailAttachmentName = `${rfqNumber}_${requesterName}_${dateFormatted}.pdf`;
 
       console.log('📧 Sending email...');
-      
+
       const mailOptions = {
         from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
         to: recipientEmail,
-        subject: subject,
-        text: text,
-        html: html,
-        attachments: [
-          {
-            filename: emailAttachmentName,
-            path: pdfPath,
-          },
-        ],
+        subject,
+        text,
+        html,
+        attachments: [{ filename: emailAttachmentName, path: pdfPath }]
       };
 
       if (creatorEmail) {
@@ -703,13 +668,8 @@ class RFQService {
 
       console.log('✅ Email sent successfully!');
       console.log('  - Message ID:', info.messageId);
-      console.log('  - From:', EMAIL_USER);
-      console.log('  - To:', recipientEmail);
-      console.log('  - Sender Name:', senderName);
       console.log('  - Attachment:', emailAttachmentName);
-      if (creatorEmail) {
-        console.log('  - Reply-To:', creatorEmail);
-      }
+      if (creatorEmail) console.log('  - Reply-To:', creatorEmail);
       console.log('========================\n');
 
       return {
@@ -721,7 +681,7 @@ class RFQService {
       };
     } catch (error) {
       console.error('❌ Email sending error:', error);
-      
+
       let errorMessage = error.message;
       if (error.code === 'EAUTH') {
         errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';
@@ -730,7 +690,7 @@ class RFQService {
       } else if (error.message.includes('Missing credentials')) {
         errorMessage = 'Email credentials are not configured. Please set EMAIL_USER and EMAIL_APP_PASSWORD in your .env file.';
       }
-      
+
       throw new Error(`Failed to send email: ${errorMessage}`);
     }
   }

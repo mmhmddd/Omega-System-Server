@@ -1,5 +1,5 @@
 // ============================================================
-// FIXED MATERIAL SERVICE - WITH TERMS & CONDITIONS TEXT PASSING
+// UPDATED MATERIAL SERVICE - T&C PAGE ALWAYS LAST (AFTER ATTACHMENTS)
 // src/services/material.service.js
 // ============================================================
 const fs = require('fs').promises;
@@ -11,7 +11,6 @@ const nodemailer = require('nodemailer');
 const MATERIALS_FILE = path.join(__dirname, '../../data/materials-requests/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
-const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 // ✅ Email configuration with proper credential checks
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
@@ -218,7 +217,6 @@ async createMaterialRequest(materialData, userId, userRole) {
       additionalNotes: materialData.additionalNotes || '',
       includeTermsAndConditions: materialData.includeTermsAndConditions || false,
       termsAndConditionsText: materialData.termsAndConditionsText || '',
-      // ✅ REMOVED: includeStaticFile - no longer needed
       language: detectedLanguage,
       status: 'pending',
       createdBy: userId,
@@ -280,8 +278,6 @@ async updateMaterialRequest(id, updateData, userId, userRole) {
       material.termsAndConditionsText = updateData.termsAndConditionsText;
     }
     
-    // ✅ REMOVED: includeStaticFile update - no longer needed
-    
     const detectedLanguage = updateData.forceLanguage || this.detectMaterialLanguage(material);
     material.language = detectedLanguage;
     material.updatedAt = new Date().toISOString();
@@ -302,7 +298,7 @@ async updateMaterialRequest(id, updateData, userId, userRole) {
   }
 
   /**
-   * ✅ FIXED: Generate Material PDF with TERMS & CONDITIONS TEXT PARAMETER
+   * ✅ UPDATED: Generate Material PDF with T&C page ALWAYS LAST (after attachments)
    */
 async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
     const material = await this.getMaterialRequestById(id, userId, userRole);
@@ -352,7 +348,7 @@ async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
 
     console.log('📝 Custom filename:', customFilename);
 
-    // ✅ CRITICAL FIX: Process T&C text properly
+    // ✅ Process T&C text - will be added LAST
     console.log('\n╔══════════════════════════════════════════════════════════╗');
     console.log('║       PROCESSING TERMS & CONDITIONS DATA                 ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
@@ -374,13 +370,13 @@ async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
     }
     console.log('════════════════════════════════════════════════════════════\n');
 
+    // ✅ STEP 1: Generate main Material Request PDF WITHOUT T&C
     const pdfResult = await materialPdfGenerator.generateMaterialPDF(
       material, 
       customFilename,
-      termsTextToPass  // ✅ Pass T&C text to generator
+      null  // ✅ Don't add T&C yet - we'll add it LAST
     );
 
-    // ✅ REMOVED: Static PDF file merge logic - no longer needed
     const pdfsToMerge = [];
     
     if (attachmentPdf) {
@@ -395,6 +391,7 @@ async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
 
     let finalPdfResult = pdfResult;
     try {
+      // ✅ STEP 2: Merge user attachments (if any)
       if (pdfsToMerge.length > 0) {
         console.log(`🔄 Merging ${pdfsToMerge.length} user attachment PDF(s)...`);
         
@@ -406,7 +403,8 @@ async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
             currentPath,
             pdfsToMerge[i],
             null,
-            pdfResult.language
+            pdfResult.language,
+            false  // ✅ Don't add headers/footers yet
           );
           currentPath = mergeResult.filepath;
           
@@ -422,24 +420,41 @@ async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
         }
         
         console.log('✅ PDF merge completed successfully');
-        console.log('   Total pages:', finalPdfResult.pageCount.total);
-      } else {
-        console.log('ℹ️  No attachments to merge, adding headers/footers only...');
-        const headerResult = await materialPdfGenerator.mergePDFs(
-          pdfResult.filepath,
-          null,
-          null,
+        console.log('   Total pages before T&C:', finalPdfResult.pageCount.total);
+      }
+
+      // ✅ STEP 3: Add Terms & Conditions page as LAST page (if enabled)
+      if (termsTextToPass) {
+        console.log('📄 Adding Terms & Conditions as LAST page...');
+        await materialPdfGenerator.addTermsAndConditionsPage(
+          finalPdfResult.filepath, 
+          termsTextToPass, 
           pdfResult.language
         );
+        console.log('✅ Terms & Conditions page added as LAST page');
         
-        finalPdfResult = {
-          ...pdfResult,
-          filename: headerResult.filename,
-          filepath: headerResult.filepath,
-          merged: false,
-          pageCount: headerResult.pageCount
-        };
+        // Update page count
+        const updatedPageCount = await materialPdfGenerator.getPageCount(finalPdfResult.filepath);
+        if (finalPdfResult.pageCount) {
+          finalPdfResult.pageCount.total = updatedPageCount;
+        }
+        finalPdfResult.hasTermsAndConditions = true;
       }
+
+      // ✅ STEP 4: Add headers and footers to ALL pages
+      console.log('ℹ️  Adding headers/footers to all pages...');
+      const headerResult = await materialPdfGenerator.addHeadersAndFootersOnly(
+        finalPdfResult.filepath,
+        pdfResult.language
+      );
+      
+      finalPdfResult = {
+        ...finalPdfResult,
+        filename: headerResult.filename,
+        filepath: headerResult.filepath,
+        pageCount: headerResult.pageCount
+      };
+      
     } catch (mergeError) {
       console.error('❌ PDF merge/header failed:', mergeError.message);
       finalPdfResult.mergeError = mergeError.message;
@@ -462,7 +477,8 @@ async generateMaterialPDF(id, userId, userRole, attachmentPdf = null) {
     console.log('════════════════════════════════════════════════════════════');
     console.log('✅ PDF generation complete!');
     console.log('   Filename:', finalPdfResult.filename);
-    console.log('   Has T&C Page:', !!pdfResult.hasTermsAndConditions);
+    console.log('   Has T&C Page:', !!finalPdfResult.hasTermsAndConditions);
+    console.log('   Total Pages:', finalPdfResult.pageCount?.total || 'Unknown');
     console.log('════════════════════════════════════════════════════════════\n');
 
     return {

@@ -645,14 +645,14 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>الأردن</p>
-        <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       <div class="company-col company-col-left">
         <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
         <p>Design – Manufacture – Installation</p>
         <p>Jordan</p>
-        <p>Tel: +96264161060 | Fax: +96264162060</p>
+        <p>Tel: +96264161060 | Fax: 96264162060</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       ` : `
@@ -667,7 +667,7 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>الأردن</p>
-        <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       `}
@@ -1218,7 +1218,7 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>الأردن</p>
-        <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       <div class="company-col company-col-left">
@@ -1240,7 +1240,7 @@ body {
         <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
         <p>تصميم – تصنيع – تركيب</p>
         <p>الأردن</p>
-        <p>تلفون: +96264161060 | فاكس: +96264162060</p>
+        <p> تلفون: 96264161060+ | فاكس: 96264162060</p>
         <p>https://www.omega-jordan.com</p>
       </div>
       `}

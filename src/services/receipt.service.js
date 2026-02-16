@@ -11,7 +11,6 @@ const RECEIPTS_FILE = path.join(__dirname, '../../data/receipts/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
 
-// ✅ Email configuration with proper credential checks
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
 const EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '587');
 const EMAIL_USER = process.env.EMAIL_USER;
@@ -20,9 +19,6 @@ const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
 
 class ReceiptService {
 
-  /**
-   * ✅ Detect language from receipt data
-   */
   detectLanguage(receiptData) {
     const fieldsToCheck = [
       receiptData.to,
@@ -30,64 +26,41 @@ class ReceiptService {
       receiptData.workLocation,
       receiptData.attention
     ];
-
     let arabicCount = 0;
     let totalFields = 0;
-
     fieldsToCheck.forEach(field => {
       if (field) {
         totalFields++;
-        if (this.isArabic(field)) {
-          arabicCount++;
-        }
+        if (this.isArabic(field)) arabicCount++;
       }
     });
-
     return arabicCount > (totalFields / 2) ? 'ar' : 'en';
   }
 
-  /**
-   * ✅ Check if text is Arabic
-   */
   isArabic(text) {
     if (!text) return false;
     const arabicPattern = /[\u0600-\u06FF]/;
     return arabicPattern.test(text);
   }
 
-  /**
-   * ✅ NEW: Create custom filename pattern: DN0005_Tarek_2026-02-07.pdf
-   */
   createReceiptFilename(receipt) {
-    // Get receipt number with 4 digits padding (e.g., DN0005)
     const receiptNumber = receipt.receiptNumber || 'DN0000';
-    
-    // Get "to" field and sanitize it (remove special characters, spaces, limit length)
     let toField = receipt.to || 'Unknown';
     toField = toField
-      .replace(/[<>:"/\\|?*\s]/g, '') // Remove invalid filename characters and spaces
+      .replace(/[<>:"/\\|?*\s]/g, '')
       .trim()
-      .substring(0, 50); // Limit length to 50 characters
-    
-    // Get date in format YYYY-MM-DD
+      .substring(0, 50);
     const dateField = receipt.date || new Date().toISOString().split('T')[0];
-    
-    // Combine: DN0005_Tarek_2026-02-07.pdf
     const filename = `${receiptNumber}_${toField}_${dateField}.pdf`;
-    
     console.log('📄 Created filename:', filename);
     return filename;
   }
 
-  /**
-   * Load users from JSON file
-   */
   async loadUsers() {
     try {
       console.log('Loading users from:', USERS_FILE);
       const data = await fs.readFile(USERS_FILE, 'utf8');
-      const users = JSON.parse(data);
-      return users;
+      return JSON.parse(data);
     } catch (error) {
       console.error('Error loading users file:', error);
       if (error.code === 'ENOENT') {
@@ -98,9 +71,6 @@ class ReceiptService {
     }
   }
 
-  /**
-   * Get user name by ID
-   */
   async getUserNameById(userId) {
     try {
       const users = await this.loadUsers();
@@ -111,21 +81,21 @@ class ReceiptService {
       users.forEach(u => {
         console.log(`  - ID: "${u.id}" (type: ${typeof u.id}) | Name: "${u.name}"`);
       });
-      
+
       let user = users.find(u => u.id === userId);
-      
+
       if (!user && typeof userId !== 'string') {
         const userIdStr = String(userId);
         console.log('Trying string conversion:', userIdStr);
         user = users.find(u => u.id === userIdStr);
       }
-      
+
       if (!user && typeof userId === 'string') {
         const userIdTrimmed = userId.trim();
         console.log('Trying trimmed version:', userIdTrimmed);
         user = users.find(u => u.id.trim() === userIdTrimmed);
       }
-      
+
       if (user) {
         console.log('✓ Found user:', user.name);
         console.log('========================');
@@ -141,47 +111,31 @@ class ReceiptService {
     }
   }
 
-  /**
-   * Load receipts from JSON file
-   */
   async loadReceipts() {
     try {
       const data = await fs.readFile(RECEIPTS_FILE, 'utf8');
       return JSON.parse(data);
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return [];
-      }
+      if (error.code === 'ENOENT') return [];
       throw error;
     }
   }
 
-  /**
-   * Save receipts to JSON file
-   */
   async saveReceipts(receipts) {
     await atomicWrite(RECEIPTS_FILE, JSON.stringify(receipts, null, 2));
   }
 
-  /**
-   * Load counter from counters.json file
-   */
   async loadCounter() {
     try {
       const data = await fs.readFile(COUNTER_FILE, 'utf8');
       const counters = JSON.parse(data);
       return counters.RECEIPT || 0;
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return 0;
-      }
+      if (error.code === 'ENOENT') return 0;
       throw error;
     }
   }
 
-  /**
-   * Save counter to counters.json file
-   */
   async saveCounter(counter) {
     try {
       let counters = {};
@@ -189,11 +143,8 @@ class ReceiptService {
         const data = await fs.readFile(COUNTER_FILE, 'utf8');
         counters = JSON.parse(data);
       } catch (error) {
-        if (error.code !== 'ENOENT') {
-          throw error;
-        }
+        if (error.code !== 'ENOENT') throw error;
       }
-      
       counters.RECEIPT = counter;
       await atomicWrite(COUNTER_FILE, JSON.stringify(counters, null, 2));
     } catch (error) {
@@ -201,29 +152,20 @@ class ReceiptService {
     }
   }
 
-  /**
-   * Generate receipt number from counter
-   */
   generateReceiptNumber(counter) {
     const paddedNumber = String(counter).padStart(4, '0');
     return `DN${paddedNumber}`;
   }
 
-  /**
-   * Reset receipt counter to 0 AND delete all receipts
-   */
   async resetReceiptCounter(newCounter = 0) {
     if (typeof newCounter !== 'number' || newCounter < 0) {
       throw new Error('Invalid counter value. Must be a positive number or 0.');
     }
-
     const oldCounter = await this.loadCounter();
     const receipts = await this.loadReceipts();
     const deletedCount = receipts.length;
-    
     await this.saveCounter(newCounter);
     await this.saveReceipts([]);
-
     return {
       oldCounter,
       newCounter,
@@ -233,28 +175,21 @@ class ReceiptService {
     };
   }
 
-  /**
-   * Create a new receipt
-   */
   async createReceipt(receiptData, userId, userRole) {
     console.log('\n=== CREATE RECEIPT DEBUG ===');
     console.log('userId:', userId);
     console.log('userId type:', typeof userId);
     console.log('userRole:', userRole);
-    
+
     const receipts = await this.loadReceipts();
-    
     const counter = await this.loadCounter();
     const newCounter = counter + 1;
-    
     const paddedCounter = String(newCounter).padStart(4, '0');
     const id = `RECEIPT-${paddedCounter}`;
     const receiptNumber = this.generateReceiptNumber(newCounter);
-    
     await this.saveCounter(newCounter);
 
     const today = new Date().toISOString().split('T')[0];
-
     console.log('Calling getUserNameById with:', userId);
     const createdByName = await this.getUserNameById(userId);
     console.log('getUserNameById returned:', createdByName);
@@ -276,7 +211,6 @@ class ReceiptService {
       additionalText: receiptData.additionalText || '',
       items: receiptData.items || [],
       notes: receiptData.notes || '',
-      // ✅ NEW: Text-based Terms & Conditions
       includeTermsAndConditions: receiptData.includeTermsAndConditions || false,
       termsAndConditionsText: receiptData.termsAndConditionsText || '',
       createdBy: userId,
@@ -288,65 +222,45 @@ class ReceiptService {
 
     receipts.push(newReceipt);
     await this.saveReceipts(receipts);
-
     console.log('Receipt created with name:', newReceipt.createdByName);
     return newReceipt;
   }
 
-  /**
-   * Add creator names to receipts
-   */
   async enrichReceiptsWithCreatorNames(receipts) {
     const users = await this.loadUsers();
-    
     return Promise.all(receipts.map(async receipt => {
       const user = users.find(u => u.id === receipt.createdBy);
-      
       if (user && user.name) {
-        return {
-          ...receipt,
-          createdByName: user.name
-        };
+        return { ...receipt, createdByName: user.name };
       } else {
-        return {
-          ...receipt,
-          createdByName: 'Unknown User'
-        };
+        return { ...receipt, createdByName: 'Unknown User' };
       }
     }));
   }
 
-  /**
-   * Get all receipts with filtering and pagination
-   */
   async getAllReceipts(filters = {}, userId, userRole) {
     let receipts = await this.loadReceipts();
-
     receipts = await this.enrichReceiptsWithCreatorNames(receipts);
 
     if (userRole === 'employee' || userRole === 'admin') {
       receipts = receipts.filter(r => r.createdBy === userId);
     }
-
     if (filters.receiptNumber) {
-      receipts = receipts.filter(r => 
+      receipts = receipts.filter(r =>
         r.receiptNumber.toLowerCase().includes(filters.receiptNumber.toLowerCase())
       );
     }
-
     if (filters.startDate) {
       receipts = receipts.filter(r => r.date >= filters.startDate);
     }
     if (filters.endDate) {
       receipts = receipts.filter(r => r.date <= filters.endDate);
     }
-
     if (filters.to) {
-      receipts = receipts.filter(r => 
+      receipts = receipts.filter(r =>
         r.to.toLowerCase().includes(filters.to.toLowerCase())
       );
     }
-
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       receipts = receipts.filter(r =>
@@ -364,7 +278,6 @@ class ReceiptService {
     const limit = filters.limit || 10;
     const startIndex = (page - 1) * limit;
     const endIndex = page * limit;
-
     const paginatedReceipts = receipts.slice(startIndex, endIndex);
 
     return {
@@ -378,16 +291,10 @@ class ReceiptService {
     };
   }
 
-  /**
-   * Get receipt by ID
-   */
   async getReceiptById(id, userId, userRole) {
     const receipts = await this.loadReceipts();
     const receipt = receipts.find(r => r.id === id);
-
-    if (!receipt) {
-      throw new Error('Receipt not found');
-    }
+    if (!receipt) throw new Error('Receipt not found');
 
     if (userRole === 'employee' || userRole === 'admin') {
       if (receipt.createdBy !== userId) {
@@ -396,23 +303,13 @@ class ReceiptService {
     }
 
     const createdByName = await this.getUserNameById(receipt.createdBy);
-
-    return {
-      ...receipt,
-      createdByName: createdByName || receipt.createdByName || 'Unknown User'
-    };
+    return { ...receipt, createdByName: createdByName || receipt.createdByName || 'Unknown User' };
   }
 
-  /**
-   * Get receipt by receipt number
-   */
   async getReceiptByNumber(receiptNumber, userId, userRole) {
     const receipts = await this.loadReceipts();
     const receipt = receipts.find(r => r.receiptNumber === receiptNumber);
-
-    if (!receipt) {
-      throw new Error('Receipt not found');
-    }
+    if (!receipt) throw new Error('Receipt not found');
 
     if (userRole === 'employee' || userRole === 'admin') {
       if (receipt.createdBy !== userId) {
@@ -421,26 +318,15 @@ class ReceiptService {
     }
 
     const createdByName = await this.getUserNameById(receipt.createdBy);
-
-    return {
-      ...receipt,
-      createdByName: createdByName || receipt.createdByName || 'Unknown User'
-    };
+    return { ...receipt, createdByName: createdByName || receipt.createdByName || 'Unknown User' };
   }
 
-  /**
-   * Update receipt
-   */
   async updateReceipt(id, updateData, userId, userRole) {
     const receipts = await this.loadReceipts();
     const receiptIndex = receipts.findIndex(r => r.id === id);
-
-    if (receiptIndex === -1) {
-      throw new Error('Receipt not found');
-    }
+    if (receiptIndex === -1) throw new Error('Receipt not found');
 
     const receipt = receipts[receiptIndex];
-
     if (userRole === 'employee' || userRole === 'admin') {
       if (receipt.createdBy !== userId) {
         throw new Error('Access denied: You can only edit your own receipts');
@@ -458,7 +344,6 @@ class ReceiptService {
     if (updateData.additionalText !== undefined) receipt.additionalText = updateData.additionalText;
     if (updateData.items !== undefined) receipt.items = updateData.items;
     if (updateData.notes !== undefined) receipt.notes = updateData.notes;
-    // ✅ UPDATE: Handle text-based Terms & Conditions
     if (updateData.includeTermsAndConditions !== undefined) {
       receipt.includeTermsAndConditions = updateData.includeTermsAndConditions;
     }
@@ -467,32 +352,20 @@ class ReceiptService {
     }
 
     receipt.updatedAt = new Date().toISOString();
-
     receipts[receiptIndex] = receipt;
     await this.saveReceipts(receipts);
 
     const createdByName = await this.getUserNameById(receipt.createdBy);
-
-    return {
-      ...receipt,
-      createdByName: createdByName || receipt.createdByName || 'Unknown User'
-    };
+    return { ...receipt, createdByName: createdByName || receipt.createdByName || 'Unknown User' };
   }
 
-  /**
-   * Delete receipt
-   */
   async deleteReceipt(id) {
     const receipts = await this.loadReceipts();
     const receiptIndex = receipts.findIndex(r => r.id === id);
-
-    if (receiptIndex === -1) {
-      throw new Error('Receipt not found');
-    }
+    if (receiptIndex === -1) throw new Error('Receipt not found');
 
     const receipt = receipts[receiptIndex];
-    
-    // Delete from File Management
+
     if (receipt.pdfFilename) {
       const fileManagementService = require('./File-management.service');
       try {
@@ -503,7 +376,6 @@ class ReceiptService {
       }
     }
 
-    // Delete physical PDF if exists
     if (receipt.pdfFilename) {
       const pdfPath = path.join(__dirname, '../../data/receipts/pdfs', receipt.pdfFilename);
       if (fsSync.existsSync(pdfPath)) {
@@ -513,27 +385,16 @@ class ReceiptService {
 
     receipts.splice(receiptIndex, 1);
     await this.saveReceipts(receipts);
-
     return { message: 'Receipt deleted successfully' };
   }
 
-  /**
-   * Get receipt statistics
-   */
   async getReceiptStats(userId, userRole) {
     let receipts = await this.loadReceipts();
-
     if (userRole === 'employee' || userRole === 'admin') {
       receipts = receipts.filter(r => r.createdBy === userId);
     }
 
-    const stats = {
-      totalReceipts: receipts.length,
-      thisMonth: 0,
-      thisWeek: 0,
-      today: 0
-    };
-
+    const stats = { totalReceipts: receipts.length, thisMonth: 0, thisWeek: 0, today: 0 };
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
@@ -541,7 +402,6 @@ class ReceiptService {
 
     receipts.forEach(receipt => {
       const receiptDate = new Date(receipt.createdAt);
-      
       if (receiptDate >= startOfMonth) stats.thisMonth++;
       if (receiptDate >= startOfWeek) stats.thisWeek++;
       if (receiptDate >= startOfDay) stats.today++;
@@ -551,50 +411,59 @@ class ReceiptService {
   }
 
   /**
-   * ✅ UPDATED: Generate receipt PDF with language-aware Terms & Conditions
+   * ✅ Generate receipt PDF.
+   *
+   *  Final page order is ALWAYS:
+   *    1. Main receipt page(s)
+   *    2. Attachment PDF page(s)   ← if provided
+   *    3. Terms & Conditions page  ← ALWAYS LAST
+   *
+   *  Key fix: termsText is NOT passed into pdfGenerator.generateReceiptPDF().
+   *  addTermsAndConditionsPage() is called as the very last step, after all
+   *  attachments have already been merged in.
    */
   async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
     const receipt = await this.getReceiptById(id, userId, userRole);
-    
+
     console.log('╔══════════════════════════════════════════════════════════╗');
     console.log('║       GENERATING RECEIPT PDF                             ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
     console.log('📄 Receipt Number:', receipt.receiptNumber);
     console.log('📎 Include Terms & Conditions:', receipt.includeTermsAndConditions);
-    
-    // ✅ Detect receipt language
+
+    // Detect receipt language
     const receiptLanguage = this.detectLanguage(receipt);
     console.log('🌐 Detected Language:', receiptLanguage === 'ar' ? 'Arabic' : 'English');
-    
-    // ✅ Get Terms & Conditions text in the same language as receipt
+
+    // Resolve Terms & Conditions text — will be appended as the very last page
     let termsText = null;
     if (receipt.includeTermsAndConditions) {
       if (receipt.termsAndConditionsText && receipt.termsAndConditionsText.trim()) {
-        // Use custom Terms & Conditions if provided
         termsText = receipt.termsAndConditionsText;
         console.log('📎 Using custom Terms & Conditions');
       } else {
-        // Use default Terms & Conditions in the same language
         termsText = pdfGenerator.getDefaultTermsAndConditions(receiptLanguage);
         console.log('📎 Using default Terms & Conditions in', receiptLanguage === 'ar' ? 'Arabic' : 'English');
       }
     }
-    
+
     console.log('📎 Terms Text Length:', termsText?.length || 0);
     console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
     console.log('════════════════════════════════════════════════════════════');
-    
+
     const customFilename = this.createReceiptFilename(receipt);
-    
-    // ✅ Pass termsText to PDF generator (language is detected automatically)
+
+    // ── Generate main receipt PDF ────────────────────────────────────────────
+    // Pass null for termsText — T&C is appended AFTER the attachment below,
+    // so it is guaranteed to always be the final page.
     const pdfResult = await pdfGenerator.generateReceiptPDF(
-      receipt, 
+      receipt,
       customFilename,
-      termsText
+      null  // ← intentionally null
     );
-    
+
+    // Validate and queue the attachment (if any)
     const pdfsToMerge = [];
-    
     if (attachmentPdf) {
       const isValid = await pdfGenerator.isValidPDF(attachmentPdf);
       if (isValid) {
@@ -604,14 +473,16 @@ class ReceiptService {
         console.warn('⚠️ Invalid user attachment PDF, skipping');
       }
     }
-    
+
     let finalPdfResult = pdfResult;
+
     try {
       if (pdfsToMerge.length > 0) {
-        console.log(`🔄 Merging ${pdfsToMerge.length} PDF(s) with receipt...`);
-        
+        // ── Step 1: Merge attachment(s) after the main receipt ───────────────
+        console.log(`🔄 Merging ${pdfsToMerge.length} attachment(s) with receipt...`);
+
         let currentPath = pdfResult.filepath;
-        
+
         for (let i = 0; i < pdfsToMerge.length; i++) {
           const mergeResult = await pdfGenerator.mergePDFs(
             currentPath,
@@ -620,7 +491,7 @@ class ReceiptService {
             pdfResult.language
           );
           currentPath = mergeResult.filepath;
-          
+
           if (i === pdfsToMerge.length - 1) {
             finalPdfResult = {
               ...pdfResult,
@@ -631,16 +502,17 @@ class ReceiptService {
             };
           }
         }
-        
-        console.log('✅ PDF merge completed successfully');
+
+        console.log('✅ Attachment merge completed successfully');
       } else {
+        // ── Step 1 (no attachment): stamp headers/footers only ───────────────
         const headerResult = await pdfGenerator.mergePDFs(
           pdfResult.filepath,
           null,
           customFilename,
           pdfResult.language
         );
-        
+
         finalPdfResult = {
           ...pdfResult,
           filename: headerResult.filename,
@@ -649,14 +521,30 @@ class ReceiptService {
           pageCount: headerResult.pageCount
         };
       }
+
+      // ── Step 2: Append Terms & Conditions as the VERY LAST page ─────────
+      // This always runs after all attachments are merged, so T&C is
+      // guaranteed to be the final page regardless of whether there is
+      // an attachment or not.
+      if (termsText) {
+        console.log('📄 Appending Terms & Conditions as the last page...');
+        await pdfGenerator.addTermsAndConditionsPage(
+          finalPdfResult.filepath,
+          termsText,
+          receiptLanguage
+        );
+        console.log('✅ Terms & Conditions appended as last page');
+      }
+
     } catch (mergeError) {
       console.error('❌ PDF merge/header failed:', mergeError.message);
       finalPdfResult.mergeError = mergeError.message;
     }
-    
+
+    // Persist PDF metadata back to the receipt record
     const receipts = await this.loadReceipts();
     const receiptIndex = receipts.findIndex(r => r.id === id);
-    
+
     if (receiptIndex !== -1) {
       receipts[receiptIndex].pdfFilename = finalPdfResult.filename;
       receipts[receiptIndex].pdfLanguage = finalPdfResult.language;
@@ -667,19 +555,16 @@ class ReceiptService {
       }
       await this.saveReceipts(receipts);
     }
-    
+
     console.log('════════════════════════════════════════════════════════════');
     console.log('✅ PDF generation complete!');
     console.log('════════════════════════════════════════════════════════════\n');
-    
-    return {
-      receipt,
-      pdf: finalPdfResult
-    };
+
+    return { receipt, pdf: finalPdfResult };
   }
 
   /**
-   * ✅ Send receipt PDF by email - Using system credentials with creator info
+   * Send receipt PDF by email
    */
   async sendReceiptByEmail(receiptId, userId, userRole, recipientEmail) {
     try {
@@ -687,8 +572,7 @@ class ReceiptService {
       console.log('Receipt ID:', receiptId);
       console.log('User ID:', userId);
       console.log('Recipient:', recipientEmail);
-      
-      // ✅ Check credentials first
+
       if (!EMAIL_USER || !EMAIL_PASS) {
         console.error('❌ Email credentials missing!');
         console.error('EMAIL_USER:', EMAIL_USER ? '✅ Set' : '❌ Not set');
@@ -696,7 +580,6 @@ class ReceiptService {
         throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
       }
 
-      // Get receipt
       const receipt = await this.getReceiptById(receiptId, userId, userRole);
       console.log('✅ Receipt found:', receipt.receiptNumber);
 
@@ -705,49 +588,33 @@ class ReceiptService {
       }
 
       const pdfPath = path.join(__dirname, '../../data/receipts/pdfs', receipt.pdfFilename);
-
-      if (!fsSync.existsSync(pdfPath)) {
-        throw new Error('PDF file not found');
-      }
+      if (!fsSync.existsSync(pdfPath)) throw new Error('PDF file not found');
       console.log('✅ PDF file found');
 
-      // Get creator's information
       const users = await this.loadUsers();
       const creator = users.find(u => u.id === receipt.createdBy);
-      
       const senderName = creator && creator.name ? creator.name : 'Omega System';
       const creatorEmail = creator && creator.email ? creator.email : null;
-      
       console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
 
-      // ✅ Create transporter with system credentials
       console.log('📧 Creating email transporter...');
       console.log('  - Host:', EMAIL_HOST);
       console.log('  - Port:', EMAIL_PORT);
       console.log('  - User:', EMAIL_USER);
-      
+
       const transporter = nodemailer.createTransport({
         host: EMAIL_HOST,
         port: EMAIL_PORT,
         secure: EMAIL_PORT === 465,
-        auth: {
-          user: EMAIL_USER,
-          pass: EMAIL_PASS,
-        },
-        tls: {
-          rejectUnauthorized: false
-        }
+        auth: { user: EMAIL_USER, pass: EMAIL_PASS },
+        tls: { rejectUnauthorized: false }
       });
 
-      // ✅ Verify connection
       console.log('🔄 Verifying SMTP connection...');
       await transporter.verify();
       console.log('✅ SMTP connection verified');
 
-      // ✅ Use custom filename pattern in email attachment
       const emailAttachmentName = this.createReceiptFilename(receipt);
-
-      // Email subject and body
       const subject = `Receipt ${receipt.receiptNumber}`;
       const text = `Please find attached the receipt ${receipt.receiptNumber}.\n\nTo: ${receipt.to || 'N/A'}\nDate: ${receipt.date}\nProject Code: ${receipt.projectCode || 'N/A'}\n\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
       const html = `
@@ -780,20 +647,14 @@ class ReceiptService {
         </div>
       `;
 
-      // ✅ Send email with custom filename
       console.log('📧 Sending email...');
       const mailOptions = {
         from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
         to: recipientEmail,
-        subject: subject,
-        text: text,
-        html: html,
-        attachments: [
-          {
-            filename: emailAttachmentName,
-            path: pdfPath,
-          },
-        ],
+        subject,
+        text,
+        html,
+        attachments: [{ filename: emailAttachmentName, path: pdfPath }]
       };
 
       if (creatorEmail) {
@@ -809,9 +670,7 @@ class ReceiptService {
       console.log('  - To:', recipientEmail);
       console.log('  - Sender Name:', senderName);
       console.log('  - Attachment Name:', emailAttachmentName);
-      if (creatorEmail) {
-        console.log('  - Reply-To:', creatorEmail);
-      }
+      if (creatorEmail) console.log('  - Reply-To:', creatorEmail);
       console.log('========================\n');
 
       return {
@@ -823,12 +682,8 @@ class ReceiptService {
       };
     } catch (error) {
       console.error('❌ Email sending error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        code: error.code,
-        command: error.command
-      });
-      
+      console.error('Error details:', { message: error.message, code: error.code, command: error.command });
+
       let errorMessage = error.message;
       if (error.code === 'EAUTH') {
         errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';
@@ -837,7 +692,7 @@ class ReceiptService {
       } else if (error.message.includes('Missing credentials')) {
         errorMessage = 'Email credentials are not configured. Please set EMAIL_USER and EMAIL_APP_PASSWORD in your .env file.';
       }
-      
+
       throw new Error(`Failed to send email: ${errorMessage}`);
     }
   }
