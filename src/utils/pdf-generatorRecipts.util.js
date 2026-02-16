@@ -1,4 +1,4 @@
-// src/utils/pdf-generatorRecipts.util.js - UPDATED: Accepts custom filename parameter
+// src/utils/pdf-generatorRecipts.util.js - UPDATED: Restructured table layout + Fixed PDF merge
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -27,7 +27,7 @@ class PDFGenerator {
 
   DEFAULT_TERMS_EN = `Terms and Conditions
 
-All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier’s scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
+All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier's scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
 
 Any additional work, variations, modifications, or requirements not specified in this document shall be subject to additional cost and corresponding time adjustments, as applicable. Fees related to studies, design approvals, authority approvals, permits, stamping, engineering calculations, or any similar technical requirements are not included unless explicitly stated.
 
@@ -44,6 +44,13 @@ Execution and delivery timelines are subject to order confirmation, receipt of r
 Estimated execution period: ( ) days / weeks / months from the date of order confirmation.`;
 
 
+
+  /**
+   * ✅ Get default Terms & Conditions text based on language
+   */
+  getDefaultTermsAndConditions(language = 'ar') {
+    return language === 'ar' ? this.DEFAULT_TERMS_AR : this.DEFAULT_TERMS_EN;
+  }
 
   isArabic(text) {
     if (!text) return false;
@@ -102,7 +109,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         dateOfIssue: 'DATE OF ISSUE',
         additionalInfo: 'يرجى استلام ما تم إدراجه أدناه',
         additionalNotes: 'ملاحظات إضافية',
-        termsAndConditions: 'الشروط والأحكام' // ✅ ADD THIS LINE
+        termsAndConditions: 'الشروط والأحكام'
       },
       en: {
         title: 'Delivery Notice',
@@ -130,7 +137,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         dateOfIssue: 'DATE OF ISSUE',
         additionalInfo: 'Please receive the items listed below:',
         additionalNotes: 'Additional Notes',
-        termsAndConditions: 'Terms and Conditions' // ✅ ADD THIS LINE
+        termsAndConditions: 'Terms and Conditions'
       }
     };
 
@@ -322,6 +329,7 @@ body {
   page-break-inside: avoid;
 }
 
+/* ✅ UPDATED: Details box with 3-column layout (key:value on same line) */
 .details-box {
   border: 2px solid var(--primary);
   padding: 0;
@@ -335,7 +343,7 @@ body {
 .detail-row {
   display: flex;
   border-bottom: 1px solid #e0e0e0;
-  min-height: 36px;
+  min-height: 45px;
 }
 
 .detail-row:last-child {
@@ -346,29 +354,37 @@ body {
   background-color: #f9f9f9;
 }
 
-.detail-label {
-  width: 30%;
-  text-align: left;
-  font-weight: bold;
-  padding: 10px 18px;
-  background-color: #e8f0fa;
-  border-${isRTL ? 'left' : 'right'}: 2px solid var(--primary);
+.detail-cell {
+  width: 33.33%;
+  padding: 12px 15px;
+  border-${isRTL ? 'left' : 'right'}: 1px solid #e0e0e0;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  font-size: 13px;
-  color: var(--primary);
+  gap: 8px;
+  text-align: ${isRTL ? 'right' : 'left'};
 }
 
-.detail-value {
-  width: 70%;
-  text-align: left;
-  padding: 10px 18px;
-  background-color: #fff;
-  display: flex;
-  align-items: center;
+.detail-cell:last-child {
+  border-${isRTL ? 'left' : 'right'}: none;
+}
+
+.detail-cell-label {
+  font-weight: bold;
+  font-size: 12px;
+  color: var(--primary);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.detail-cell-value {
   font-size: 13px;
   color: #333;
+  line-height: 1.4;
+  flex: 1;
+}
+
+.detail-cell-empty {
+  visibility: hidden;
 }
 
 .items-table {
@@ -533,65 +549,103 @@ body {
   </div>
 
 
-
   <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>
 
-  <!-- Details Box -->
+  <!-- ✅ UPDATED: Details Box with 3-column layout (key: value on same line) -->
   <div class="details-box">
-    ${receipt.to ? `
+    <!-- Row 1: To, Address, Attention -->
+    ${receipt.to || receipt.address || receipt.attention ? `
     <div class="detail-row">
-      <div class="detail-label">${labels.to}:</div>
-      <div class="detail-value">${receipt.to}</div>
+      ${receipt.to ? `
+      <div class="detail-cell">
+        <span class="detail-cell-label">${labels.to}:</span>
+        <span class="detail-cell-value">${receipt.to}</span>
+      </div>
+      ` : `
+      <div class="detail-cell">
+        <span class="detail-cell-empty">-</span>
+      </div>
+      `}
+      ${receipt.address ? `
+      <div class="detail-cell">
+        <span class="detail-cell-label">${labels.address}:</span>
+        <span class="detail-cell-value">${receipt.address}</span>
+      </div>
+      ` : `
+      <div class="detail-cell">
+        <span class="detail-cell-empty">-</span>
+      </div>
+      `}
+      ${receipt.attention ? `
+      <div class="detail-cell">
+        <span class="detail-cell-label">${labels.attention}:</span>
+        <span class="detail-cell-value">${receipt.attention}</span>
+      </div>
+      ` : `
+      <div class="detail-cell">
+        <span class="detail-cell-empty">-</span>
+      </div>
+      `}
     </div>
     ` : ''}
     
-    ${receipt.address ? `
+    <!-- Row 2: Project Code, Work Location, Vehicle Number -->
+    ${receipt.projectCode || receipt.workLocation || receipt.companyNumber ? `
     <div class="detail-row">
-      <div class="detail-label">${labels.address}:</div>
-      <div class="detail-value">${receipt.address}</div>
+      ${receipt.projectCode ? `
+      <div class="detail-cell">
+        <span class="detail-cell-label">${labels.projectCode}:</span>
+        <span class="detail-cell-value">${receipt.projectCode}</span>
+      </div>
+      ` : `
+      <div class="detail-cell">
+        <span class="detail-cell-empty">-</span>
+      </div>
+      `}
+      ${receipt.workLocation ? `
+      <div class="detail-cell">
+        <span class="detail-cell-label">${labels.workLocation}:</span>
+        <span class="detail-cell-value">${receipt.workLocation}</span>
+      </div>
+      ` : `
+      <div class="detail-cell">
+        <span class="detail-cell-empty">-</span>
+      </div>
+      `}
+      ${receipt.companyNumber ? `
+      <div class="detail-cell">
+        <span class="detail-cell-label">${labels.vehicleNumber}:</span>
+        <span class="detail-cell-value">${receipt.companyNumber}</span>
+      </div>
+      ` : `
+      <div class="detail-cell">
+        <span class="detail-cell-empty">-</span>
+      </div>
+      `}
     </div>
     ` : ''}
     
-    ${receipt.attention ? `
+    <!-- Row 3: Date, Receipt Number -->
     <div class="detail-row">
-      <div class="detail-label">${labels.attention}:</div>
-      <div class="detail-value">${receipt.attention}</div>
+      <div class="detail-cell">
+        <span class="detail-cell-label">${labels.date}:</span>
+        <span class="detail-cell-value">${formattedDate}</span>
+      </div>
+      ${receipt.receiptNumber ? `
+      <div class="detail-cell">
+        <span class="detail-cell-label">${labels.receiptNumber}:</span>
+        <span class="detail-cell-value">${receipt.receiptNumber}</span>
+      </div>
+      ` : `
+      <div class="detail-cell">
+        <span class="detail-cell-empty">-</span>
+      </div>
+      `}
+      <div class="detail-cell">
+        <span class="detail-cell-empty">-</span>
+      </div>
     </div>
-    ` : ''}
-    
-    ${receipt.projectCode ? `
-    <div class="detail-row">
-      <div class="detail-label">${labels.projectCode}:</div>
-      <div class="detail-value">${receipt.projectCode}</div>
-    </div>
-    ` : ''}
-    
-    ${receipt.workLocation ? `
-    <div class="detail-row">
-      <div class="detail-label">${labels.workLocation}:</div>
-      <div class="detail-value">${receipt.workLocation}</div>
-    </div>
-    ` : ''}
-    
-    ${receipt.companyNumber ? `
-    <div class="detail-row">
-      <div class="detail-label">${labels.vehicleNumber}:</div>
-      <div class="detail-value">${receipt.companyNumber}</div>
-    </div>
-    ` : ''}
-    
-    <div class="detail-row">
-      <div class="detail-label">${labels.date}:</div>
-      <div class="detail-value">${formattedDate}</div>
-    </div>
-    
-    ${receipt.receiptNumber ? `
-    <div class="detail-row">
-      <div class="detail-label">${labels.receiptNumber}:</div>
-      <div class="detail-value">${receipt.receiptNumber}</div>
-    </div>
-    ` : ''}
   </div>
 
   <!-- ✅ Additional Text Box (only if exists) -->
@@ -650,7 +704,7 @@ body {
 <html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
 <head>
 <meta charset="UTF-8">
-<title>الشروط والأحكام - OMEGA</title>
+<title>${isRTL ? 'الشروط والأحكام' : 'Terms and Conditions'} - OMEGA</title>
 <style>
 * {
   box-sizing: border-box;
@@ -782,9 +836,6 @@ body {
     </div>
   </div>
 
-  <!-- Blue Separator -->
-  <div class="blue-separator"></div>
-
   <!-- Title -->
   <h1 class="title">${isRTL ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>
 
@@ -799,12 +850,14 @@ body {
   }
 
   /**
-   * ✅ NEW: Add Terms & Conditions page to existing PDF
+   * ✅ FIXED: Add Terms & Conditions page to existing PDF
    */
   async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
     let browser;
     
     try {
+      console.log('📄 Generating Terms & Conditions page...');
+      
       // Generate Terms HTML
       const termsHTML = this.generateTermsHTML(termsText, language);
       
@@ -878,7 +931,7 @@ body {
         fs.unlinkSync(tempTermsPath);
         console.log('✅ Terms & Conditions page added successfully');
       } catch (err) {
-        console.log('Could not delete temp Terms PDF:', err.message);
+        console.log('⚠️ Could not delete temp Terms PDF:', err.message);
       }
       
     } catch (error) {
@@ -890,10 +943,7 @@ body {
     }
   }
   /**
-   * ✅ UPDATED: Generate receipt PDF with custom filename parameter
-   */
-  /**
-   * ✅ UPDATED: Generate receipt PDF with custom filename and T&C
+   * ✅ UPDATED: Generate receipt PDF with custom filename and T&C in same language
    */
   async generateReceiptPDF(receipt, customFilename = null, termsAndConditionsText = null) {
     const language = this.detectLanguage(receipt);
@@ -943,13 +993,14 @@ body {
         await browser.close();
         browser = null;
 
-        // ✅ If Terms & Conditions text is provided, add it as a new page
+        // ✅ If Terms & Conditions text is provided, add it as a new page WITH SAME LANGUAGE
         if (termsAndConditionsText && termsAndConditionsText.trim()) {
-          console.log('📄 Adding Terms & Conditions page to PDF...');
+          console.log(`📄 Adding Terms & Conditions page to PDF in ${language === 'ar' ? 'Arabic' : 'English'}...`);
           await this.addTermsAndConditionsPage(filepath, termsAndConditionsText, language);
         }
 
         console.log('✅ PDF generated with filename:', filename);
+        console.log(`✅ Language: ${language === 'ar' ? 'Arabic' : 'English'}`);
 
         resolve({ 
           filename, 
@@ -1025,7 +1076,7 @@ body {
         logoImage = await pdfDoc.embedPng(logoBytes);
       }
     } catch (error) {
-      console.log('Logo not found');
+      console.log('⚠️ Logo not found');
     }
 
     for (let i = 0; i < totalPages; i++) {
@@ -1142,96 +1193,96 @@ body {
   }
 
   /**
-   * ✅ UPDATED: mergePDFs now preserves custom filename when merging
+   * ✅ FIXED: mergePDFs now properly handles all merging scenarios
    */
   async mergePDFs(generatedPdfPath, attachmentPdf = null, outputFilename = null, language = 'ar') {
     try {
-      if (!attachmentPdf) {
-        const pdfBytes = fs.readFileSync(generatedPdfPath);
-        const pdfDoc = await PDFDocument.load(pdfBytes);
-        
-        await this.addHeadersFootersToAllPages(pdfDoc, language);
-        
-        const updatedBytes = await pdfDoc.save();
-        fs.writeFileSync(generatedPdfPath, updatedBytes);
-        
-        return {
-          filepath: generatedPdfPath,
-          filename: path.basename(generatedPdfPath),
-          merged: false,
-          pageCount: {
-            total: pdfDoc.getPageCount()
-          }
-        };
-      }
+      console.log('📄 Starting PDF merge process...');
+      console.log('   - Generated PDF:', generatedPdfPath);
+      console.log('   - Has attachment:', !!attachmentPdf);
+      console.log('   - Output filename:', outputFilename);
 
+      // Step 1: Load the generated PDF
       const generatedPdfBytes = fs.readFileSync(generatedPdfPath);
-      const generatedPdf = await PDFDocument.load(generatedPdfBytes);
+      let workingPdf = await PDFDocument.load(generatedPdfBytes);
 
-      let attachmentPdfBytes;
-      if (Buffer.isBuffer(attachmentPdf)) {
-        attachmentPdfBytes = attachmentPdf;
-      } else if (typeof attachmentPdf === 'string') {
-        attachmentPdfBytes = fs.readFileSync(attachmentPdf);
-      } else {
-        throw new Error('Invalid attachment format');
-      }
-
-      const attachmentPdfDoc = await PDFDocument.load(attachmentPdfBytes);
-      const mergedPdf = await PDFDocument.create();
-      const a4 = this.getA4Dimensions();
-
-      const generatedPages = await mergedPdf.copyPages(
-        generatedPdf,
-        generatedPdf.getPageIndices()
-      );
-      generatedPages.forEach(page => mergedPdf.addPage(page));
-
-      const attachmentIndices = attachmentPdfDoc.getPageIndices();
-      for (const index of attachmentIndices) {
-        const [copiedPage] = await mergedPdf.copyPages(attachmentPdfDoc, [index]);
-        const { width, height} = copiedPage.getSize();
+      // Step 2: If there's an attachment, merge it
+      if (attachmentPdf) {
+        console.log('📎 Merging attachment PDF...');
         
-        const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
-        
-        if (!isA4) {
-          await this.resizePageToA4(copiedPage);
+        let attachmentPdfBytes;
+        if (Buffer.isBuffer(attachmentPdf)) {
+          attachmentPdfBytes = attachmentPdf;
+        } else if (typeof attachmentPdf === 'string') {
+          attachmentPdfBytes = fs.readFileSync(attachmentPdf);
+        } else {
+          throw new Error('Invalid attachment format');
         }
-        
-        mergedPdf.addPage(copiedPage);
+
+        const attachmentPdfDoc = await PDFDocument.load(attachmentPdfBytes);
+        const mergedPdf = await PDFDocument.create();
+        const a4 = this.getA4Dimensions();
+
+        // Copy pages from generated PDF
+        const generatedPages = await mergedPdf.copyPages(
+          workingPdf,
+          workingPdf.getPageIndices()
+        );
+        generatedPages.forEach(page => mergedPdf.addPage(page));
+
+        // Copy and resize pages from attachment
+        const attachmentIndices = attachmentPdfDoc.getPageIndices();
+        for (const index of attachmentIndices) {
+          const [copiedPage] = await mergedPdf.copyPages(attachmentPdfDoc, [index]);
+          const { width, height } = copiedPage.getSize();
+          
+          const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
+          
+          if (!isA4) {
+            await this.resizePageToA4(copiedPage);
+          }
+          
+          mergedPdf.addPage(copiedPage);
+        }
+
+        workingPdf = mergedPdf;
+        console.log('✅ Attachment merged successfully');
       }
 
-      await this.addHeadersFootersToAllPages(mergedPdf, language);
+      // Step 3: Add headers and footers to all pages
+      console.log('📄 Adding headers and footers...');
+      await this.addHeadersFootersToAllPages(workingPdf, language);
 
-      // ✅ Use custom filename if provided, otherwise create default
-      const finalFilename = outputFilename || 
-        path.basename(generatedPdfPath).replace('.pdf', `_merged_${Date.now()}.pdf`);
-      
+      // Step 4: Save the final PDF
+      const finalFilename = outputFilename || path.basename(generatedPdfPath);
       const outputDir = path.dirname(generatedPdfPath);
       const outputPath = path.join(outputDir, finalFilename);
 
-      const mergedPdfBytes = await mergedPdf.save();
-      fs.writeFileSync(outputPath, mergedPdfBytes);
+      const finalPdfBytes = await workingPdf.save();
+      fs.writeFileSync(outputPath, finalPdfBytes);
 
-      try {
-        fs.unlinkSync(generatedPdfPath);
-      } catch (err) {
-        console.log('Could not delete original');
+      // Step 5: Clean up original file if output path is different
+      if (outputPath !== generatedPdfPath) {
+        try {
+          fs.unlinkSync(generatedPdfPath);
+          console.log('✅ Original file cleaned up');
+        } catch (err) {
+          console.log('⚠️ Could not delete original file');
+        }
       }
 
-      console.log('✅ PDF merged with filename:', finalFilename);
+      console.log('✅ PDF merge completed:', finalFilename);
 
       return {
         filepath: outputPath,
         filename: finalFilename,
-        merged: true,
+        merged: !!attachmentPdf,
         pageCount: {
-          generated: generatedPdf.getPageCount(),
-          attachment: attachmentPdfDoc.getPageCount(),
-          total: mergedPdf.getPageCount()
+          total: workingPdf.getPageCount()
         }
       };
     } catch (error) {
+      console.error('❌ PDF merge failed:', error);
       throw new Error(`PDF merge failed: ${error.message}`);
     }
   }

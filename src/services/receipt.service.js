@@ -1,4 +1,4 @@
-// src/services/receipt.service.js - UPDATED WITH CUSTOM FILENAME PATTERN
+// src/services/receipt.service.js - UPDATED WITH LANGUAGE-AWARE TERMS & CONDITIONS
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -10,7 +10,6 @@ const pdfGenerator = require('../utils/pdf-generatorRecipts.util');
 const RECEIPTS_FILE = path.join(__dirname, '../../data/receipts/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
 const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
-const STATIC_PDF_PATH = path.join(__dirname, '../../data/Terms And Conditions/terms-and-conditions.pdf');
 
 // ✅ Email configuration with proper credential checks
 const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
@@ -19,48 +18,42 @@ const EMAIL_USER = process.env.EMAIL_USER;
 const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
 
-
-
 class ReceiptService {
 
+  /**
+   * ✅ Detect language from receipt data
+   */
+  detectLanguage(receiptData) {
+    const fieldsToCheck = [
+      receiptData.to,
+      receiptData.address,
+      receiptData.workLocation,
+      receiptData.attention
+    ];
 
-DEFAULT_TERMS_AR = `الشروط والأحكام
+    let arabicCount = 0;
+    let totalFields = 0;
 
-تُعتبر جميع المواد والبنود والخدمات غير المذكورة صراحةً في هذا المستند مستثناة. كما أن أي خدمات أو أعمال تقع خارج نطاق عمل المورد غير مشمولة. ضريبة القيمة المضافة وأي رسوم حكومية أو تصاريح أو موافقات رسمية غير مشمولة ما لم يُذكر خلاف ذلك صراحةً. كما أن الأعمال المدنية وأعمال الرفع والمناولة وفك وإعادة تركيب العوائق الموجودة في الموقع أو أي أعمال مشابهة غير مشمولة ما لم يتم ذكرها بشكل واضح.
+    fieldsToCheck.forEach(field => {
+      if (field) {
+        totalFields++;
+        if (this.isArabic(field)) {
+          arabicCount++;
+        }
+      }
+    });
 
-أي أعمال إضافية أو تغييرات أو تعديلات أو متطلبات غير مذكورة في هذا المستند تخضع لتكاليف إضافية وتعديل في مدة التنفيذ حسب الحالة. كما أن رسوم الدراسات واعتماد التصاميم والموافقات الرسمية والتصاريح وختم المخططات والحسابات الهندسية أو أي متطلبات فنية مشابهة غير مشمولة ما لم يُذكر خلاف ذلك صراحةً.
+    return arabicCount > (totalFields / 2) ? 'ar' : 'en';
+  }
 
-الأسعار مبنية على أساس تنفيذ الطلب بالكامل كما هو محدد، وفي حال تنفيذ جزء من الطلب يحق للمورد تعديل الأسعار وفقًا لذلك.
-
-تكون شروط الدفع على النحو التالي:
-• ( )% دفعة مقدمة عند تأكيد الطلب  
-• ( )% أثناء التنفيذ / عند التوريد  
-• ( )% عند الانتهاء والتسليم النهائي  
-
-يسري هذا المستند لمدة ( ) يوم تقويمي / يوم عمل من تاريخ الإصدار ما لم يُذكر خلاف ذلك.
-
-تعتمد مدة التنفيذ والتوريد على تأكيد الطلب واستلام الموافقات اللازمة وجاهزية الموقع.  
-مدة التنفيذ التقديرية: ( ) يوم / أسبوع / شهر من تاريخ تأكيد الطلب.`;
-
-
-
- DEFAULT_TERMS_EN = `Terms and Conditions
-
-All materials, items, and services not explicitly stated in this document shall be considered excluded. Any services or works falling outside the Supplier’s scope are not included. Value Added Tax (VAT) and any applicable governmental fees, permits, or approvals are not included unless otherwise expressly stated. Civil works, lifting equipment, handling, dismantling, re-installation of existing site obstacles, or any similar activities are excluded unless clearly mentioned.
-
-Any additional work, variations, modifications, or requirements not specified in this document shall be subject to additional cost and corresponding time adjustments, as applicable. Fees related to studies, design approvals, authority approvals, permits, stamping, engineering calculations, or any similar technical requirements are not included unless explicitly stated.
-
-Prices are based on the execution of the complete order as specified. In the event of partial order execution, the Supplier reserves the right to revise and amend the prices accordingly.
-
-Payment terms shall be as follows:
-• ( )% advance payment upon order confirmation  
-• ( )% during project execution / upon delivery  
-• ( )% upon completion and final handover  
-
-This document is valid for ( ) calendar / working days from the date of issuance unless otherwise stated.
-
-Execution and delivery timelines are subject to order confirmation, receipt of required approvals, and readiness of the project/site conditions.  
-Estimated execution period: ( ) days / weeks / months from the date of order confirmation.`;
+  /**
+   * ✅ Check if text is Arabic
+   */
+  isArabic(text) {
+    if (!text) return false;
+    const arabicPattern = /[\u0600-\u06FF]/;
+    return arabicPattern.test(text);
+  }
 
   /**
    * ✅ NEW: Create custom filename pattern: DN0005_Tarek_2026-02-07.pdf
@@ -465,7 +458,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     if (updateData.additionalText !== undefined) receipt.additionalText = updateData.additionalText;
     if (updateData.items !== undefined) receipt.items = updateData.items;
     if (updateData.notes !== undefined) receipt.notes = updateData.notes;
-        // ✅ UPDATE: Handle text-based Terms & Conditions
+    // ✅ UPDATE: Handle text-based Terms & Conditions
     if (updateData.includeTermsAndConditions !== undefined) {
       receipt.includeTermsAndConditions = updateData.includeTermsAndConditions;
     }
@@ -558,9 +551,9 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   }
 
   /**
-   * ✅ UPDATED: Generate receipt PDF with custom filename pattern
+   * ✅ UPDATED: Generate receipt PDF with language-aware Terms & Conditions
    */
-async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
+  async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
     const receipt = await this.getReceiptById(id, userId, userRole);
     
     console.log('╔══════════════════════════════════════════════════════════╗');
@@ -568,17 +561,36 @@ async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
     console.log('╚══════════════════════════════════════════════════════════╝');
     console.log('📄 Receipt Number:', receipt.receiptNumber);
     console.log('📎 Include Terms & Conditions:', receipt.includeTermsAndConditions);
-    console.log('📎 Terms Text Length:', receipt.termsAndConditionsText?.length || 0);
+    
+    // ✅ Detect receipt language
+    const receiptLanguage = this.detectLanguage(receipt);
+    console.log('🌐 Detected Language:', receiptLanguage === 'ar' ? 'Arabic' : 'English');
+    
+    // ✅ Get Terms & Conditions text in the same language as receipt
+    let termsText = null;
+    if (receipt.includeTermsAndConditions) {
+      if (receipt.termsAndConditionsText && receipt.termsAndConditionsText.trim()) {
+        // Use custom Terms & Conditions if provided
+        termsText = receipt.termsAndConditionsText;
+        console.log('📎 Using custom Terms & Conditions');
+      } else {
+        // Use default Terms & Conditions in the same language
+        termsText = pdfGenerator.getDefaultTermsAndConditions(receiptLanguage);
+        console.log('📎 Using default Terms & Conditions in', receiptLanguage === 'ar' ? 'Arabic' : 'English');
+      }
+    }
+    
+    console.log('📎 Terms Text Length:', termsText?.length || 0);
     console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
     console.log('════════════════════════════════════════════════════════════');
     
     const customFilename = this.createReceiptFilename(receipt);
     
-    // ✅ Pass termsAndConditionsText to PDF generator
+    // ✅ Pass termsText to PDF generator (language is detected automatically)
     const pdfResult = await pdfGenerator.generateReceiptPDF(
       receipt, 
       customFilename,
-      receipt.termsAndConditionsText // Pass the text
+      termsText
     );
     
     const pdfsToMerge = [];
@@ -732,7 +744,7 @@ async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
       await transporter.verify();
       console.log('✅ SMTP connection verified');
 
-      // ✅ UPDATED: Use custom filename pattern in email attachment
+      // ✅ Use custom filename pattern in email attachment
       const emailAttachmentName = this.createReceiptFilename(receipt);
 
       // Email subject and body
@@ -778,7 +790,7 @@ async generateReceiptPDF(id, userId, userRole, attachmentPdf = null) {
         html: html,
         attachments: [
           {
-            filename: emailAttachmentName, // ✅ Use custom filename
+            filename: emailAttachmentName,
             path: pdfPath,
           },
         ],
