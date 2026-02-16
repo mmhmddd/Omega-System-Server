@@ -1,5 +1,5 @@
 // ============================================================
-// COSTING SHEET SERVICE - WITH TEXT-BASED TERMS AND CONDITIONS
+// UPDATED COSTING SHEET SERVICE - T&C PAGE ALWAYS LAST (AFTER ATTACHMENTS)
 // src/services/costing-sheet.service.js
 // ============================================================
 const fs = require('fs').promises;
@@ -235,7 +235,7 @@ class CostingSheetService {
       notes: costingSheetData.notes || '',
       items: costingSheetData.items || [],
       additionalNotes: costingSheetData.additionalNotes || '',
-      // ✅ NEW: Store Terms & Conditions as text instead of file flag
+      // ✅ Store Terms & Conditions as text
       includeTermsAndConditions: costingSheetData.includeTermsAndConditions || false,
       termsAndConditionsText: costingSheetData.termsAndConditionsText || '',
       language: detectedLanguage,
@@ -310,23 +310,21 @@ class CostingSheetService {
   }
 
   /**
-   * ✅ GENERATE COSTING SHEET PDF WITH TEXT-BASED TERMS & CONDITIONS
-   * The PDF generator will receive the termsAndConditionsText and add it as a page
+   * ✅ UPDATED: Generate Costing Sheet PDF with T&C page ALWAYS LAST (after attachments)
    */
   async generateCostingSheetPDF(id, userId, userRole, attachmentPdf = null) {
-    // Get costing sheet data
     const costingSheet = await this.getCostingSheetById(id, userId, userRole);
 
     console.log('╔══════════════════════════════════════════════════════════╗');
     console.log('║       GENERATING COSTING SHEET PDF                       ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
     console.log('📄 CS Number:', costingSheet.csNumber);
-    console.log('📎 Include Terms & Conditions:', costingSheet.includeTermsAndConditions);
-    console.log('📎 Terms Text Length:', costingSheet.termsAndConditionsText?.length || 0);
-    console.log('📎 User Attachment:', attachmentPdf ? 'Yes' : 'No');
+    console.log('📄 Include T&C (checkbox):', costingSheet.includeTermsAndConditions);
+    console.log('📄 T&C Text Available:', !!costingSheet.termsAndConditionsText);
+    console.log('📄 T&C Text Length:', costingSheet.termsAndConditionsText?.length || 0);
+    console.log('📄 User Attachment:', attachmentPdf ? 'Yes' : 'No');
     console.log('════════════════════════════════════════════════════════════');
 
-    // Delete old PDF if exists
     if (costingSheet.pdfFilename) {
       const oldPdfPath = path.join(__dirname, '../../data/costing-sheets/pdfs', costingSheet.pdfFilename);
       if (fsSync.existsSync(oldPdfPath)) {
@@ -362,47 +360,66 @@ class CostingSheetService {
 
     console.log('📝 Custom filename:', customFilename);
 
-    // ✅ Pass termsAndConditionsText to PDF generator
+    // ✅ Process T&C text - will be added LAST
+    console.log('\n╔══════════════════════════════════════════════════════════╗');
+    console.log('║       PROCESSING TERMS & CONDITIONS DATA                 ║');
+    console.log('╚══════════════════════════════════════════════════════════╝');
+    
+    const termsTextToPass = (costingSheet.includeTermsAndConditions === true && costingSheet.termsAndConditionsText && costingSheet.termsAndConditionsText.trim()) 
+      ? costingSheet.termsAndConditionsText.trim()
+      : null;
+
+    console.log('📄 Checkbox enabled:', costingSheet.includeTermsAndConditions === true);
+    console.log('📄 Text exists:', !!costingSheet.termsAndConditionsText);
+    console.log('📄 Text not empty:', costingSheet.termsAndConditionsText && costingSheet.termsAndConditionsText.trim() !== '');
+    console.log('📄 Will add T&C page:', !!termsTextToPass);
+    
+    if (termsTextToPass) {
+      console.log('📄 T&C Text Length:', termsTextToPass.length);
+      console.log('📄 T&C Preview:', termsTextToPass.substring(0, 150) + '...');
+    } else {
+      console.log('⚠️  T&C page will NOT be added');
+    }
+    console.log('════════════════════════════════════════════════════════════\n');
+
+    // ✅ STEP 1: Generate main Costing Sheet PDF WITHOUT T&C
     const pdfResult = await costingSheetPdfGenerator.generateCostingSheetPDF(
       costingSheet, 
       customFilename,
-      costingSheet.termsAndConditionsText // Pass the text
+      null  // ✅ Don't add T&C yet - we'll add it LAST
     );
 
-    // Prepare list of PDFs to merge (user attachment only)
     const pdfsToMerge = [];
     
-    // Add user-uploaded attachment if provided
     if (attachmentPdf) {
       const isValid = await costingSheetPdfGenerator.isValidPDF(attachmentPdf);
       if (isValid) {
         pdfsToMerge.push(attachmentPdf);
         console.log('✅ Added user attachment PDF to merge list');
       } else {
-        console.warn('⚠️  Invalid user attachment PDF, skipping');
+        console.warn('⚠️ Invalid user attachment PDF, skipping');
       }
     }
 
-    // Merge all PDFs
     let finalPdfResult = pdfResult;
     try {
+      // ✅ STEP 2: Merge user attachments (if any)
       if (pdfsToMerge.length > 0) {
-        console.log(`🔄 Merging ${pdfsToMerge.length} additional PDF(s) with Costing Sheet...`);
+        console.log(`🔄 Merging ${pdfsToMerge.length} user attachment PDF(s)...`);
         
         let currentPath = pdfResult.filepath;
         
-        // Merge each PDF sequentially
         for (let i = 0; i < pdfsToMerge.length; i++) {
           console.log(`   Merging PDF ${i + 1} of ${pdfsToMerge.length}...`);
           const mergeResult = await costingSheetPdfGenerator.mergePDFs(
             currentPath,
             pdfsToMerge[i],
             null,
-            pdfResult.language
+            pdfResult.language,
+            false  // ✅ Don't add headers/footers yet
           );
           currentPath = mergeResult.filepath;
           
-          // Update final result on last merge
           if (i === pdfsToMerge.length - 1) {
             finalPdfResult = {
               ...pdfResult,
@@ -415,25 +432,41 @@ class CostingSheetService {
         }
         
         console.log('✅ PDF merge completed successfully');
-        console.log('   Total pages:', finalPdfResult.pageCount.total);
-      } else {
-        // No PDFs to merge, just add headers/footers
-        console.log('ℹ️  No additional PDFs to merge, adding headers/footers only...');
-        const headerResult = await costingSheetPdfGenerator.mergePDFs(
-          pdfResult.filepath,
-          null,
-          null,
+        console.log('   Total pages before T&C:', finalPdfResult.pageCount.total);
+      }
+
+      // ✅ STEP 3: Add Terms & Conditions page as LAST page (if enabled)
+      if (termsTextToPass) {
+        console.log('📄 Adding Terms & Conditions as LAST page...');
+        await costingSheetPdfGenerator.addTermsAndConditionsPage(
+          finalPdfResult.filepath, 
+          termsTextToPass, 
           pdfResult.language
         );
+        console.log('✅ Terms & Conditions page added as LAST page');
         
-        finalPdfResult = {
-          ...pdfResult,
-          filename: headerResult.filename,
-          filepath: headerResult.filepath,
-          merged: false,
-          pageCount: headerResult.pageCount
-        };
+        // Update page count
+        const updatedPageCount = await costingSheetPdfGenerator.getPageCount(finalPdfResult.filepath);
+        if (finalPdfResult.pageCount) {
+          finalPdfResult.pageCount.total = updatedPageCount;
+        }
+        finalPdfResult.hasTermsAndConditions = true;
       }
+
+      // ✅ STEP 4: Add headers and footers to ALL pages
+      console.log('ℹ️  Adding headers/footers to all pages...');
+      const headerResult = await costingSheetPdfGenerator.addHeadersAndFootersOnly(
+        finalPdfResult.filepath,
+        pdfResult.language
+      );
+      
+      finalPdfResult = {
+        ...finalPdfResult,
+        filename: headerResult.filename,
+        filepath: headerResult.filepath,
+        pageCount: headerResult.pageCount
+      };
+      
     } catch (mergeError) {
       console.error('❌ PDF merge/header failed:', mergeError.message);
       finalPdfResult.mergeError = mergeError.message;
@@ -456,6 +489,9 @@ class CostingSheetService {
 
     console.log('════════════════════════════════════════════════════════════');
     console.log('✅ PDF generation complete!');
+    console.log('   Filename:', finalPdfResult.filename);
+    console.log('   Has T&C Page:', !!finalPdfResult.hasTermsAndConditions);
+    console.log('   Total Pages:', finalPdfResult.pageCount?.total || 'Unknown');
     console.log('════════════════════════════════════════════════════════════\n');
 
     return {
