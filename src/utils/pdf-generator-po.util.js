@@ -1,4 +1,4 @@
-// src/utils/pdf-generator-po.util.js - PURCHASE ORDER PDF GENERATOR WITH CUSTOM FILENAME SUPPORT
+// src/utils/pdf-generator-po.util.js - PURCHASE ORDER PDF GENERATOR WITH FIXED HEADER
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -167,7 +167,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         accountant: 'المحاسب',
         docCode: 'OMEGA-PUR-05',
         issueDate: 'DATE OF ISSUE',
-        termsAndConditions: 'الشروط والأحكام' 
+        termsAndConditions: 'الشروط والأحكام'
       },
       en: {
         title: 'Purchase Order',
@@ -447,11 +447,10 @@ body {
   background: #fff;
 }
 
-/* ✅ NEW: Company info section without gray background */
+/* ✅ FIXED: Company info section matching Material Request format exactly */
 .company-info {
-  padding: 10px 0;
+  padding: 5px 0 10px 0;
   margin-bottom: 10px;
-  direction: ltr;
   break-inside: avoid;
   page-break-inside: avoid;
 }
@@ -460,44 +459,41 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  direction: ltr;
+  gap: 30px;
 }
 
-.company-left, .company-right {
+.company-col {
   width: 48%;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
-.company-left {
-  text-align: left;
-  direction: ltr;
-}
-
-.company-right {
+.company-col-right {
   text-align: right;
   direction: rtl;
 }
 
-.company-left p, .company-right p {
-  margin: 3px 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #333;
+.company-col-left {
+  text-align: left;
+  direction: ltr;
 }
 
-/* ✅ NEW: Blue line separator */
+.company-col p {
+  margin: 4px 0;
+}
+
+/* ✅ Blue line separator matching Material Request's green line */
 .separator-line {
   width: 100%;
-  height: 2px;
+  height: 3px;
   background-color: #2B4C8C;
-  margin: 15px 0;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  margin: 10px 0 20px 0;
 }
 
 .title {
   text-align: center;
-  margin: 15px 0;
-  font-size: 22px;
+  margin: 0 0 25px 0;
+  font-size: 24px;
   color: #2B4C8C;
   font-weight: bold;
   break-inside: avoid;
@@ -800,17 +796,17 @@ body {
 
 <div class="page-content">
 
-  <!-- ✅ NEW LAYOUT: Company info without gray background -->
+  <!-- ✅ FIXED: Company info header matching Material Request format exactly -->
   <div class="company-info">
     <div class="company-row">
-      <div class="company-left">
+      <div class="company-col company-col-left">
         <p><strong>${labels.companyNameEn}</strong></p>
         <p>${labels.taglineEn}</p>
         <p>${labels.countryEn}</p>
         <p>${labels.telEN}</p>
         <p>${labels.website}</p>
       </div>
-      <div class="company-right">
+      <div class="company-col company-col-right">
         <p><strong>${labels.companyNameAr}</strong></p>
         <p>${labels.tagline}</p>
         <p>${labels.countryAR}</p>
@@ -820,11 +816,9 @@ body {
     </div>
   </div>
 
+  <div class="separator-line"></div>
 
-  <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>
-
-  <!-- ✅ Doc info - only show if data exists -->
   ${(hasPONumber || hasDate) ? `
   <div class="doc-info">
     ${hasPONumber ? `
@@ -1014,8 +1008,6 @@ body {
     `;
   }
 
-  // Add these methods to the POPDFGenerator class in pdf-generator-po.util.js
-
 /**
  * ✅ Generate Terms & Conditions HTML Page for Purchase Orders - MATCHES MAIN PO FORMAT
  */
@@ -1112,49 +1104,49 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  direction: ltr;
+  gap: 30px;
 }
 
-.company-left, .company-right {
+.company-col {
   width: 48%;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
-.company-left {
-  text-align: left;
-  direction: ltr;
-}
-
-.company-right {
+.company-col-right {
   text-align: right;
   direction: rtl;
 }
 
-.company-left p, .company-right p {
-  margin: 3px 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #333;
+.company-col-left {
+  text-align: left;
+  direction: ltr;
 }
 
+.company-col p {
+  margin: 4px 0;
+}
+
+/* Blue separator line */
 .separator-line {
   width: 100%;
-  height: 2px;
+  height: 3px;
   background-color: #2B4C8C;
-  margin: 15px 0;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  margin: 10px 0 20px 0;
 }
 
+/* Title */
 .title {
   text-align: center;
-  margin: 15px 0 20px 0;
-  font-size: 22px;
+  margin: 0 0 25px 0;
+  font-size: 24px;
   color: #2B4C8C;
   font-weight: bold;
   break-inside: avoid;
   page-break-inside: avoid;
 }
 
+/* Terms Content */
 .terms-content {
   padding: 20px 0;
   font-size: 12px;
@@ -1171,15 +1163,38 @@ body {
     padding: 0;
     margin: 0;
   }
+  
+  .page-content {
+    margin: 0;
+  }
 }
 </style>
 </head>
 
 <body>
 <div class="page-content">
-  <!-- ✅ MATCHES MAIN PO: Logo on left with company info beside it -->
   <div class="header-container">
+    ${logoBase64 ? `<img src="${logoBase64}" class="company-logo-left" alt="OMEGA Logo" />` : ''}
+    <div class="company-info">
+      <div class="company-row">
+        <div class="company-col company-col-left">
+          <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+          <p>Design – Manufacture – Installation</p>
+          <p>Jordan</p>
+          <p>Tel: +96264161060 | Fax: +96264162060</p>
+        </div>
+        <div class="company-col company-col-right">
+          <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+          <p>تصميم – تصنيع – تركيب</p>
+          <p>المملكة الأردنية الهاشمية</p>
+          <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
+  <!-- Blue separator line -->
+  <div class="separator-line"></div>
 
   <!-- Title -->
   <h1 class="title">${language === 'ar' ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>
@@ -1252,11 +1267,9 @@ async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
     // 3. Merge PDFs using pdf-lib
     console.log('   Step 3: Merging PDFs...');
     
-    const fs = require('fs');
     const existingPdfBytes = fs.readFileSync(existingPdfPath);
     const termsPdfBytes = fs.readFileSync(tempTermsPath);
     
-    const { PDFDocument } = require('pdf-lib');
     const existingPdf = await PDFDocument.load(existingPdfBytes);
     const termsPdf = await PDFDocument.load(termsPdfBytes);
     const mergedPdf = await PDFDocument.create();
@@ -1298,7 +1311,6 @@ async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
   }
 }
 
-  // ✅ UPDATED: Accept customFilename parameter
 async generatePOPDF(po, customFilename = null, termsAndConditionsText = null, includeTermsAndConditions = false) {
   const language = this.detectLanguage(po);
 
