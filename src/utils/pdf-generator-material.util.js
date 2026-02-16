@@ -1,5 +1,5 @@
 // ============================================================
-// UPDATED PDF GENERATOR MATERIAL - T&C PAGE ALWAYS LAST
+// FIXED PDF GENERATOR MATERIAL - Corrected Header Layout
 // src/utils/pdf-generator-material.util.js
 // ============================================================
 const fsSync = require('fs');
@@ -376,11 +376,10 @@ body {
   background: #fff;
 }
 
-/* ✅ NEW: Company info section without gray background */
+/* ✅ FIXED: Company info section matching Receipt format exactly */
 .company-info {
-  padding: 10px 0;
+  padding: 5px 0 10px 0;
   margin-bottom: 10px;
-  direction: ltr;
   break-inside: avoid;
   page-break-inside: avoid;
 }
@@ -389,44 +388,41 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  direction: ltr;
+  gap: 30px;
 }
 
-.company-left, .company-right {
+.company-col {
   width: 48%;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
-.company-left {
-  text-align: left;
-  direction: ltr;
-}
-
-.company-right {
+.company-col-right {
   text-align: right;
   direction: rtl;
 }
 
-.company-left p, .company-right p {
-  margin: 3px 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #333;
+.company-col-left {
+  text-align: left;
+  direction: ltr;
 }
 
-/* ✅ NEW: Green line separator */
+.company-col p {
+  margin: 4px 0;
+}
+
+/* ✅ Green line separator matching Receipt's blue line */
 .separator-line {
   width: 100%;
-  height: 2px;
+  height: 3px;
   background-color: #1F6B3D;
-  margin: 15px 0;
-  break-inside: avoid;
-  page-break-inside: avoid;
+  margin: 10px 0 20px 0;
 }
 
 .title {
   text-align: center;
-  margin: 15px 0;
-  font-size: 22px;
+  margin: 0 0 25px 0;
+  font-size: 24px;
   color: #1F6B3D;
   font-weight: bold;
   break-inside: avoid;
@@ -618,27 +614,41 @@ body {
 
 <div class="page-content">
 
-  <!-- ✅ NEW LAYOUT: Company info without gray background -->
+  <!-- ✅ FIXED: Company info header matching Receipt format exactly -->
   <div class="company-info">
     <div class="company-row">
-      <div class="company-left">
-        <p><strong>${labels.companyNameEn}</strong></p>
-        <p>${labels.taglineEn}</p>
-        <p>${labels.country}</p>
-        <p>${labels.tel}</p>
-        <p>${labels.website}</p>
+      ${isRTL ? `
+      <div class="company-col company-col-right">
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>المملكة الأردنية الهاشمية</p>
+        <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
       </div>
-      <div class="company-right">
-        <p><strong>${labels.companyNameAr}</strong></p>
-        <p>${labels.tagline}</p>
-        <p>${labels.country}</p>
-        <p>${labels.tel}</p>
-        <p>${labels.website}</p>
+      <div class="company-col company-col-left">
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>Design – Manufacture – Installation</p>
+        <p>Jordan</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
       </div>
+      ` : `
+      <div class="company-col company-col-left">
+        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+        <p>Design – Manufacture – Installation</p>
+        <p>Jordan</p>
+        <p>Tel: +96264161060 | Fax: +96264162060</p>
+      </div>
+      <div class="company-col company-col-right">
+        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+        <p>تصميم – تصنيع – تركيب</p>
+        <p>المملكة الأردنية الهاشمية</p>
+        <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
+      </div>
+      `}
     </div>
   </div>
 
-  <!-- ✅ Title after green line -->
+
+  <!-- ✅ Title after separator line -->
   <h1 class="title">${labels.title}</h1>
 
   <!-- ✅ Doc info - only show if data exists -->
@@ -976,11 +986,10 @@ generateTermsHTML(termsText, language = 'ar') {
             background: #fff;
           }
 
-          /* Company Info Section */
+          /* ✅ FIXED: Company Info Section matching Receipt format */
           .company-info {
-            padding: 10px 0;
+            padding: 5px 0 10px 0;
             margin-bottom: 10px;
-            direction: ltr;
             break-inside: avoid;
             page-break-inside: avoid;
           }
@@ -989,45 +998,42 @@ generateTermsHTML(termsText, language = 'ar') {
             display: flex;
             justify-content: space-between;
             align-items: flex-start;
-            direction: ltr;
+            gap: 30px;
           }
 
-          .company-left, .company-right {
+          .company-col {
             width: 48%;
+            font-size: 12px;
+            line-height: 1.6;
           }
 
-          .company-left {
-            text-align: left;
-            direction: ltr;
-          }
-
-          .company-right {
+          .company-col-right {
             text-align: right;
             direction: rtl;
           }
 
-          .company-left p, .company-right p {
-            margin: 3px 0;
-            font-size: 11px;
-            line-height: 1.4;
-            color: #333;
+          .company-col-left {
+            text-align: left;
+            direction: ltr;
+          }
+
+          .company-col p {
+            margin: 4px 0;
           }
 
           /* Green separator line */
           .separator-line {
             width: 100%;
-            height: 2px;
+            height: 3px;
             background-color: #1F6B3D;
-            margin: 15px 0;
-            break-inside: avoid;
-            page-break-inside: avoid;
+            margin: 10px 0 20px 0;
           }
 
           /* Title */
           .title {
             text-align: center;
-            margin: 15px 0 20px 0;
-            font-size: 22px;
+            margin: 0 0 25px 0;
+            font-size: 24px;
             color: #1F6B3D;
             font-weight: bold;
             break-inside: avoid;
@@ -1062,25 +1068,40 @@ generateTermsHTML(termsText, language = 'ar') {
       <body>
         <div class="page-content">
 
-          <!-- Company Info Header -->
+          <!-- ✅ FIXED: Company Info Header matching Receipt format -->
           <div class="company-info">
             <div class="company-row">
-              <div class="company-left">
-                <p><strong>OMEGA ENGINEERING INDUSTRIES</strong></p>
-                <p>DESIGN - FABRICATION - INSTALLATION</p>
-                <p>JORDAN</p>
-                <p>Tel: +96264161060 Fax: +96264162060</p>
-                <p>https://www.omega-jordan.com</p>
-              </div>
-              <div class="company-right">
+              ${isRTL ? `
+              <div class="company-col company-col-right">
                 <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
                 <p>تصميم – تصنيع – تركيب</p>
-                <p>JORDAN</p>
-                <p>Tel: +96264161060 Fax: +96264162060</p>
-                <p>https://www.omega-jordan.com</p>
+                <p>المملكة الأردنية الهاشمية</p>
+                <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
               </div>
+              <div class="company-col company-col-left">
+                <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+                <p>Design – Manufacture – Installation</p>
+                <p>Jordan</p>
+                <p>Tel: +96264161060 | Fax: +96264162060</p>
+              </div>
+              ` : `
+              <div class="company-col company-col-left">
+                <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
+                <p>Design – Manufacture – Installation</p>
+                <p>Jordan</p>
+                <p>Tel: +96264161060 | Fax: +96264162060</p>
+              </div>
+              <div class="company-col company-col-right">
+                <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
+                <p>تصميم – تصنيع – تركيب</p>
+                <p>المملكة الأردنية الهاشمية</p>
+                <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
+              </div>
+              `}
             </div>
           </div>
+
+
 
           <!-- Title -->
           <h1 class="title">${language === 'ar' ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>

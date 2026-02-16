@@ -1,4 +1,4 @@
-// src/utils/pdf-generatorRecipts.util.js - UPDATED: Restructured table layout + Fixed PDF merge
+// src/utils/pdf-generatorRecipts.util.js - UPDATED: Dynamic rows - removes empty fields completely
 const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -237,6 +237,40 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
       `;
     }
 
+    // ✅ NEW: Generate details box HTML dynamically - only shows rows with data
+    const generateDetailsBox = () => {
+      // Collect all fields with their values
+      const allFields = [
+        { label: labels.to, value: receipt.to },
+        { label: labels.address, value: receipt.address },
+        { label: labels.attention, value: receipt.attention },
+        { label: labels.projectCode, value: receipt.projectCode },
+        { label: labels.workLocation, value: receipt.workLocation },
+        { label: labels.vehicleNumber, value: receipt.companyNumber },
+        { label: labels.date, value: formattedDate }, // Date always present
+        { label: labels.receiptNumber, value: receipt.receiptNumber }
+      ].filter(field => field.value); // Only keep fields with values
+      
+      // Generate rows with 3 cells each
+      let rowsHTML = '';
+      for (let i = 0; i < allFields.length; i += 3) {
+        const row = allFields.slice(i, i + 3);
+        const cellsHTML = row.map(field => `
+          <div class="detail-cell">
+            <span class="detail-cell-label">${field.label}:</span>
+            <span class="detail-cell-value">${field.value}</span>
+          </div>
+        `).join('');
+        
+        // Add empty cells to fill the row if needed
+        const emptyCells = row.length < 3 ? '<div class="detail-cell"><span class="detail-cell-empty">-</span></div>'.repeat(3 - row.length) : '';
+        
+        rowsHTML += `<div class="detail-row">${cellsHTML}${emptyCells}</div>`;
+      }
+      
+      return rowsHTML;
+    };
+
     return `
 <!DOCTYPE html>
 <html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
@@ -329,7 +363,7 @@ body {
   page-break-inside: avoid;
 }
 
-/* ✅ UPDATED: Details box with 3-column layout (key:value on same line) */
+/* ✅ Details box with dynamic 3-column layout */
 .details-box {
   border: 2px solid var(--primary);
   padding: 0;
@@ -552,100 +586,9 @@ body {
   <!-- ✅ Title after blue line -->
   <h1 class="title">${labels.title}</h1>
 
-  <!-- ✅ UPDATED: Details Box with 3-column layout (key: value on same line) -->
+  <!-- ✅ NEW: Dynamic Details Box - only shows rows with filled data -->
   <div class="details-box">
-    <!-- Row 1: To, Address, Attention -->
-    ${receipt.to || receipt.address || receipt.attention ? `
-    <div class="detail-row">
-      ${receipt.to ? `
-      <div class="detail-cell">
-        <span class="detail-cell-label">${labels.to}:</span>
-        <span class="detail-cell-value">${receipt.to}</span>
-      </div>
-      ` : `
-      <div class="detail-cell">
-        <span class="detail-cell-empty">-</span>
-      </div>
-      `}
-      ${receipt.address ? `
-      <div class="detail-cell">
-        <span class="detail-cell-label">${labels.address}:</span>
-        <span class="detail-cell-value">${receipt.address}</span>
-      </div>
-      ` : `
-      <div class="detail-cell">
-        <span class="detail-cell-empty">-</span>
-      </div>
-      `}
-      ${receipt.attention ? `
-      <div class="detail-cell">
-        <span class="detail-cell-label">${labels.attention}:</span>
-        <span class="detail-cell-value">${receipt.attention}</span>
-      </div>
-      ` : `
-      <div class="detail-cell">
-        <span class="detail-cell-empty">-</span>
-      </div>
-      `}
-    </div>
-    ` : ''}
-    
-    <!-- Row 2: Project Code, Work Location, Vehicle Number -->
-    ${receipt.projectCode || receipt.workLocation || receipt.companyNumber ? `
-    <div class="detail-row">
-      ${receipt.projectCode ? `
-      <div class="detail-cell">
-        <span class="detail-cell-label">${labels.projectCode}:</span>
-        <span class="detail-cell-value">${receipt.projectCode}</span>
-      </div>
-      ` : `
-      <div class="detail-cell">
-        <span class="detail-cell-empty">-</span>
-      </div>
-      `}
-      ${receipt.workLocation ? `
-      <div class="detail-cell">
-        <span class="detail-cell-label">${labels.workLocation}:</span>
-        <span class="detail-cell-value">${receipt.workLocation}</span>
-      </div>
-      ` : `
-      <div class="detail-cell">
-        <span class="detail-cell-empty">-</span>
-      </div>
-      `}
-      ${receipt.companyNumber ? `
-      <div class="detail-cell">
-        <span class="detail-cell-label">${labels.vehicleNumber}:</span>
-        <span class="detail-cell-value">${receipt.companyNumber}</span>
-      </div>
-      ` : `
-      <div class="detail-cell">
-        <span class="detail-cell-empty">-</span>
-      </div>
-      `}
-    </div>
-    ` : ''}
-    
-    <!-- Row 3: Date, Receipt Number -->
-    <div class="detail-row">
-      <div class="detail-cell">
-        <span class="detail-cell-label">${labels.date}:</span>
-        <span class="detail-cell-value">${formattedDate}</span>
-      </div>
-      ${receipt.receiptNumber ? `
-      <div class="detail-cell">
-        <span class="detail-cell-label">${labels.receiptNumber}:</span>
-        <span class="detail-cell-value">${receipt.receiptNumber}</span>
-      </div>
-      ` : `
-      <div class="detail-cell">
-        <span class="detail-cell-empty">-</span>
-      </div>
-      `}
-      <div class="detail-cell">
-        <span class="detail-cell-empty">-</span>
-      </div>
-    </div>
+    ${generateDetailsBox()}
   </div>
 
   <!-- ✅ Additional Text Box (only if exists) -->
