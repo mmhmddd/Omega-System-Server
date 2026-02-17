@@ -328,6 +328,7 @@ buildHeaderHTML(invoiceData, isArabic) {
   }
 }
 
+
   buildFooterHTML(isArabic) {
     return `
       <div style="width:100%; display:flex; justify-content:space-between; align-items:center; padding:0 30px; font-size:11px; color:#555; border-top:1px solid #ddd;">
