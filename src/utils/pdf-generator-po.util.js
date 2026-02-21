@@ -84,8 +84,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     const labels = {
       ar: {
         title:        'طلب شراء',
-        titleSub:     'طلب شراء',         // Arabic doc → English subtitle
-        poNo:         'PO No',
+        poNo:         'رقم طلب الشراء',
         issueDate:    'تاريخ الإصدار',
         revNo:        'رقم المراجعة',
         receiverInfo: 'معلومات المستلم',
@@ -115,7 +114,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
       },
       en: {
         title:        'Purchase Order',
-        titleSub:     'Purchase Order',         
         poNo:         'PO No',
         issueDate:    'Issue Date',
         revNo:        'Rev. No',
@@ -192,6 +190,11 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     };
   }
 
+  // ── Returns true only when taxRate is a positive number ──────────────────
+  hasTax(po) {
+    const rate = parseFloat(po.taxRate);
+    return !isNaN(rate) && rate > 0;
+  }
 
   generateHTML(po) {
     const language = this.detectLanguage(po);
@@ -201,6 +204,9 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     const formattedDate      = po.date || new Date().toISOString().split('T')[0];
     const totals             = this.calculateTotals(po.items, po.taxRate || 0);
     const translatedSupplier = po.supplier ? this.getSupplierTranslation(po.supplier, language) : '';
+
+    // ── Key flag: show tax row only when taxRate > 0 ──────────────────────
+    const showTax = this.hasTax(po);
 
     // HTML-escape helper
     const esc = v => String(v || '')
@@ -247,6 +253,11 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     const hasItems       = this.hasItemsData(po.items);
     const hasNotes       = this.hasData(po.notes);
 
+    // ── Grand total: when no tax, grand total equals subtotal exactly ────────
+    const grandTotalDisplay = hasItems
+      ? (showTax ? totals.grandTotal : totals.subtotal)
+      : '—';
+
     return `<!DOCTYPE html>
 <html lang="${language}" dir="${dir}">
 <head>
@@ -289,13 +300,14 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
 
   /* ── TITLE BAR ───────────────────────────────────────────────────────── */
   .titlebar {
-    display: grid;
-    grid-template-columns: 1fr auto 1fr;
-    align-items: end;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     gap: 10px;
     margin-bottom: 10px;
+    width: 100%;
   }
-  .po-meta { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .po-meta { font-size: 11px; color: var(--muted); line-height: 1.6; flex-shrink: 0; }
   .po-meta strong { color: var(--ink); }
   .doc-title {
     text-align: center;
@@ -304,13 +316,8 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     font-size: 22px;
     letter-spacing: .3px;
     line-height: 1.1;
-  }
-  .doc-title small {
-    display: block;
-    margin-top: 2px;
-    font-weight: 800;
-    font-size: 13px;
-    color: var(--muted);
+    white-space: nowrap;
+    flex: 1;
   }
 
   /* ── PARTY TABLE ─────────────────────────────────────────────────────── */
@@ -472,19 +479,36 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
 
   <!-- ══ TITLE BAR ════════════════════════════════════════════════════════ -->
   <div class="titlebar">
-    <div class="po-meta" style="text-align:${isRTL ? 'right' : 'left'}; direction:${dir}">
-      ${this.hasData(po.poNumber) ? `<div>${labels.poNo}: <strong>${esc(po.poNumber)}</strong></div>` : ''}
-    </div>
 
-    <div class="doc-title">
-      ${esc(labels.title)}
-      <small>${esc(labels.titleSub)}</small>
-    </div>
-
-    <div class="po-meta" style="text-align:${isRTL ? 'left' : 'right'}; direction:${dir}">
+    <!-- أقصى اليسار -->
+    ${isRTL ? `
+    <div class="po-meta" style="text-align: left; direction: ltr;">
       ${this.hasData(po.date) ? `<div>${labels.issueDate}: <strong>${esc(formattedDate)}</strong></div>` : ''}
       <div>${labels.revNo}: <strong>01</strong></div>
     </div>
+    ` : `
+    <div class="po-meta" style="text-align: left; direction: ltr;">
+      ${this.hasData(po.poNumber) ? `<div>${labels.poNo}: <strong>${esc(po.poNumber)}</strong></div>` : ''}
+    </div>
+    `}
+
+    <!-- وسط: العنوان فقط -->
+    <div class="doc-title">
+      ${esc(labels.title)}
+    </div>
+
+    <!-- أقصى اليمين -->
+    ${isRTL ? `
+    <div class="po-meta" style="text-align: right; direction: rtl;">
+      ${this.hasData(po.poNumber) ? `<div>${labels.poNo}: <strong>${esc(po.poNumber)}</strong></div>` : ''}
+    </div>
+    ` : `
+    <div class="po-meta" style="text-align: right; direction: ltr;">
+      ${this.hasData(po.date) ? `<div>${labels.issueDate}: <strong>${esc(formattedDate)}</strong></div>` : ''}
+      <div>${labels.revNo}: <strong>01</strong></div>
+    </div>
+    `}
+
   </div>
 
   <!-- ══ SUPPLIER / RECEIVER PARTY TABLE ══════════════════════════════════ -->
@@ -564,20 +588,32 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
       </div>
     </div>
 
-    <!-- Totals -->
+    <!-- ══ TOTALS ══════════════════════════════════════════════════════════
+         • Tax row is HIDDEN when taxRate = 0 or not provided
+         • Grand Total equals Subtotal when there is no tax
+    ═════════════════════════════════════════════════════════════════════ -->
     <div class="totals">
+
+      <!-- Subtotal row: always shown -->
       <div class="trow">
         <span>${labels.subtotal}</span>
         <strong>${hasItems ? totals.subtotal : '—'}</strong>
       </div>
+
+      <!-- Tax row: only shown when taxRate > 0 -->
+      ${showTax ? `
       <div class="trow">
-        <span>${labels.tax} (${po.taxRate || 0}%)</span>
+        <span>${labels.tax} (${po.taxRate}%)</span>
         <strong>${hasItems ? totals.tax : '—'}</strong>
       </div>
+      ` : ''}
+
+      <!-- Grand Total row: always shown -->
       <div class="trow grand">
         <span>${labels.grandTotal}</span>
-        <strong>${hasItems ? totals.grandTotal : '—'}</strong>
+        <strong>${grandTotalDisplay}</strong>
       </div>
+
     </div>
 
   </div><!-- /footer-grid -->
@@ -642,39 +678,7 @@ body { background: #fff; }
 </head>
 <body>
 <div class="page-content">
-  <div class="company-info">
-    <div class="company-row">
-      ${isRTL ? `
-      <div class="company-col company-col-right">
-        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
-        <p>تصميم – تصنيع – تركيب</p>
-        <p>المملكة الأردنية الهاشمية</p>
-        <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
-      </div>
-      <div class="company-col company-col-left">
-        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
-        <p>Design – Manufacture – Installation</p>
-        <p>Jordan</p>
-        <p>Tel: +96264161060 | Fax: +96264162060</p>
-      </div>
-      ` : `
-      <div class="company-col company-col-left">
-        <p><strong>OMEGA ENGINEERING INDUSTRIES CO.</strong></p>
-        <p>Design – Manufacture – Installation</p>
-        <p>Jordan</p>
-        <p>Tel: +96264161060 | Fax: +96264162060</p>
-      </div>
-      <div class="company-col company-col-right">
-        <p><strong>شركة أوميغا للصناعات الهندسية</strong></p>
-        <p>تصميم – تصنيع – تركيب</p>
-        <p>المملكة الأردنية الهاشمية</p>
-        <p>تلفون: 96264161060+ | فاكس: 96264162060+</p>
-      </div>
-      `}
-    </div>
-  </div>
-  <div class="separator-line"></div>
-  <h1 class="title">${language === 'ar' ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>
+    <h1 class="title">${language === 'ar' ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>
   <div class="terms-content">${formattedText}</div>
 </div>
 </body>
@@ -737,7 +741,6 @@ body { background: #fff; }
     }
   }
 
-
   async generatePOPDF(po, customFilename = null, termsAndConditionsText = null, includeTermsAndConditions = false) {
     const language = this.detectLanguage(po);
 
@@ -758,6 +761,7 @@ body { background: #fff; }
         console.log('📄 Filename:', filename);
         console.log('📄 Language:', language);
         console.log('📄 Include T&C:', includeTermsAndConditions);
+        console.log('📄 Tax Rate:', po.taxRate, '| Show Tax Row:', this.hasTax(po));
 
         let finalTermsText = null;
         if (includeTermsAndConditions) {
@@ -809,7 +813,6 @@ body { background: #fff; }
       }
     });
   }
-
 
   getA4Dimensions() {
     return { width: 595.28, height: 841.89 };
