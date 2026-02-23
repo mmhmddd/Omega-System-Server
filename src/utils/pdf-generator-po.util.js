@@ -40,6 +40,21 @@ This document is valid for ( ) calendar / working days from the date of issuance
 Execution and delivery timelines are subject to order confirmation, receipt of required approvals, and readiness of the project/site conditions.  
 Estimated execution period: ( ) days / weeks / months from the date of order confirmation.`;
 
+  // ── Jordan timezone helper ─────────────────────────────────────────────────
+  // Always returns the current date/time in Jordan (Asia/Amman, UTC+3)
+  getJordanDate() {
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Amman' }); // YYYY-MM-DD
+  }
+
+  getJordanDateTime() {
+    return new Date().toLocaleString('en-GB', {
+      timeZone: 'Asia/Amman',
+      year:   'numeric', month:  '2-digit', day:    '2-digit',
+      hour:   '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    });
+  }
+
   isArabic(text) {
     if (!text) return false;
     const arabicPattern = /[\u0600-\u06FF]/;
@@ -190,7 +205,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     };
   }
 
-  // ── Returns true only when taxRate is a positive number ──────────────────
   hasTax(po) {
     const rate = parseFloat(po.taxRate);
     return !isNaN(rate) && rate > 0;
@@ -201,18 +215,18 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     const labels   = this.getLabels(language);
     const isRTL    = language === 'ar';
     const dir      = isRTL ? 'rtl' : 'ltr';
-    const formattedDate      = po.date || new Date().toISOString().split('T')[0];
+
+    // ── Always use Jordan date if po.date is not provided ────────────────────
+    const formattedDate = po.date || this.getJordanDate();
+
     const totals             = this.calculateTotals(po.items, po.taxRate || 0);
     const translatedSupplier = po.supplier ? this.getSupplierTranslation(po.supplier, language) : '';
 
-    // ── Key flag: show tax row only when taxRate > 0 ──────────────────────
     const showTax = this.hasTax(po);
 
-    // HTML-escape helper
     const esc = v => String(v || '')
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-    // ── Items rows ────────────────────────────────────────────────────────────
     const itemsHTML = (po.items || []).map((item, i) => {
       const hasRowData = this.hasData(item.description) || this.hasData(item.unit) ||
                          this.hasData(item.quantity)    || this.hasData(item.unitPrice);
@@ -230,7 +244,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
         </tr>`;
     }).join('');
 
-    // ── Party grid rows (only show filled fields) ─────────────────────────────
     const makeRows = fields => fields
       .filter(([, v]) => this.hasData(v))
       .map(([l, v]) => `<div class="label">${esc(l)}</div><div class="value">${esc(v)}</div>`)
@@ -253,7 +266,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     const hasItems       = this.hasItemsData(po.items);
     const hasNotes       = this.hasData(po.notes);
 
-    // ── Grand total: when no tax, grand total equals subtotal exactly ────────
     const grandTotalDisplay = hasItems
       ? (showTax ? totals.grandTotal : totals.subtotal)
       : '—';
@@ -276,11 +288,9 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, "Segoe UI", Tahoma, sans-serif; color: var(--ink); background: #fff; }
 
-  /* PAGE */
   @page { size: A4; margin: 35mm 20mm 25mm 20mm; }
   .page { width: 100%; background: #fff; }
 
-  /* ── COMPANY HEADER ──────────────────────────────────────────────────── */
   .company-info { padding: 5px 0 10px; margin-bottom: 10px; }
   .company-row  { display: flex; justify-content: space-between; align-items: flex-start; gap: 30px; }
   .company-col  { width: 48%; font-size: 12px; line-height: 1.6; }
@@ -288,7 +298,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   .company-col-left  { text-align: left;  direction: ltr; }
   .company-col p { margin: 4px 0; }
 
-  /* ── SEPARATOR ───────────────────────────────────────────────────────── */
   .separator-line {
     width: 100%;
     height: 3px;
@@ -298,7 +307,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     print-color-adjust: exact;
   }
 
-  /* ── TITLE BAR ───────────────────────────────────────────────────────── */
+  /* ── TITLE BAR: PO No only on one side, title centered ─────────────── */
   .titlebar {
     display: flex;
     justify-content: space-between;
@@ -307,8 +316,9 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     margin-bottom: 10px;
     width: 100%;
   }
-  .po-meta { font-size: 11px; color: var(--muted); line-height: 1.6; flex-shrink: 0; }
+  .po-meta { font-size: 11px; color: var(--muted); line-height: 1.6; flex-shrink: 0; min-width: 120px; }
   .po-meta strong { color: var(--ink); }
+  .po-meta-empty { min-width: 120px; flex-shrink: 0; }
   .doc-title {
     text-align: center;
     font-weight: 900;
@@ -320,7 +330,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     flex: 1;
   }
 
-  /* ── PARTY TABLE ─────────────────────────────────────────────────────── */
   .party {
     width: 100%;
     border: 1px solid var(--line);
@@ -353,7 +362,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   .label { color: var(--muted); font-size: 11px; }
   .value { border-bottom: 1px dotted var(--line); padding-bottom: 2px; min-height: 14px; }
 
-  /* ── NOTES ───────────────────────────────────────────────────────────── */
   .note {
     margin: 8px 0 10px;
     border-left: 5px solid var(--warn);
@@ -366,7 +374,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     print-color-adjust: exact;
   }
 
-  /* ── ITEMS TABLE ─────────────────────────────────────────────────────── */
   .items {
     width: 100%;
     border-collapse: collapse;
@@ -390,7 +397,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   .num, .qty, .price, .total { text-align: center; white-space: nowrap; }
   .desc { width: 100%; }
 
-  /* ── FOOTER GRID ─────────────────────────────────────────────────────── */
   .footer-grid {
     display: grid;
     grid-template-columns: 1.2fr 1.2fr 1fr;
@@ -405,7 +411,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   .frow:last-child { margin-bottom: 0; }
   .fline { border-bottom: 1px dotted var(--line); height: 14px; font-size: 11px; padding-bottom: 2px; }
 
-  /* ── TOTALS ──────────────────────────────────────────────────────────── */
   .totals { border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
   .trow { display: flex; justify-content: space-between; gap: 10px; padding: 8px 10px; font-size: 11.5px; border-top: 1px solid var(--line); }
   .trow:first-child { border-top: 0; }
@@ -418,7 +423,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     print-color-adjust: exact;
   }
 
-  /* ── SIGNATURES ──────────────────────────────────────────────────────── */
   .sigs {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -431,7 +435,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   .sig { text-align: center; }
   .sig .sline { border-bottom: 1px dotted var(--line); height: 16px; margin-top: 20px; }
 
-  /* ── PRINT ───────────────────────────────────────────────────────────── */
   @media print {
     .page { margin: 0; padding: 0; width: auto; }
     .party, .items, .totals, .footer-grid { page-break-inside: avoid; }
@@ -477,61 +480,69 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   <!-- ══ BLUE SEPARATOR ═══════════════════════════════════════════════════ -->
   <div class="separator-line"></div>
 
-  <!-- ══ TITLE BAR ════════════════════════════════════════════════════════ -->
+  <!-- ══ TITLE BAR — PO No only (Issue Date & Rev. No removed) ═══════════ -->
   <div class="titlebar">
 
-    <!-- أقصى اليسار -->
     ${isRTL ? `
-    <div class="po-meta" style="text-align: left; direction: ltr;">
-      ${this.hasData(po.date) ? `<div>${labels.issueDate}: <strong>${esc(formattedDate)}</strong></div>` : ''}
-      <div>${labels.revNo}: <strong>01</strong></div>
-    </div>
-    ` : `
-    <div class="po-meta" style="text-align: left; direction: ltr;">
-      ${this.hasData(po.poNumber) ? `<div>${labels.poNo}: <strong>${esc(po.poNumber)}</strong></div>` : ''}
-    </div>
-    `}
-
-    <!-- وسط: العنوان فقط -->
-    <div class="doc-title">
-      ${esc(labels.title)}
-    </div>
-
-    <!-- أقصى اليمين -->
-    ${isRTL ? `
+    <!-- RTL: PO No on the RIGHT side, empty placeholder on LEFT -->
+    <div class="po-meta-empty"></div>
+    <div class="doc-title">${esc(labels.title)}</div>
     <div class="po-meta" style="text-align: right; direction: rtl;">
       ${this.hasData(po.poNumber) ? `<div>${labels.poNo}: <strong>${esc(po.poNumber)}</strong></div>` : ''}
     </div>
     ` : `
-    <div class="po-meta" style="text-align: right; direction: ltr;">
-      ${this.hasData(po.date) ? `<div>${labels.issueDate}: <strong>${esc(formattedDate)}</strong></div>` : ''}
-      <div>${labels.revNo}: <strong>01</strong></div>
+    <!-- LTR: PO No on the LEFT side, empty placeholder on RIGHT -->
+    <div class="po-meta" style="text-align: left; direction: ltr;">
+      ${this.hasData(po.poNumber) ? `<div>${labels.poNo}: <strong>${esc(po.poNumber)}</strong></div>` : ''}
     </div>
+    <div class="doc-title">${esc(labels.title)}</div>
+    <div class="po-meta-empty"></div>
     `}
 
   </div>
 
-  <!-- ══ SUPPLIER / RECEIVER PARTY TABLE ══════════════════════════════════ -->
+  <!-- ══ SUPPLIER / RECEIVER PARTY TABLE ══════════════════════════════════
+       AR (RTL): col1=Supplier (right) | col2=Receiver (left)
+       EN (LTR): col1=Receiver (left)  | col2=Supplier (right)
+  ════════════════════════════════════════════════════════════════════════ -->
   ${showPartyTable ? `
   <table class="party">
     <thead>
       <tr>
-        <th style="text-align:${isRTL ? 'right' : 'left'}; direction:${dir}">${labels.receiverInfo}</th>
-        <th style="text-align:${isRTL ? 'left'  : 'right'}; direction:${dir}">${labels.supplierInfo}</th>
+        ${isRTL ? `
+        <th style="text-align:right; direction:rtl">${labels.supplierInfo}</th>
+        <th style="text-align:left;  direction:rtl">${labels.receiverInfo}</th>
+        ` : `
+        <th style="text-align:left;  direction:ltr">${labels.receiverInfo}</th>
+        <th style="text-align:right; direction:ltr">${labels.supplierInfo}</th>
+        `}
       </tr>
     </thead>
     <tbody>
       <tr>
+        ${isRTL ? `
         <td>
-          <div class="grid" style="direction:${dir}; text-align:${isRTL ? 'right' : 'left'}">
+          <div class="grid" style="direction:rtl; text-align:right">
+            ${spRows}
+          </div>
+        </td>
+        <td>
+          <div class="grid" style="direction:rtl; text-align:right">
+            ${rxRows}
+          </div>
+        </td>
+        ` : `
+        <td>
+          <div class="grid" style="direction:ltr; text-align:left">
             ${rxRows}
           </div>
         </td>
         <td>
-          <div class="grid" style="direction:${dir}; text-align:${isRTL ? 'right' : 'left'}">
+          <div class="grid" style="direction:ltr; text-align:left">
             ${spRows}
           </div>
         </td>
+        `}
       </tr>
     </tbody>
   </table>
@@ -562,7 +573,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   <!-- ══ FOOTER: PAYMENT + APPROVAL + TOTALS ══════════════════════════════ -->
   <div class="footer-grid">
 
-    <!-- Payment -->
     <div class="box">
       <h4>${labels.payTitle}</h4>
       <div class="frow">
@@ -575,7 +585,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
       </div>
     </div>
 
-    <!-- Approval -->
     <div class="box">
       <h4>${labels.apprTitle}</h4>
       <div class="frow">
@@ -588,35 +597,24 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
       </div>
     </div>
 
-    <!-- ══ TOTALS ══════════════════════════════════════════════════════════
-         • Tax row is HIDDEN when taxRate = 0 or not provided
-         • Grand Total equals Subtotal when there is no tax
-    ═════════════════════════════════════════════════════════════════════ -->
     <div class="totals">
-
-      <!-- Subtotal row: always shown -->
       <div class="trow">
         <span>${labels.subtotal}</span>
         <strong>${hasItems ? totals.subtotal : '—'}</strong>
       </div>
-
-      <!-- Tax row: only shown when taxRate > 0 -->
       ${showTax ? `
       <div class="trow">
         <span>${labels.tax} (${po.taxRate}%)</span>
         <strong>${hasItems ? totals.tax : '—'}</strong>
       </div>
       ` : ''}
-
-      <!-- Grand Total row: always shown -->
       <div class="trow grand">
         <span>${labels.grandTotal}</span>
         <strong>${grandTotalDisplay}</strong>
       </div>
-
     </div>
 
-  </div><!-- /footer-grid -->
+  </div>
 
   <!-- ══ SIGNATURES ═══════════════════════════════════════════════════════ -->
   <div class="sigs">
@@ -625,7 +623,7 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     <div class="sig"><span>${labels.sig3}</span><div class="sline"></div></div>
   </div>
 
-</div><!-- /page -->
+</div>
 </body>
 </html>`;
   }
@@ -691,9 +689,6 @@ body { background: #fff; }
       console.log('╔══════════════════════════════════════════════════════════╗');
       console.log('║       ADDING PO TERMS & CONDITIONS PAGE                  ║');
       console.log('╚══════════════════════════════════════════════════════════╝');
-      console.log('📄 Existing PDF:', existingPdfPath);
-      console.log('📄 Terms Text Length:', termsText?.length || 0);
-      console.log('📄 Language:', language);
 
       const termsHTML     = this.generateTermsHTML(termsText, language);
       const tempTermsPath = existingPdfPath.replace('.pdf', '_terms_temp.pdf');
@@ -720,9 +715,6 @@ body { background: #fff; }
       const termsPdf         = await PDFDocument.load(termsPdfBytes);
       const mergedPdf        = await PDFDocument.create();
 
-      console.log('   - Existing PDF pages:', existingPdf.getPageCount());
-      console.log('   - Terms PDF pages:',    termsPdf.getPageCount());
-
       const existingPages = await mergedPdf.copyPages(existingPdf, existingPdf.getPageIndices());
       existingPages.forEach(p => mergedPdf.addPage(p));
       const termsPages = await mergedPdf.copyPages(termsPdf, termsPdf.getPageIndices());
@@ -732,8 +724,6 @@ body { background: #fff; }
       fs.unlinkSync(tempTermsPath);
 
       console.log('✅ TERMS & CONDITIONS PAGE ADDED SUCCESSFULLY');
-      console.log('   Total pages in merged PDF:', mergedPdf.getPageCount());
-      console.log('════════════════════════════════════════════════════════════\n');
     } catch (error) {
       if (browser) await browser.close();
       console.error('❌ Error adding Terms & Conditions page:', error);
@@ -762,15 +752,14 @@ body { background: #fff; }
         console.log('📄 Language:', language);
         console.log('📄 Include T&C:', includeTermsAndConditions);
         console.log('📄 Tax Rate:', po.taxRate, '| Show Tax Row:', this.hasTax(po));
+        console.log('📄 Jordan Date:', this.getJordanDate());
 
         let finalTermsText = null;
         if (includeTermsAndConditions) {
           if (termsAndConditionsText && termsAndConditionsText.trim()) {
             finalTermsText = termsAndConditionsText;
-            console.log('📄 Using custom T&C text');
           } else {
             finalTermsText = language === 'ar' ? this.DEFAULT_TERMS_AR : this.DEFAULT_TERMS_EN;
-            console.log('📄 Using default T&C for language:', language);
           }
         }
         console.log('════════════════════════════════════════════════════════════');
@@ -794,9 +783,7 @@ body { background: #fff; }
         browser = null;
 
         if (finalTermsText && finalTermsText.trim()) {
-          console.log('📄 Adding Terms & Conditions page...');
           await this.addTermsAndConditionsPage(filepath, finalTermsText, language);
-          console.log('✅ Terms & Conditions page added');
         }
 
         console.log('✅ PDF generation complete\n');
@@ -858,13 +845,14 @@ body { background: #fff; }
     for (let i = 0; i < totalPages; i++) {
       const page = pages[i];
       const { width, height } = page.getSize();
-      const isA4 = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
-      if (!isA4) {
+      const isA4Page = Math.abs(width - a4.width) < 1 && Math.abs(height - a4.height) < 1;
+      if (!isA4Page) {
         console.log(`Page ${i + 1} is not A4, skipping header/footer`);
         continue;
       }
 
-      const dateOfIssue = `DATE OF ISSUE: ${new Date().toISOString().split('T')[0]}`;
+      // ── Use Jordan date in header ─────────────────────────────────────────
+      const dateOfIssue = `DATE OF ISSUE: ${this.getJordanDate()}`;
       const docCode     = 'OMEGA-PUR-05';
       const pageNumber  = `Page ${i + 1} of ${totalPages}`;
 
