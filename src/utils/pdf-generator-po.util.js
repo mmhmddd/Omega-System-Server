@@ -41,9 +41,8 @@ Execution and delivery timelines are subject to order confirmation, receipt of r
 Estimated execution period: ( ) days / weeks / months from the date of order confirmation.`;
 
   // ── Jordan timezone helper ─────────────────────────────────────────────────
-  // Always returns the current date/time in Jordan (Asia/Amman, UTC+3)
   getJordanDate() {
-    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Amman' }); // YYYY-MM-DD
+    return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Amman' });
   }
 
   getJordanDateTime() {
@@ -216,7 +215,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     const isRTL    = language === 'ar';
     const dir      = isRTL ? 'rtl' : 'ltr';
 
-    // ── Always use Jordan date if po.date is not provided ────────────────────
     const formattedDate = po.date || this.getJordanDate();
 
     const totals             = this.calculateTotals(po.items, po.taxRate || 0);
@@ -307,7 +305,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     print-color-adjust: exact;
   }
 
-  /* ── TITLE BAR: PO No only on one side, title centered ─────────────── */
   .titlebar {
     display: flex;
     justify-content: space-between;
@@ -444,7 +441,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
 <body>
 <div class="page">
 
-  <!-- ══ COMPANY HEADER ═══════════════════════════════════════════════════ -->
   <div class="company-info">
     <div class="company-row">
       ${isRTL ? `
@@ -477,44 +473,34 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
     </div>
   </div>
 
-  <!-- ══ BLUE SEPARATOR ═══════════════════════════════════════════════════ -->
   <div class="separator-line"></div>
 
-  <!-- ══ TITLE BAR — PO No only (Issue Date & Rev. No removed) ═══════════ -->
   <div class="titlebar">
-
     ${isRTL ? `
-    <!-- RTL: PO No on the RIGHT side, empty placeholder on LEFT -->
     <div class="po-meta-empty"></div>
     <div class="doc-title">${esc(labels.title)}</div>
     <div class="po-meta" style="text-align: right; direction: rtl;">
       ${this.hasData(po.poNumber) ? `<div>${labels.poNo}: <strong>${esc(po.poNumber)}</strong></div>` : ''}
     </div>
     ` : `
-    <!-- LTR: PO No on the LEFT side, empty placeholder on RIGHT -->
     <div class="po-meta" style="text-align: left; direction: ltr;">
       ${this.hasData(po.poNumber) ? `<div>${labels.poNo}: <strong>${esc(po.poNumber)}</strong></div>` : ''}
     </div>
     <div class="doc-title">${esc(labels.title)}</div>
     <div class="po-meta-empty"></div>
     `}
-
   </div>
 
-  <!-- ══ SUPPLIER / RECEIVER PARTY TABLE ══════════════════════════════════
-       AR (RTL): col1=Supplier (right) | col2=Receiver (left)
-       EN (LTR): col1=Receiver (left)  | col2=Supplier (right)
-  ════════════════════════════════════════════════════════════════════════ -->
   ${showPartyTable ? `
   <table class="party">
     <thead>
       <tr>
         ${isRTL ? `
         <th style="text-align:right; direction:rtl">${labels.supplierInfo}</th>
-        <th style="text-align:left;  direction:rtl">${labels.receiverInfo}</th>
+        <th style="text-align:right;  direction:rtl">${labels.receiverInfo}</th>
         ` : `
         <th style="text-align:left;  direction:ltr">${labels.receiverInfo}</th>
-        <th style="text-align:right; direction:ltr">${labels.supplierInfo}</th>
+        <th style="text-align:left; direction:ltr">${labels.supplierInfo}</th>
         `}
       </tr>
     </thead>
@@ -548,10 +534,8 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   </table>
   ` : ''}
 
-  <!-- ══ NOTES ════════════════════════════════════════════════════════════ -->
   ${hasNotes ? `<div class="note" dir="${dir}">${esc(po.notes)}</div>` : ''}
 
-  <!-- ══ ITEMS TABLE ══════════════════════════════════════════════════════ -->
   ${hasItems ? `
   <table class="items">
     <thead>
@@ -570,7 +554,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   </table>
   ` : ''}
 
-  <!-- ══ FOOTER: PAYMENT + APPROVAL + TOTALS ══════════════════════════════ -->
   <div class="footer-grid">
 
     <div class="box">
@@ -616,7 +599,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
 
   </div>
 
-  <!-- ══ SIGNATURES ═══════════════════════════════════════════════════════ -->
   <div class="sigs">
     <div class="sig"><span>${labels.sig1}</span><div class="sline"></div></div>
     <div class="sig"><span>${labels.sig2}</span><div class="sline"></div></div>
@@ -629,18 +611,11 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
   }
 
   generateTermsHTML(termsText, language = 'ar') {
-    console.log('🔨 Generating Purchase Order Terms HTML...');
-    console.log('   Language:', language);
-    console.log('   Text length:', termsText?.length || 0);
-
     const isRTL = language === 'ar';
-
     const escapeHtml = (text) => text
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-
     const formattedText = escapeHtml(termsText).replace(/\n/g, '<br>');
-
     return `
 <!DOCTYPE html>
 <html lang="${language}" dir="${isRTL ? 'rtl' : 'ltr'}">
@@ -652,12 +627,6 @@ Estimated execution period: ( ) days / weeks / months from the date of order con
 body { background: #fff; }
 @page { size: A4; margin: 35mm 20mm 25mm 20mm; }
 .page-content  { width: 100%; background: #fff; }
-.company-info  { padding: 5px 0 10px; margin-bottom: 10px; }
-.company-row   { display: flex; justify-content: space-between; align-items: flex-start; gap: 30px; }
-.company-col   { width: 48%; font-size: 12px; line-height: 1.6; }
-.company-col-right { text-align: right; direction: rtl; }
-.company-col-left  { text-align: left;  direction: ltr; }
-.company-col p { margin: 4px 0; }
 .separator-line {
   width: 100%; height: 3px; background: #2B4C8C; margin: 10px 0 20px;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
@@ -676,7 +645,7 @@ body { background: #fff; }
 </head>
 <body>
 <div class="page-content">
-    <h1 class="title">${language === 'ar' ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>
+  <h1 class="title">${language === 'ar' ? 'الشروط والأحكام' : 'Terms and Conditions'}</h1>
   <div class="terms-content">${formattedText}</div>
 </div>
 </body>
@@ -686,10 +655,6 @@ body { background: #fff; }
   async addTermsAndConditionsPage(existingPdfPath, termsText, language = 'ar') {
     let browser;
     try {
-      console.log('╔══════════════════════════════════════════════════════════╗');
-      console.log('║       ADDING PO TERMS & CONDITIONS PAGE                  ║');
-      console.log('╚══════════════════════════════════════════════════════════╝');
-
       const termsHTML     = this.generateTermsHTML(termsText, language);
       const tempTermsPath = existingPdfPath.replace('.pdf', '_terms_temp.pdf');
 
@@ -722,13 +687,19 @@ body { background: #fff; }
 
       fs.writeFileSync(existingPdfPath, await mergedPdf.save());
       fs.unlinkSync(tempTermsPath);
-
-      console.log('✅ TERMS & CONDITIONS PAGE ADDED SUCCESSFULLY');
     } catch (error) {
       if (browser) await browser.close();
-      console.error('❌ Error adding Terms & Conditions page:', error);
       throw error;
     }
+  }
+
+  // ── Sanitize a string for safe use as a filename ──────────────────────────
+  sanitizeFilename(name) {
+    if (!name) return '';
+    return name
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, '')  // strip invalid filename characters
+      .replace(/\s+/g, '_');          // replace spaces/whitespace with underscores
   }
 
   async generatePOPDF(po, customFilename = null, termsAndConditionsText = null, includeTermsAndConditions = false) {
@@ -740,9 +711,12 @@ body { background: #fff; }
         const pdfDir = path.join(__dirname, '../../data/purchases/pdfs');
         if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
 
+        // ── CHANGED: default filename now uses po.supplier (المورد) ──────────
+        const supplierSafe = this.sanitizeFilename(po.supplier);
         const filename = customFilename
           ? `${customFilename}.pdf`
-          : `${po.poNumber || 'po'}_${Date.now()}.pdf`;
+          : `${supplierSafe || po.poNumber || 'po'}_${Date.now()}.pdf`;
+
         const filepath = path.join(pdfDir, filename);
 
         console.log('╔══════════════════════════════════════════════════════════╗');
@@ -851,7 +825,6 @@ body { background: #fff; }
         continue;
       }
 
-      // ── Use Jordan date in header ─────────────────────────────────────────
       const dateOfIssue = `DATE OF ISSUE: ${this.getJordanDate()}`;
       const docCode     = 'OMEGA-PUR-05';
       const pageNumber  = `Page ${i + 1} of ${totalPages}`;

@@ -7,23 +7,48 @@ const nodemailer = require('nodemailer');
 const atomicWrite = require('../utils/atomic-write.util');
 const poPdfGenerator = require('../utils/pdf-generator-po.util');
 
-const POS_FILE = path.join(__dirname, '../../data/purchases/index.json');
+const POS_FILE     = path.join(__dirname, '../../data/purchases/index.json');
 const COUNTER_FILE = path.join(__dirname, '../../data/counters.json');
-const USERS_FILE = path.join(__dirname, '../../data/users/users.json');
+const USERS_FILE   = path.join(__dirname, '../../data/users/users.json');
+
+// ── Shared filename helpers ────────────────────────────────────────────────
+const sanitizeFilename = (str) => {
+  if (!str) return 'Unknown';
+  return str
+    .replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '')
+    .replace(/\s+/g, '_')
+    .substring(0, 30);
+};
+
+const formatDate = (dateStr) => {
+  if (!dateStr) {
+    const today = new Date().toISOString().split('T')[0];
+    const [year, month, day] = today.split('-');
+    return `${day}-${month}-${year}`;
+  }
+  const [year, month, day] = dateStr.split('-');
+  return `${day}-${month}-${year}`;
+};
+
+/**
+ * Build the standard PO download / attachment filename.
+ * Pattern: PO00001_SupplierName_DD-MM-YYYY.pdf
+ * ✅ Uses supplier (المورد) — NOT receiver (المستلم)
+ */
+const buildPOFilename = (po) => {
+  const poNumber     = po.poNumber  || 'PO00000';
+  const supplierName = sanitizeFilename(po.supplier);   // ✅ supplier, not receiver
+  const dateFmt      = formatDate(po.date);
+  return `${poNumber}_${supplierName}_${dateFmt}`;      // no .pdf — callers add it
+};
 
 class PurchaseService {
   async loadUsers() {
     try {
-      console.log('Loading users from:', USERS_FILE);
       const data = await fs.readFile(USERS_FILE, 'utf8');
-      const users = JSON.parse(data);
-      return users;
+      return JSON.parse(data);
     } catch (error) {
-      console.error('Error loading users file:', error);
-      if (error.code === 'ENOENT') {
-        console.error('Users file does not exist at:', USERS_FILE);
-        return [];
-      }
+      if (error.code === 'ENOENT') return [];
       throw error;
     }
   }
@@ -31,56 +56,21 @@ class PurchaseService {
   async getUserNameById(userId) {
     try {
       const users = await this.loadUsers();
-      
-      if (!userId) {
-        console.log('⚠️ No userId provided');
-        return null;
-      }
-      
-      console.log('\n=== USER LOOKUP ===');
-      console.log('Looking for userId:', userId);
-      console.log('Type:', typeof userId);
-      
+
+      if (!userId) return null;
+
       const searchId = String(userId).trim().toLowerCase();
-      
-      let foundUser = null;
-      
-      foundUser = users.find(u => u.id === userId);
-      if (foundUser) {
-        console.log('✓ Found (direct match):', foundUser.name);
-        return foundUser.name;
-      }
-      
-      foundUser = users.find(u => {
-        const dbId = String(u.id).trim().toLowerCase();
-        return dbId === searchId;
-      });
-      
-      if (foundUser) {
-        console.log('✓ Found (string match):', foundUser.name);
-        return foundUser.name;
-      }
-      
-      foundUser = users.find(u => {
-        const username = String(u.username || '').trim().toLowerCase();
-        return username === searchId;
-      });
-      
-      if (foundUser) {
-        console.log('✓ Found (username match):', foundUser.name);
-        return foundUser.name;
-      }
-      
-      console.log('✗ User not found');
-      console.log('Searched for:', searchId);
-      console.log('Available users:');
-      users.forEach(u => {
-        console.log(`  - ID: "${u.id}" | Username: "${u.username}" | Name: "${u.name}"`);
-      });
-      console.log('==================\n');
-      
+
+      let found = users.find(u => u.id === userId);
+      if (found) return found.name;
+
+      found = users.find(u => String(u.id).trim().toLowerCase() === searchId);
+      if (found) return found.name;
+
+      found = users.find(u => String(u.username || '').trim().toLowerCase() === searchId);
+      if (found) return found.name;
+
       return null;
-      
     } catch (error) {
       console.error('❌ Error getting user name:', error);
       return null;
@@ -92,9 +82,7 @@ class PurchaseService {
       const data = await fs.readFile(POS_FILE, 'utf8');
       return JSON.parse(data);
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return [];
-      }
+      if (error.code === 'ENOENT') return [];
       throw error;
     }
   }
@@ -109,88 +97,65 @@ class PurchaseService {
       const counters = JSON.parse(data);
       return counters.PO || 0;
     } catch (error) {
-      if (error.code === 'ENOENT') {
-        return 0;
-      }
+      if (error.code === 'ENOENT') return 0;
       throw error;
     }
   }
 
   async saveCounter(counter) {
+    let counters = {};
     try {
-      let counters = {};
-      try {
-        const data = await fs.readFile(COUNTER_FILE, 'utf8');
-        counters = JSON.parse(data);
-      } catch (error) {
-        if (error.code !== 'ENOENT') {
-          throw error;
-        }
-      }
-      
-      counters.PO = counter;
-      await atomicWrite(COUNTER_FILE, JSON.stringify(counters, null, 2));
+      const data = await fs.readFile(COUNTER_FILE, 'utf8');
+      counters = JSON.parse(data);
     } catch (error) {
-      throw error;
+      if (error.code !== 'ENOENT') throw error;
     }
+    counters.PO = counter;
+    await atomicWrite(COUNTER_FILE, JSON.stringify(counters, null, 2));
   }
 
   generatePONumber(counter) {
-    const paddedNumber = String(counter).padStart(5, '0');
-    return `PO${paddedNumber}`;
+    return `PO${String(counter).padStart(5, '0')}`;
   }
 
   async resetPOCounter() {
-    const oldCounter = await this.loadCounter();
-    const pos = await this.loadPOs();
+    const oldCounter  = await this.loadCounter();
+    const pos         = await this.loadPOs();
     const deletedCount = pos.length;
-    
+
     await this.saveCounter(0);
     await this.savePOs([]);
 
     return {
       oldCounter,
-      newCounter: 0,
-      deletedPOs: deletedCount,
+      newCounter:   0,
+      deletedPOs:   deletedCount,
       nextPONumber: this.generatePONumber(1),
-      message: `Counter reset to 0 and ${deletedCount} PO(s) deleted`
+      message:      `Counter reset to 0 and ${deletedCount} PO(s) deleted`
     };
   }
 
   detectLanguage(text) {
     if (!text) return 'en';
-    const arabicPattern = /[\u0600-\u06FF]/;
-    return arabicPattern.test(text) ? 'ar' : 'en';
+    return /[\u0600-\u06FF]/.test(text) ? 'ar' : 'en';
   }
 
   detectPOLanguage(poData) {
     const fieldsToCheck = [
-      poData.supplier,
-      poData.supplierAddress,
-      poData.receiver,
-      poData.receiverCity,
-      poData.receiverAddress,
-      poData.tableHeaderText,
-      poData.notes
+      poData.supplier, poData.supplierAddress,
+      poData.receiver, poData.receiverCity, poData.receiverAddress,
+      poData.tableHeaderText, poData.notes
     ];
 
     if (poData.items && poData.items.length > 0) {
-      poData.items.forEach(item => {
-        if (item.description) {
-          fieldsToCheck.push(item.description);
-        }
-      });
+      poData.items.forEach(item => { if (item.description) fieldsToCheck.push(item.description); });
     }
 
-    let arabicCount = 0;
-    let totalFields = 0;
-
+    let arabicCount = 0, totalFields = 0;
     fieldsToCheck.forEach(field => {
       if (field) {
         totalFields++;
-        if (this.detectLanguage(field) === 'ar') {
-          arabicCount++;
-        }
+        if (this.detectLanguage(field) === 'ar') arabicCount++;
       }
     });
 
@@ -199,21 +164,9 @@ class PurchaseService {
 
   async enrichPOsWithCreatorNames(pos) {
     const users = await this.loadUsers();
-    
     return Promise.all(pos.map(async po => {
       const user = users.find(u => u.id === po.createdBy);
-      
-      if (user && user.name) {
-        return {
-          ...po,
-          createdByName: user.name
-        };
-      } else {
-        return {
-          ...po,
-          createdByName: 'Unknown User'
-        };
-      }
+      return { ...po, createdByName: user?.name || 'Unknown User' };
     }));
   }
 
@@ -222,85 +175,69 @@ class PurchaseService {
     console.log('User ID:', userId);
     console.log('User Role:', userRole);
     console.log('Include Terms & Conditions:', poData.includeTermsAndConditions);
-    console.log('T&C Text Length:', poData.termsAndConditionsText?.length || 0);
-    
-    const pos = await this.loadPOs();
-    
-    const counter = await this.loadCounter();
+
+    const pos        = await this.loadPOs();
+    const counter    = await this.loadCounter();
     const newCounter = counter + 1;
-    
+
     const paddedCounter = String(newCounter).padStart(5, '0');
-    const id = `PO-${paddedCounter}`;
+    const id       = `PO-${paddedCounter}`;
     const poNumber = this.generatePONumber(newCounter);
-    
+
     await this.saveCounter(newCounter);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today           = new Date().toISOString().split('T')[0];
     const detectedLanguage = poData.forceLanguage || this.detectPOLanguage(poData);
 
     let createdByName = await this.getUserNameById(userId);
-    
     if (!createdByName) {
-      console.log('⚠️ getUserNameById returned null, trying alternative lookup...');
       const users = await this.loadUsers();
-      const user = users.find(u => 
-        u.id === userId || 
-        String(u.id).trim() === String(userId).trim()
+      const user  = users.find(u =>
+        u.id === userId || String(u.id).trim() === String(userId).trim()
       );
-      
-      if (user) {
-        createdByName = user.name;
-        console.log('✓ Found via alternative lookup:', createdByName);
-      } else {
-        createdByName = 'Unknown User';
-        console.log('✗ User not found in alternative lookup');
-      }
+      createdByName = user ? user.name : 'Unknown User';
     }
 
     const newPO = {
       id,
       poNumber,
-      date: poData.date || today,
-      supplier: poData.supplier || '',
-      supplierAddress: poData.supplierAddress || '',
-      supplierPhone: poData.supplierPhone || '',
-      receiver: poData.receiver || '',
-      receiverCity: poData.receiverCity || '',
-      receiverAddress: poData.receiverAddress || '',
-      receiverPhone: poData.receiverPhone || '',
-      tableHeaderText: poData.tableHeaderText || '',
-      taxRate: poData.taxRate || 0,
-      items: poData.items || [],
-      notes: poData.notes || '',
+      date:             poData.date || today,
+      supplier:         poData.supplier         || '',
+      supplierAddress:  poData.supplierAddress   || '',
+      supplierPhone:    poData.supplierPhone     || '',
+      receiver:         poData.receiver         || '',
+      receiverCity:     poData.receiverCity      || '',
+      receiverAddress:  poData.receiverAddress   || '',
+      receiverPhone:    poData.receiverPhone     || '',
+      tableHeaderText:  poData.tableHeaderText   || '',
+      taxRate:          poData.taxRate           || 0,
+      items:            poData.items             || [],
+      notes:            poData.notes             || '',
       includeTermsAndConditions: poData.includeTermsAndConditions || false,
-      termsAndConditionsText: poData.termsAndConditionsText || '',
-      language: detectedLanguage,
-      status: 'pending',
-      createdBy: userId,
+      termsAndConditionsText:    poData.termsAndConditionsText    || '',
+      language:      detectedLanguage,
+      status:        'pending',
+      createdBy:     userId,
       createdByName: createdByName,
       createdByRole: userRole,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt:     new Date().toISOString(),
+      updatedAt:     new Date().toISOString()
     };
 
     pos.push(newPO);
     await this.savePOs(pos);
 
-    console.log('✓ PO created successfully');
-    console.log('Creator name:', newPO.createdByName);
-    console.log('Include Terms & Conditions:', newPO.includeTermsAndConditions);
+    console.log('✓ PO created:', newPO.poNumber, '| Creator:', newPO.createdByName);
     console.log('=================\n');
-    
+
     return newPO;
   }
 
   async updatePO(id, updateData, userId, userRole) {
-    const pos = await this.loadPOs();
+    const pos     = await this.loadPOs();
     const poIndex = pos.findIndex(p => p.id === id);
 
-    if (poIndex === -1) {
-      throw new Error('Purchase Order not found');
-    }
+    if (poIndex === -1) throw new Error('Purchase Order not found');
 
     const po = pos[poIndex];
 
@@ -310,46 +247,36 @@ class PurchaseService {
       }
     }
 
-    if (updateData.date) po.date = updateData.date;
-    if (updateData.supplier !== undefined) po.supplier = updateData.supplier;
-    if (updateData.supplierAddress !== undefined) po.supplierAddress = updateData.supplierAddress;
-    if (updateData.supplierPhone !== undefined) po.supplierPhone = updateData.supplierPhone;
-    if (updateData.receiver !== undefined) po.receiver = updateData.receiver;
-    if (updateData.receiverCity !== undefined) po.receiverCity = updateData.receiverCity;
-    if (updateData.receiverAddress !== undefined) po.receiverAddress = updateData.receiverAddress;
-    if (updateData.receiverPhone !== undefined) po.receiverPhone = updateData.receiverPhone;
-    if (updateData.tableHeaderText !== undefined) po.tableHeaderText = updateData.tableHeaderText;
-    if (updateData.taxRate !== undefined) po.taxRate = updateData.taxRate;
-    if (updateData.items) po.items = updateData.items;
-    if (updateData.notes !== undefined) po.notes = updateData.notes;
-    if (updateData.status) po.status = updateData.status;
-    
-    if (updateData.includeTermsAndConditions !== undefined) {
+    if (updateData.date)                        po.date            = updateData.date;
+    if (updateData.supplier         !== undefined) po.supplier         = updateData.supplier;
+    if (updateData.supplierAddress  !== undefined) po.supplierAddress  = updateData.supplierAddress;
+    if (updateData.supplierPhone    !== undefined) po.supplierPhone    = updateData.supplierPhone;
+    if (updateData.receiver         !== undefined) po.receiver         = updateData.receiver;
+    if (updateData.receiverCity     !== undefined) po.receiverCity     = updateData.receiverCity;
+    if (updateData.receiverAddress  !== undefined) po.receiverAddress  = updateData.receiverAddress;
+    if (updateData.receiverPhone    !== undefined) po.receiverPhone    = updateData.receiverPhone;
+    if (updateData.tableHeaderText  !== undefined) po.tableHeaderText  = updateData.tableHeaderText;
+    if (updateData.taxRate          !== undefined) po.taxRate          = updateData.taxRate;
+    if (updateData.items)                          po.items            = updateData.items;
+    if (updateData.notes            !== undefined) po.notes            = updateData.notes;
+    if (updateData.status)                         po.status           = updateData.status;
+    if (updateData.includeTermsAndConditions !== undefined)
       po.includeTermsAndConditions = updateData.includeTermsAndConditions;
-    }
-    if (updateData.termsAndConditionsText !== undefined) {
+    if (updateData.termsAndConditionsText !== undefined)
       po.termsAndConditionsText = updateData.termsAndConditionsText;
-    }
 
-    const detectedLanguage = updateData.forceLanguage || this.detectPOLanguage(po);
-    po.language = detectedLanguage;
-
+    po.language  = updateData.forceLanguage || this.detectPOLanguage(po);
     po.updatedAt = new Date().toISOString();
 
     pos[poIndex] = po;
     await this.savePOs(pos);
 
     const createdByName = await this.getUserNameById(po.createdBy);
-
-    return {
-      ...po,
-      createdByName: createdByName || po.createdByName || 'Unknown User'
-    };
+    return { ...po, createdByName: createdByName || po.createdByName || 'Unknown User' };
   }
 
   async getAllPOs(filters = {}, userId, userRole) {
     let pos = await this.loadPOs();
-
     pos = await this.enrichPOsWithCreatorNames(pos);
 
     if (userRole === 'employee' || userRole === 'admin') {
@@ -357,54 +284,39 @@ class PurchaseService {
     }
 
     if (filters.poNumber) {
-      pos = pos.filter(p => 
-        p.poNumber.toLowerCase().includes(filters.poNumber.toLowerCase())
-      );
+      pos = pos.filter(p => p.poNumber.toLowerCase().includes(filters.poNumber.toLowerCase()));
     }
-
-    if (filters.startDate) {
-      pos = pos.filter(p => p.date >= filters.startDate);
-    }
-    if (filters.endDate) {
-      pos = pos.filter(p => p.date <= filters.endDate);
-    }
-
+    if (filters.startDate) pos = pos.filter(p => p.date >= filters.startDate);
+    if (filters.endDate)   pos = pos.filter(p => p.date <= filters.endDate);
     if (filters.supplier) {
-      pos = pos.filter(p => 
-        p.supplier.toLowerCase().includes(filters.supplier.toLowerCase())
-      );
+      pos = pos.filter(p => p.supplier.toLowerCase().includes(filters.supplier.toLowerCase()));
     }
-
     if (filters.status) {
       pos = pos.filter(p => p.status === filters.status);
     }
-
     if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
+      const s = filters.search.toLowerCase();
       pos = pos.filter(p =>
-        p.poNumber.toLowerCase().includes(searchLower) ||
-        p.supplier.toLowerCase().includes(searchLower) ||
-        p.receiver.toLowerCase().includes(searchLower) ||
-        (p.notes && p.notes.toLowerCase().includes(searchLower)) ||
-        (p.createdByName && p.createdByName.toLowerCase().includes(searchLower))
+        p.poNumber.toLowerCase().includes(s)      ||
+        p.supplier.toLowerCase().includes(s)      ||
+        p.receiver.toLowerCase().includes(s)      ||
+        (p.notes           && p.notes.toLowerCase().includes(s))          ||
+        (p.createdByName   && p.createdByName.toLowerCase().includes(s))
       );
     }
 
     pos.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
-    const page = filters.page || 1;
-    const limit = filters.limit || 10;
+    const page       = filters.page  || 1;
+    const limit      = filters.limit || 10;
     const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-
-    const paginatedPOs = pos.slice(startIndex, endIndex);
 
     return {
-      pos: paginatedPOs,
+      pos: pos.slice(startIndex, startIndex + limit),
       pagination: {
         currentPage: page,
-        totalPages: Math.ceil(pos.length / limit),
-        totalPOs: pos.length,
+        totalPages:  Math.ceil(pos.length / limit),
+        totalPOs:    pos.length,
         limit
       }
     };
@@ -412,11 +324,9 @@ class PurchaseService {
 
   async getPOById(id, userId, userRole) {
     const pos = await this.loadPOs();
-    const po = pos.find(p => p.id === id);
+    const po  = pos.find(p => p.id === id);
 
-    if (!po) {
-      throw new Error('Purchase Order not found');
-    }
+    if (!po) throw new Error('Purchase Order not found');
 
     if (userRole === 'employee' || userRole === 'admin') {
       if (po.createdBy !== userId) {
@@ -425,23 +335,17 @@ class PurchaseService {
     }
 
     const createdByName = await this.getUserNameById(po.createdBy);
-
-    return {
-      ...po,
-      createdByName: createdByName || po.createdByName || 'Unknown User'
-    };
+    return { ...po, createdByName: createdByName || po.createdByName || 'Unknown User' };
   }
 
   async deletePO(id) {
-    const pos = await this.loadPOs();
+    const pos     = await this.loadPOs();
     const poIndex = pos.findIndex(p => p.id === id);
 
-    if (poIndex === -1) {
-      throw new Error('Purchase Order not found');
-    }
+    if (poIndex === -1) throw new Error('Purchase Order not found');
 
     const po = pos[poIndex];
-    
+
     if (po.pdfFilename) {
       const fileManagementService = require('./File-management.service');
       try {
@@ -474,25 +378,22 @@ class PurchaseService {
 
     const stats = {
       totalPOs: pos.length,
-      pending: pos.filter(p => p.status === 'pending').length,
+      pending:  pos.filter(p => p.status === 'pending').length,
       approved: pos.filter(p => p.status === 'approved').length,
       rejected: pos.filter(p => p.status === 'rejected').length,
-      thisMonth: 0,
-      thisWeek: 0,
-      today: 0
+      thisMonth: 0, thisWeek: 0, today: 0
     };
 
-    const now = new Date();
+    const now          = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
-    const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+    const startOfWeek  = new Date(now.setDate(now.getDate() - now.getDay()));
+    const startOfDay   = new Date(now.setHours(0, 0, 0, 0));
 
     pos.forEach(po => {
-      const poDate = new Date(po.createdAt);
-      
-      if (poDate >= startOfMonth) stats.thisMonth++;
-      if (poDate >= startOfWeek) stats.thisWeek++;
-      if (poDate >= startOfDay) stats.today++;
+      const d = new Date(po.createdAt);
+      if (d >= startOfMonth) stats.thisMonth++;
+      if (d >= startOfWeek)  stats.thisWeek++;
+      if (d >= startOfDay)   stats.today++;
     });
 
     return stats;
@@ -500,45 +401,26 @@ class PurchaseService {
 
   async generatePOPDF(id, userId, userRole, attachmentPdf = null) {
     const po = await this.getPOById(id, userId, userRole);
-    
+
     console.log('╔══════════════════════════════════════════════════════════╗');
     console.log('║          GENERATING PURCHASE ORDER PDF                   ║');
     console.log('╚══════════════════════════════════════════════════════════╝');
     console.log('📄 PO Number:', po.poNumber);
-    console.log('📄 Include T&C (checkbox):', po.includeTermsAndConditions);
-    console.log('📄 T&C Text Length:', po.termsAndConditionsText?.length || 0);
+    console.log('📄 Supplier (المورد):', po.supplier);
+    console.log('📄 Include T&C:', po.includeTermsAndConditions);
     console.log('📄 User Attachment:', attachmentPdf ? 'Yes' : 'No');
-    console.log('📄 T&C Position: LAST PAGE (after all content)');
     console.log('════════════════════════════════════════════════════════════');
-    
-    const sanitizeFilename = (str) => {
-      if (!str) return 'Unknown';
-      return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
-    };
-    
-    const formatDate = (dateStr) => {
-      if (!dateStr) {
-        const today = new Date().toISOString().split('T')[0];
-        const [year, month, day] = today.split('-');
-        return `${day}-${month}-${year}`;
-      }
-      const [year, month, day] = dateStr.split('-');
-      return `${day}-${month}-${year}`;
-    };
-    
-    const poNumber = po.poNumber || 'PO00000';
-    const receiverName = sanitizeFilename(po.receiver);
-    const dateFormatted = formatDate(po.date);
-    const customFilename = `${poNumber}_${receiverName}_${dateFormatted}`;
 
+    // ✅ Filename based on supplier (المورد), not receiver (المستلم)
+    const customFilename = buildPOFilename(po);
     console.log('📝 Custom filename:', customFilename);
-    
-    console.log('\n📄 Step 1: Generating main PO PDF (without T&C)...');
+
+    console.log('\n📄 Step 1: Generating main PO PDF...');
     const pdfResult = await poPdfGenerator.generatePOPDF(po, customFilename);
-    console.log('✅ Main PO PDF generated successfully');
-    
+    console.log('✅ Main PO PDF generated');
+
     let finalPdfResult = pdfResult;
-    
+
     if (attachmentPdf) {
       console.log('\n📄 Step 2: Processing user attachment...');
       const isValid = await poPdfGenerator.isValidPDF(attachmentPdf);
@@ -550,170 +432,124 @@ class PurchaseService {
           null,
           pdfResult.language
         );
-        
         finalPdfResult = {
           ...pdfResult,
-          filename: mergeResult.filename,
-          filepath: mergeResult.filepath,
-          merged: true,
+          filename:  mergeResult.filename,
+          filepath:  mergeResult.filepath,
+          merged:    true,
           pageCount: mergeResult.pageCount
         };
-        console.log('✅ User attachment merged successfully');
-        console.log('   Total pages after merge:', mergeResult.pageCount.total);
+        console.log('✅ User attachment merged. Total pages:', mergeResult.pageCount.total);
       } else {
-        console.warn('⚠️  Invalid user attachment PDF, skipping attachment');
+        console.warn('⚠️  Invalid attachment PDF, skipping');
       }
     } else {
-      console.log('\n📄 Step 2: No user attachment provided');
-      console.log('ℹ️  Adding headers/footers only...');
+      console.log('\n📄 Step 2: No attachment — adding headers/footers only...');
       const headerResult = await poPdfGenerator.mergePDFs(
         pdfResult.filepath,
         null,
         null,
         pdfResult.language
       );
-      
       finalPdfResult = {
         ...pdfResult,
-        filename: headerResult.filename,
-        filepath: headerResult.filepath,
-        merged: false,
+        filename:  headerResult.filename,
+        filepath:  headerResult.filepath,
+        merged:    false,
         pageCount: headerResult.pageCount
       };
       console.log('✅ Headers/footers added');
     }
-    
+
     if (po.includeTermsAndConditions) {
-      console.log('\n📄 Step 3: Adding Terms & Conditions page...');
-      
-      let termsText = null;
-      
-      if (po.termsAndConditionsText && po.termsAndConditionsText.trim()) {
-        termsText = po.termsAndConditionsText;
-        console.log('   Using custom T&C text (user-provided)');
-      } else {
-        termsText = pdfResult.language === 'ar' 
-          ? poPdfGenerator.DEFAULT_TERMS_AR 
-          : poPdfGenerator.DEFAULT_TERMS_EN;
-        console.log('   Using default T&C for language:', pdfResult.language);
-      }
-      
-      if (termsText) {
-        console.log('🔄 Appending T&C page to END of PDF...');
-        await poPdfGenerator.addTermsAndConditionsPage(
-          finalPdfResult.filepath, 
-          termsText, 
-          pdfResult.language
-        );
-        console.log('✅ Terms & Conditions page added as LAST PAGE');
-        
-        if (finalPdfResult.pageCount) {
-          finalPdfResult.pageCount.total += 1;
-          console.log('   Total pages after T&C:', finalPdfResult.pageCount.total);
-        }
-      }
+      console.log('\n📄 Step 3: Adding Terms & Conditions page (LAST PAGE)...');
+      const termsText = (po.termsAndConditionsText && po.termsAndConditionsText.trim())
+        ? po.termsAndConditionsText
+        : (pdfResult.language === 'ar'
+            ? poPdfGenerator.DEFAULT_TERMS_AR
+            : poPdfGenerator.DEFAULT_TERMS_EN);
+
+      await poPdfGenerator.addTermsAndConditionsPage(
+        finalPdfResult.filepath,
+        termsText,
+        pdfResult.language
+      );
+      console.log('✅ T&C page added as last page');
+
+      if (finalPdfResult.pageCount) finalPdfResult.pageCount.total += 1;
     } else {
       console.log('\n📄 Step 3: T&C disabled, skipping');
     }
-    
+
     console.log('\n📄 Step 4: Updating PO record...');
-    const pos = await this.loadPOs();
+    const pos     = await this.loadPOs();
     const poIndex = pos.findIndex(p => p.id === id);
-    
+
     if (poIndex !== -1) {
-      pos[poIndex].pdfFilename = finalPdfResult.filename;
-      pos[poIndex].pdfLanguage = finalPdfResult.language;
+      pos[poIndex].pdfFilename    = finalPdfResult.filename;
+      pos[poIndex].pdfLanguage    = finalPdfResult.language;
       pos[poIndex].pdfGeneratedAt = new Date().toISOString();
-      pos[poIndex].pdfMerged = finalPdfResult.merged || false;
-      if (finalPdfResult.pageCount) {
-        pos[poIndex].pdfPageCount = finalPdfResult.pageCount;
-      }
+      pos[poIndex].pdfMerged      = finalPdfResult.merged || false;
+      if (finalPdfResult.pageCount) pos[poIndex].pdfPageCount = finalPdfResult.pageCount;
       await this.savePOs(pos);
       console.log('✅ PO record updated');
     }
-    
+
     console.log('════════════════════════════════════════════════════════════');
     console.log('✅ PDF GENERATION COMPLETE!');
-    console.log('   Final structure:');
-    console.log('   1. Main PO PDF');
-    if (attachmentPdf) {
-      console.log('   2. User Attachment PDF');
-    }
-    if (po.includeTermsAndConditions) {
-      console.log(`   ${attachmentPdf ? '3' : '2'}. Terms & Conditions (الشروط والأحكام) ← LAST PAGE`);
-    }
     console.log('════════════════════════════════════════════════════════════\n');
-    
-    return {
-      po,
-      pdf: finalPdfResult
-    };
+
+    return { po, pdf: finalPdfResult };
   }
 
   async sendPOByEmail(poId, userId, userRole, recipientEmail) {
     try {
-      console.log('\n📧 === SEND PO EMAIL DEBUG ===');
-      console.log('PO ID:', poId);
-      console.log('User ID:', userId);
-      console.log('Recipient:', recipientEmail);
-      
+      console.log('\n📧 === SEND PO EMAIL ===');
+      console.log('PO ID:', poId, '| Recipient:', recipientEmail);
+
       const EMAIL_USER = process.env.EMAIL_USER;
       const EMAIL_PASS = process.env.EMAIL_APP_PASSWORD || process.env.EMAIL_PASS;
       const EMAIL_HOST = process.env.EMAIL_HOST || 'smtp.gmail.com';
       const EMAIL_PORT = parseInt(process.env.EMAIL_PORT || '587');
       const EMAIL_FROM = process.env.EMAIL_FROM || EMAIL_USER;
-      
+
       if (!EMAIL_USER || !EMAIL_PASS) {
-        console.error('❌ Email credentials missing!');
         throw new Error('Email configuration error: Missing SMTP credentials. Please check your .env file.');
       }
 
       const po = await this.getPOById(poId, userId, userRole);
       console.log('✅ PO found:', po.poNumber);
 
-      if (!po.pdfFilename) {
-        throw new Error('PDF not generated yet. Please generate PDF first.');
-      }
+      if (!po.pdfFilename) throw new Error('PDF not generated yet. Please generate PDF first.');
 
       const pdfPath = path.join(__dirname, '../../data/purchases/pdfs', po.pdfFilename);
-
-      const fsSync = require('fs');
-      if (!fsSync.existsSync(pdfPath)) {
-        throw new Error('PDF file not found');
-      }
+      if (!fsSync.existsSync(pdfPath)) throw new Error('PDF file not found');
       console.log('✅ PDF file found');
 
-      const users = await this.loadUsers();
+      const users   = await this.loadUsers();
       const creator = users.find(u => u.id === po.createdBy);
-      
-      const senderName = creator && creator.name ? creator.name : 'Omega System';
-      const creatorEmail = creator && creator.email ? creator.email : null;
-      
-      console.log('✅ Creator info:', { name: senderName, hasEmail: !!creatorEmail });
 
-      const nodemailer = require('nodemailer');
-      console.log('📧 Creating email transporter...');
-      
+      const senderName   = creator?.name  || 'Omega System';
+      const creatorEmail = creator?.email || null;
+
       const transporter = nodemailer.createTransport({
-        host: EMAIL_HOST,
-        port: EMAIL_PORT,
+        host:   EMAIL_HOST,
+        port:   EMAIL_PORT,
         secure: EMAIL_PORT === 465,
-        auth: {
-          user: EMAIL_USER,
-          pass: EMAIL_PASS,
-        },
-        tls: {
-          rejectUnauthorized: false
-        }
+        auth:   { user: EMAIL_USER, pass: EMAIL_PASS },
+        tls:    { rejectUnauthorized: false }
       });
 
-      console.log('🔄 Verifying SMTP connection...');
       await transporter.verify();
       console.log('✅ SMTP connection verified');
 
+      // ✅ Email attachment filename also uses supplier (المورد)
+      const emailAttachmentName = `${buildPOFilename(po)}.pdf`;
+      console.log('📎 Attachment filename:', emailAttachmentName);
+
       const subject = `Purchase Order ${po.poNumber}`;
-      const text = `Please find attached the Purchase Order ${po.poNumber}.\n\nSupplier: ${po.supplier || 'N/A'}\nReceiver: ${po.receiver || 'N/A'}\nDate: ${po.date}\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
-      
+      const text    = `Please find attached Purchase Order ${po.poNumber}.\n\nSupplier: ${po.supplier || 'N/A'}\nReceiver: ${po.receiver || 'N/A'}\nDate: ${po.date}\nSent by: ${senderName}${creatorEmail ? ` (${creatorEmail})` : ''}`;
+
       const html = `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto;">
           <div style="background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%); color: white; padding: 20px; border-radius: 10px 10px 0 0;">
@@ -725,6 +561,10 @@ class PurchaseService {
               <tr style="background: #f8fafc;">
                 <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">PO Number:</td>
                 <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #1565C0; font-weight: 600;">${po.poNumber}</td>
+              </tr>
+              <tr style="background: #f8fafc;">
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Supplier:</td>
+                <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #475569;">${po.supplier || 'N/A'}</td>
               </tr>
               <tr style="background: #f8fafc;">
                 <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; font-weight: bold; color: #334155;">Date:</td>
@@ -744,72 +584,36 @@ class PurchaseService {
         </div>
       `;
 
-      const sanitizeFilename = (str) => {
-        if (!str) return 'Unknown';
-        return str.replace(/[^a-zA-Z0-9\u0600-\u06FF\s]/g, '').replace(/\s+/g, '_').substring(0, 30);
-      };
-      
-      const formatDate = (dateStr) => {
-        if (!dateStr) {
-          const today = new Date().toISOString().split('T')[0];
-          const [year, month, day] = today.split('-');
-          return `${day}-${month}-${year}`;
-        }
-        const [year, month, day] = dateStr.split('-');
-        return `${day}-${month}-${year}`;
-      };
-      
-      const poNumber = po.poNumber || 'PO00000';
-      const receiverName = sanitizeFilename(po.receiver);
-      const dateFormatted = formatDate(po.date);
-      const emailAttachmentName = `${poNumber}_${receiverName}_${dateFormatted}.pdf`;
-
-      console.log('📧 Sending email...');
       const mailOptions = {
-        from: `"${senderName} - Omega System" <${EMAIL_USER}>`,
-        to: recipientEmail,
-        subject: subject,
-        text: text,
-        html: html,
-        attachments: [
-          {
-            filename: emailAttachmentName,
-            path: pdfPath,
-          },
-        ],
+        from:        `"${senderName} - Omega System" <${EMAIL_USER}>`,
+        to:          recipientEmail,
+        subject,
+        text,
+        html,
+        attachments: [{ filename: emailAttachmentName, path: pdfPath }]
       };
 
-      if (creatorEmail) {
-        mailOptions.replyTo = creatorEmail;
-        console.log('✅ Reply-to set:', creatorEmail);
-      }
+      if (creatorEmail) mailOptions.replyTo = creatorEmail;
 
       const info = await transporter.sendMail(mailOptions);
 
-      console.log('✅ Email sent successfully!');
-      console.log('  - Message ID:', info.messageId);
-      console.log('  - From:', EMAIL_USER);
-      console.log('  - To:', recipientEmail);
-      console.log('  - Attachment:', emailAttachmentName);
+      console.log('✅ Email sent! Message ID:', info.messageId);
       console.log('========================\n');
 
       return {
-        message: 'Email sent successfully',
+        message:   'Email sent successfully',
         messageId: info.messageId,
-        sentFrom: EMAIL_USER,
-        sentBy: senderName,
-        replyTo: creatorEmail || null
+        sentFrom:  EMAIL_USER,
+        sentBy:    senderName,
+        replyTo:   creatorEmail || null
       };
     } catch (error) {
       console.error('❌ Email sending error:', error);
-      
+
       let errorMessage = error.message;
-      if (error.code === 'EAUTH') {
-        errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';
-      } else if (error.code === 'ESOCKET') {
-        errorMessage = 'Cannot connect to email server. Please check your EMAIL_HOST and EMAIL_PORT settings.';
-      }
-      
+      if (error.code === 'EAUTH')   errorMessage = 'Email authentication failed. Please check your EMAIL_USER and EMAIL_APP_PASSWORD in .env file.';
+      if (error.code === 'ESOCKET') errorMessage = 'Cannot connect to email server. Please check your EMAIL_HOST and EMAIL_PORT settings.';
+
       throw new Error(`Failed to send email: ${errorMessage}`);
     }
   }
